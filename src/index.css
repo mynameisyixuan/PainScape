@@ -66,16 +66,35 @@ body {
 /* 画布页面 */
 .screen { position: relative; width: 100vw; height: 100vh; overflow: hidden; }
 
+/* 修改：确保 top-bar 不会超出屏幕，增加 box-sizing */
 .top-bar {
-  position: absolute; top: 0; left: 0; width: 100%; padding: 20px; 
-  display: flex; justify-content: space-between; align-items: flex-start; 
+  position: absolute; top: 0; left: 0;
+  width: 100%; padding: 20px;
+  display: flex; justify-content: space-between; align-items: flex-start;
   background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent);
   pointer-events: none; z-index: 10;
+  box-sizing: border-box; /* 【核心修复】：防止 padding 撑爆屏幕宽 */
 }
-.finish-btn {
-  pointer-events: auto; background: var(--accent-red); color: #fff; border: none; 
-  padding: 8px 20px; border-radius: 20px; font-weight: bold; cursor: pointer;
+
+/* 结果页底部的两个按钮并排 */
+.btn-group-bottom {
+  display: flex;
+  gap: 15px;
+  width: 100%;
+  max-width: 350px;
+  margin-bottom: 40px;
 }
+
+.action-btn {
+  flex: 1;
+  padding: 14px;
+  border-radius: 20px;
+  font-weight: bold;
+  cursor: pointer;
+  border: none;
+}
+.btn-share { background: #4caf50; color: #fff; }
+.btn-retry { background: transparent; border: 1px solid #444; color: #888; }
 
 /* 底部工具栏 */
 .toolbar {
