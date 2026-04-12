@@ -1,24 +1,24 @@
-# Logs
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
+# 前端依赖
+frontend/node_modules/
+frontend/dist/
+frontend/build/
 
-node_modules
-dist
-dist-ssr
-*.local
+# 后端 Python 虚拟环境
+backend/pvenv/
+.venv/
+env/
 
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
+# 后端缓存
+__pycache__/
+*.pyc
+*.pyo
+.env
+
+# 系统/OneDrive临时文件
+*.tmp
+~$*
+Thumbs.db
 .DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
+
+# 后端日志文件
+*.log
