@@ -326,25 +326,54 @@ function App() {
   };
 
   // 【异常捕获升级版：完美修复生成崩溃 Bug】
-  const handleFinish = () => {
-    try {
-      if (p5Ref.current && p5Ref.current.canvas) {
-        // 安全获取 Base64 图片
-        const url = p5Ref.current.canvas.toDataURL("image/png");
-        setImgUrl(url);
+  const handleFinish = async () => {
+    if (p5Ref.current) {
+      const canvas = document.querySelector("canvas");
+      // 为了省空间，存为压缩画质的 JPEG 格式，或者只存低清缩略图
+      const url = canvas.toDataURL("image/jpeg", 0.5);
+      setImgUrl(url);
 
-        const dominant = getDominantPain();
-        const newRecord = { id: Date.now(), date: new Date().toLocaleDateString(), time: new Date().toLocaleTimeString(), img: url, type: dominant };
-        const newHistory = [newRecord, ...history];
-        setHistory(newHistory);
+      const dominant = getDominantPain();
+      const newRecord = {
+        id: Date.now(),
+        date: new Date().toLocaleDateString(),
+        time: new Date().toLocaleTimeString(),
+        img: url, // 为了本地测试，依然存图片，但是存压缩版
+        type: dominant
+      };
+
+      // 【核心修复】：只保留最近的 5 条历史记录，防止 localStorage 被撑爆
+      const newHistory = [newRecord, ...history].slice(0, 5);
+      setHistory(newHistory);
+
+      try {
         localStorage.setItem('painscape_history', JSON.stringify(newHistory));
+      } catch (err) {
+        console.warn("历史记录已满，清理旧数据...", err);
+        // 如果还满，强行清空重置
+        setHistory([newRecord]);
+        localStorage.setItem('painscape_history', JSON.stringify([newRecord]));
       }
-    } catch (err) {
-      console.warn("截图失败，可能是因为本地跨域协议限制。", err);
-      // 就算报错，也不阻断流程，放一张占位符进去
-      setImgUrl("");
-    } finally {
-      // 无论成功与否，一定跳转到结果页
+
+      // ====== 向 Python 后端发送请求 ======
+      try {
+        const response = await fetch(" https://among-showpiece-rush.ngrok-free.dev/api/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json",
+        // Ngrok 免费版有时候会有一个警告页，加上下面这行 Header 可以绕过它：
+        "ngrok-skip-browser-warning": "true" },
+          body: JSON.stringify({
+            dominantPain: dominant,
+            userPref: userPrefs.join(","),
+            painScore: 85
+          })
+        });
+        const aiResult = await response.json();
+        console.log("✅ 后端返回成功！数据如下：", aiResult);
+      } catch (error) {
+        console.error("❌ 后端请求失败:", error);
+      }
+
       setPage("result");
     }
   };
