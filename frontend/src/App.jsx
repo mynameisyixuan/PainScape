@@ -445,13 +445,14 @@ function App() {
       const shareText = getShareText(shareContent.identity, shareContent);
 
       if (hasFront && hasBack) {
-        // 使用 captureFullCanvas 获取完整画面
+        // 使用 p5 方式捕获
         const frontCanvas = captureFullCanvas('front');
+        const backCanvas = captureFullCanvas('back');
+
         const imgFront = new Image();
         imgFront.src = frontCanvas.toDataURL();
         await new Promise(resolve => { imgFront.onload = resolve; });
 
-        const backCanvas = captureFullCanvas('back');
         const imgBack = new Image();
         imgBack.src = backCanvas.toDataURL();
         await new Promise(resolve => { imgBack.onload = resolve; });
@@ -554,27 +555,33 @@ function App() {
 
   // 捕获包含动态粒子的完整画面
   const captureFullCanvas = (side) => {
-    const tempCanvas = document.createElement('canvas');
-    const tempCtx = tempCanvas.getContext('2d');
+    const p5 = p5Ref.current;
+    if (!p5) {
+      console.warn('p5 实例不存在');
+      return document.createElement('canvas');
+    }
 
     const pg = side === 'front' ? pgFrontRef.current : pgBackRef.current;
+    if (!pg) {
+      console.warn(`${side} 画布不存在`);
+      return document.createElement('canvas');
+    }
 
-    if (!pg) return tempCanvas;
+    // 创建一个新的 p5 Graphics 对象
+    const captureGraphics = p5.createGraphics(pg.width, pg.height);
 
-    tempCanvas.width = pg.width;
-    tempCanvas.height = pg.height;
+    // 1. 绘制静态图层
+    captureGraphics.image(pg, 0, 0);
 
-    // 1. 绘制静态图层（离屏画布内容）
-    tempCtx.drawImage(pg.canvas, 0, 0);
-
-    // 2. 绘制该面的动态粒子（wave, twist, heavy）
+    // 2. 绘制该面的动态粒子
     dynamicParticles.current.forEach(dp => {
       if (dp.bodyMode === side) {
-        dp.show(tempCtx);
+        dp.show(captureGraphics);
       }
     });
 
-    return tempCanvas;
+    // 返回原生 canvas 元素
+    return captureGraphics.elt;
   };
 
   // 检查某一面是否有任何内容（静态 + 动态）
@@ -584,18 +591,23 @@ function App() {
 
     // 检查静态图层
     try {
-      const imageData = pg.drawingContext.getImageData(0, 0, pg.width, pg.height);
+      const ctx = pg.drawingContext;
+      if (!ctx) return true;
+
+      const imageData = ctx.getImageData(0, 0, pg.width, pg.height);
       const data = imageData.data;
       for (let i = 3; i < data.length; i += 4) {
-        if (data[i] > 0) return false; // 有非透明像素
+        if (data[i] > 0) return false;
       }
     } catch (e) {
       console.error("检测静态画布失败:", e);
     }
 
     // 检查动态粒子
-    const hasDynamicParticles = dynamicParticles.current.some(dp => dp.bodyMode === side);
-    if (hasDynamicParticles) return false;
+    if (dynamicParticles.current) {
+      const hasDynamicParticles = dynamicParticles.current.some(dp => dp.bodyMode === side);
+      if (hasDynamicParticles) return false;
+    }
 
     return true;
   };
@@ -1432,10 +1444,15 @@ function App() {
 
               {/* 预览说明 */}
               {(() => {
+                // 添加安全检查
+                if (!pgFrontRef.current || !pgBackRef.current) {
+                  return <p style={{ color: '#888', fontSize: '13px', textAlign: 'center', marginBottom: '15px' }}>正在加载画布...</p>;
+                }
+
                 const hasFront = !isSideEmpty('front');
                 const hasBack = !isSideEmpty('back');
 
-                console.log('预览检测 - hasFront:', hasFront, 'hasBack:', hasBack); // 调试用
+                console.log('预览检测 - hasFront:', hasFront, 'hasBack:', hasBack);
 
                 if (hasFront && hasBack) {
                   return (
@@ -1474,47 +1491,59 @@ function App() {
                 justifyContent: 'center'
               }}>
                 {(() => {
-                  const hasFront = !isSideEmpty('front');
-                  const hasBack = !isSideEmpty('back');
+                  // 安全检查
+                  if (!pgFrontRef.current || !pgBackRef.current) {
+                    return <p style={{ color: '#666' }}>画布加载中...</p>;
+                  }
 
-                  if (hasFront && hasBack) {
-                    const frontCanvas = captureFullCanvas('front');
-                    const backCanvas = captureFullCanvas('back');
-                    return (
-                      <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+                  try {
+                    const hasFront = !isSideEmpty('front');
+                    const hasBack = !isSideEmpty('back');
+
+                    if (hasFront && hasBack) {
+                      const frontCanvas = captureFullCanvas('front');
+                      const backCanvas = captureFullCanvas('back');
+                      return (
+                        <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+                          <div style={{ textAlign: 'center' }}>
+                            <img
+                              src={frontCanvas.toDataURL()}
+                              style={{ width: '180px', height: 'auto', borderRadius: '8px', border: '1px solid #444' }}
+                              alt="正面"
+                            />
+                            <p style={{ color: '#fff', fontSize: '12px', marginTop: '5px' }}>正面</p>
+                          </div>
+                          <div style={{ textAlign: 'center' }}>
+                            <img
+                              src={backCanvas.toDataURL()}
+                              style={{ width: '180px', height: 'auto', borderRadius: '8px', border: '1px solid #444' }}
+                              alt="背面"
+                            />
+                            <p style={{ color: '#fff', fontSize: '12px', marginTop: '5px' }}>背面</p>
+                          </div>
+                        </div>
+                      );
+                    } else if (hasFront || hasBack) {
+                      const activeSide = hasFront ? 'front' : 'back';
+                      const activeCanvas = captureFullCanvas(activeSide);
+                      return (
                         <div style={{ textAlign: 'center' }}>
                           <img
-                            src={frontCanvas.toDataURL()}
-                            style={{ width: '180px', height: 'auto', borderRadius: '8px', border: '1px solid #444' }}
-                            alt="正面"
+                            src={activeCanvas.toDataURL()}
+                            style={{ width: '100%', maxWidth: '300px', borderRadius: '8px', border: '1px solid #444' }}
+                            alt="预览"
                           />
-                          <p style={{ color: '#fff', fontSize: '12px', marginTop: '5px' }}>正面</p>
+                          <p style={{ color: '#fff', fontSize: '12px', marginTop: '5px' }}>
+                            {hasFront ? '正面' : '背面'}
+                          </p>
                         </div>
-                        <div style={{ textAlign: 'center' }}>
-                          <img
-                            src={backCanvas.toDataURL()}
-                            style={{ width: '180px', height: 'auto', borderRadius: '8px', border: '1px solid #444' }}
-                            alt="背面"
-                          />
-                          <p style={{ color: '#888', fontSize: '12px', marginTop: '5px' }}>背面</p>
-                        </div>
-                      </div>
-                    );
-                  } else {
-                    const activeSide = hasFront ? 'front' : 'back';
-                    const activeCanvas = captureFullCanvas(activeSide);
-                    return (
-                      <div style={{ textAlign: 'center' }}>
-                        <img
-                          src={activeCanvas.toDataURL()}
-                          style={{ width: '100%', maxWidth: '300px', borderRadius: '8px', border: '1px solid #444' }}
-                          alt="预览"
-                        />
-                        <p style={{ color: '#fff', fontSize: '12px', marginTop: '5px' }}>
-                          {hasFront ? '正面' : '背面'}
-                        </p>
-                      </div>
-                    );
+                      );
+                    } else {
+                      return <p style={{ color: '#666' }}>暂无绘画内容</p>;
+                    }
+                  } catch (error) {
+                    console.error('预览生成失败:', error);
+                    return <p style={{ color: '#d32f2f' }}>预览加载失败，请重试</p>;
                   }
                 })()}
               </div>
