@@ -357,11 +357,9 @@ function App() {
 
       // ====== 向 Python 后端发送请求 ======
       try {
-        const response = await fetch(" https://among-showpiece-rush.ngrok-free.dev/api/generate", {
+        const response = await fetch("http://localhost:8000/api/generate", {
           method: "POST",
-          headers: { "Content-Type": "application/json",
-        // Ngrok 免费版有时候会有一个警告页，加上下面这行 Header 可以绕过它：
-        "ngrok-skip-browser-warning": "true" },
+          headers: { "Content-Type": "application/json"},
           body: JSON.stringify({
             dominantPain: dominant,
             userPref: userPrefs.join(","),
