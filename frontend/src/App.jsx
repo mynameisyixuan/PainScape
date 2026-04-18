@@ -201,10 +201,7 @@ function App() {
   const staticParticles = useRef([]); const dynamicParticles = useRef([]);
 
   const p5Ref = useRef(null); const bgFrontRef = useRef(null); const bgBackRef = useRef(null);
-
-  // 【核心修复：隔离正背面画布】
-  const pgFrontRef = useRef(null);
-  const pgBackRef = useRef(null);
+  const pgFrontRef = useRef(null); const pgBackRef = useRef(null);
 
   const camRef = useRef({ x: 0, y: 0, zoom: 1.0 });
   const pressTimer = useRef(0); const isLongPressing = useRef(false);
@@ -228,7 +225,6 @@ function App() {
     bgBackRef.current = p5.loadImage("body_back.png");
   };
 
-  // 【核心修复：状态快照捕获正反面与动态粒子】
   const captureState = () => {
     if (!pgFrontRef.current || !pgBackRef.current) return null;
     return {
@@ -244,11 +240,11 @@ function App() {
     pgFrontRef.current = p5.createGraphics(window.innerWidth * 2, window.innerHeight * 2);
     pgBackRef.current = p5.createGraphics(window.innerWidth * 2, window.innerHeight * 2);
     camRef.current.x = 0; camRef.current.y = 0;
-    if(!hasSavedInitial.current) { undoStackRef.current.push(captureState()); hasSavedInitial.current = true; }
+    if (!hasSavedInitial.current) { undoStackRef.current.push(captureState()); hasSavedInitial.current = true; }
   };
 
   const isSafeToDraw = (p5) => {
-    if (page !== 'canvas' || bodyMode === 'none') return false; // 盲画模式目前不记录
+    if (page !== 'canvas' || bodyMode === 'none') return false;
     let currentY = p5.touches.length > 0 ? p5.touches[0].y : p5.mouseY;
     let currentX = p5.touches.length > 0 ? p5.touches[0].x : p5.mouseX;
     if (currentY < 100 || currentY > window.innerHeight - 150 || currentX > window.innerWidth - 80) return false;
@@ -283,7 +279,7 @@ function App() {
   const handleClear = () => { undoStackRef.current.push(captureState()); redoStackRef.current = []; pgFrontRef.current.clear(); pgBackRef.current.clear(); dynamicParticles.current = []; staticParticles.current = []; };
 
   const mouseWheel = (p5, event) => {
-    if(page !== 'canvas') return false;
+    if (page !== 'canvas') return false;
     camRef.current.zoom = Math.max(0.5, Math.min(camRef.current.zoom + (event.delta > 0 ? -0.1 : 0.1), 3.0));
     return false;
   };
@@ -302,8 +298,6 @@ function App() {
     else { if (speed < 1) pressTimer.current++; else pressTimer.current = 0; if (pressTimer.current > 20) isLongPressing.current = true; }
 
     let isPanning = (activeBrush === null) || isLongPressing.current || p5.mouseButton === p5.RIGHT || p5.touches.length >= 2;
-
-    // 当前活跃的缓冲图层
     let currentPg = bodyMode === 'back' ? pgBackRef.current : pgFrontRef.current;
 
     if (isInteracting) {
@@ -326,7 +320,6 @@ function App() {
       }
     }
 
-    // 更新静态粒子到对应的图层
     for (let i = staticParticles.current.length - 1; i >= 0; i--) {
       let p = staticParticles.current[i];
       p.update(p5);
@@ -341,19 +334,17 @@ function App() {
     if (activeImg) {
       p5.imageMode(p5.CENTER); p5.tint(255, 40);
       let imgScale = (p5.height * 0.8) / activeImg.height;
-      p5.image(activeImg, p5.width/2, p5.height/2, activeImg.width * imgScale, activeImg.height * imgScale);
+      p5.image(activeImg, p5.width / 2, p5.height / 2, activeImg.width * imgScale, activeImg.height * imgScale);
     }
 
-    // 仅渲染当前模式的涂鸦
     if (bodyMode !== 'none') {
       p5.noTint(); p5.imageMode(p5.CORNER); p5.image(currentPg, 0, 0);
     }
 
-    // 渲染当前模式的动态粒子
     for (let i = dynamicParticles.current.length - 1; i >= 0; i--) {
       let dp = dynamicParticles.current[i];
       dp.update(p5);
-      if(dp.bodyMode === bodyMode) dp.show(p5);
+      if (dp.bodyMode === bodyMode) dp.show(p5);
       if (dp.isDead()) dynamicParticles.current.splice(i, 1);
     }
     p5.pop();
@@ -365,49 +356,44 @@ function App() {
       setImgUrl(url);
 
       const dominant = Object.keys(brushCounts.current).reduce((a, b) => brushCounts.current[a] > brushCounts.current[b] ? a : b) || 'twist';
-      const newRecord = { id: Date.now(), date: new Date().toLocaleDateString(), time: new Date().toLocaleTimeString(), img: url, type: dominant, content: generateContent(dominant) };
+      const content = generateContent(dominant);
+      const newRecord = { 
+        id: Date.now(), 
+        date: new Date().toLocaleDateString(), 
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        month: `${new Date().getFullYear()}年${new Date().getMonth() + 1}月`,
+        img: url, 
+        type: dominant, 
+        content: content
+      };
 
-      const newHistory = [newRecord, ...history].slice(0, 10);
+      const newHistory = [newRecord, ...history].slice(0, 20);
       setHistory(newHistory);
       try { localStorage.setItem('painscape_history', JSON.stringify(newHistory)); } catch (err) { setHistory([newRecord]); }
-
-      // 调用后端大模型转译 (演示版使用本地文本)
-      // fetch("...", { ... });
 
       setPage("result");
     }
   };
 
-  // 【核心新增】：基于 HTML5 Canvas 将底图与文本拼成完整分享卡片
   const handleShare = async (content) => {
     try {
-      // 创建离屏 Canvas
       const cvs = document.createElement('canvas');
       const ctx = cvs.getContext('2d');
       cvs.width = 600; cvs.height = 900;
-
-      // 绘制深色背景
       ctx.fillStyle = '#0a0a0a'; ctx.fillRect(0, 0, 600, 900);
-
-      // 加载并绘制痛觉图谱
       const img = new Image();
       img.src = imgUrl;
       await new Promise(resolve => { img.onload = resolve; });
-      ctx.drawImage(img, 50, 50, 500, (500/img.width)*img.height);
-
-      // 绘制文本框和文字
-      ctx.fillStyle = '#1c1c1c'; ctx.roundRect = ctx.roundRect || function(x, y, w, h, r) { this.beginPath(); this.moveTo(x+r, y); this.lineTo(x+w-r, y); this.quadraticCurveTo(x+w, y, x+w, y+r); this.lineTo(x+w, y+h-r); this.quadraticCurveTo(x+w, y+h, x+w-r, y+h); this.lineTo(x+r, y+h); this.quadraticCurveTo(x, y+h, x, y+h-r); this.lineTo(x, y+r); this.quadraticCurveTo(x, y, x+r, y); this.closePath(); };
+      ctx.drawImage(img, 50, 50, 500, (500 / img.width) * img.height);
+      ctx.fillStyle = '#1c1c1c'; 
+      ctx.roundRect = ctx.roundRect || function (x, y, w, h, r) { this.beginPath(); this.moveTo(x + r, y); this.lineTo(x + w - r, y); this.quadraticCurveTo(x + w, y, x + w, y + r); this.lineTo(x + w, y + h - r); this.quadraticCurveTo(x + w, y + h, x + w - r, y + h); this.lineTo(x + r, y + h); this.quadraticCurveTo(x, y + h, x, y + h - r); this.lineTo(x, y + r); this.quadraticCurveTo(x, y, x + r, y); this.closePath(); };
       ctx.roundRect(50, 650, 500, 200, 20); ctx.fill();
-
       ctx.fillStyle = '#ff9800'; ctx.font = 'bold 24px sans-serif';
       ctx.fillText('不可见痛苦声明', 70, 700);
-
       ctx.fillStyle = '#ccc'; ctx.font = '16px sans-serif';
       const lines = content.action.replace(/🛑|🥣|🫂|❤️|复合指令：|偏好指令：/g, '').trim().split('\n');
       ctx.fillText(`我正在经历强烈的 ${content.pain}。`, 70, 740);
       ctx.fillText(`请求协助：${lines[0]}`, 70, 780);
-
-      // 导出图片
       const finalUrl = cvs.toDataURL('image/jpeg');
       const blob = await (await fetch(finalUrl)).blob();
       const file = new File([blob], 'painscape_card.jpg', { type: 'image/jpeg' });
@@ -418,11 +404,11 @@ function App() {
         const link = document.createElement('a'); link.href = finalUrl; link.download = 'painscape_card.jpg'; link.click();
         alert("已为您生成带文本的复合分享卡片并下载。");
       }
-    } catch(e) { console.log("分享被取消", e); }
+    } catch (e) { console.log("分享被取消", e); }
   };
 
   const handlePublishPost = () => {
-    if(!postText) return alert("写点什么吧~");
+    if (!postText) return alert("写点什么吧~");
     const dominant = Object.keys(brushCounts.current).reduce((a, b) => brushCounts.current[a] > brushCounts.current[b] ? a : b) || 'twist';
     setPosts([{ id: Date.now(), text: postText, img: imgUrl, tags: `#${BRUSHES[dominant].label.split(" ")[1]}`, likes: 0, group: communityFilter }, ...posts]);
     setShowPostModal(false); setPostText(""); setPage("community");
@@ -432,8 +418,17 @@ function App() {
     const name = prompt("请输入新群组名称（如：家庭群）：");
     if (name) {
       const newId = 'group_' + Date.now();
-      setCommunityGroups([...communityGroups, { id: newId, name: `💬 {name}` }]);
+      setCommunityGroups([...communityGroups, { id: newId, name: `💬 ${name}` }]);
       setCommunityFilter(newId);
+    }
+  };
+
+  const handleJoinGroup = () => {
+    const code = prompt("请输入群组邀请码（演示模式任意输入）：");
+    if (code) {
+      const newId = 'group_' + Date.now();
+      setCommunityGroups([...communityGroups, { id: newId, name: `👥 新群组` }]);
+      alert("已加入群组！");
     }
   };
 
@@ -467,242 +462,256 @@ function App() {
     return { ...TEXTS[dominant], action: actionText, pain: painName[dominant] };
   };
 
- // ================= 页面组件渲染 =================
-return (
-  <>
-    <div style={{ position: 'fixed', top: 0, left: 0, zIndex: 1, touchAction: 'none' }}>
-      <Sketch setup={setup} draw={draw} preload={preload} mouseWheel={mouseWheel} mouseReleased={mouseReleased} touchEnded={mouseReleased}/>
-    </div>
+  // 按月归类日记
+  const groupedHistory = history.reduce((acc, item) => {
+    if (!acc[item.month]) acc[item.month] = [];
+    acc[item.month].push(item);
+    return acc;
+  }, {});
 
-    <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 100, pointerEvents: 'none' }}>
+  return (
+    <>
+      <div style={{ position: 'fixed', top: 0, left: 0, zIndex: 1, touchAction: 'none' }}>
+        <Sketch setup={setup} draw={draw} preload={preload} mouseWheel={mouseWheel} mouseReleased={mouseReleased} touchEnded={mouseReleased} />
+      </div>
 
-      {/* === Splash 开屏页 === */}
-      {page === "splash" && (
-        <div style={{pointerEvents:'auto', background:'#050505', width:'100vw', height:'100vh', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'40px', boxSizing:'border-box', opacity: splashOpacity, transition: 'opacity 1s ease-in-out'}}>
-          <h1 style={{color:'#fff', letterSpacing:'8px', marginBottom:'40px'}}>PainScape</h1>
-          <p style={{color:'#aaa', fontSize:'14px', lineHeight:'1.8', textAlign:'center', fontStyle:'italic', whiteSpace:'pre-wrap'}}>{quote}</p>
-        </div>
-      )}
+      {/* UI 容器：关键修复 - 只在 canvas 页面禁用 pointerEvents */}
+      <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 100, pointerEvents: page === 'canvas' ? 'none' : 'auto' }}>
 
-      {/* === Onboarding 页面 === */}
-      {page === "onboarding" && (
-        <div style={{pointerEvents:'auto', background:'#0a0a0a', width:'100%', height:'100%', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center'}}>
-          <h1 style={{color:'#fff', marginBottom:'5px', fontSize:'2rem'}}>PainScape</h1>
-          <p style={{color:'#aaa', marginBottom:'30px'}}>拒绝隐忍，让疼痛被看见</p>
-
-          <div style={{background:'rgba(255,255,255,0.05)', padding:'15px', borderRadius:'12px', width:'100%', maxWidth:'320px', marginBottom:'20px', textAlign:'left'}}>
-            <p style={{color:'#fff', fontSize:'13px', margin:'0 0 8px 0'}}><strong>🎨 快速指南：</strong></p>
-            <p style={{color:'#888', fontSize:'12px', margin:'4px 0'}}>• 滑动或点击：绘制痛觉质地</p>
-            <p style={{color:'#888', fontSize:'12px', margin:'4px 0'}}>• 长按 0.3 秒：拖拽移动画布</p>
-            <p style={{color:'#888', fontSize:'12px', margin:'4px 0'}}>• 滚轮/双指：放大缩小身体细节</p>
+        {/* === Splash 开屏页 === */}
+        {page === "splash" && (
+          <div style={{ pointerEvents: 'auto', background: '#050505', width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px', boxSizing: 'border-box', opacity: splashOpacity, transition: 'opacity 1s ease-in-out' }}>
+            <h1 style={{ color: '#fff', letterSpacing: '8px', marginBottom: '40px' }}>PainScape</h1>
+            <p style={{ color: '#aaa', fontSize: '14px', lineHeight: '1.8', textAlign: 'center', fontStyle: 'italic', whiteSpace: 'pre-wrap' }}>{quote}</p>
           </div>
+        )}
 
-          <div style={{width:'100%', maxWidth:'320px', textAlign:'left'}}>
-            <label style={{color:'#fff', marginBottom:'15px', display:'block', fontSize:'1rem', fontWeight:'bold'}}>当痛经发作时，你最需要伴侣/家人怎么做？</label>
-            <div style={{display:'flex', flexDirection:'column', gap:'12px'}}>
-              {['alone', 'care', 'comfort'].map((p, i) => (
-                <button key={p} onClick={()=>togglePref(p)} style={{padding:'15px', borderRadius:'12px', textAlign:'left', background:'#1e1e1e', border: userPrefs.includes(p)?'2px solid #d32f2f':'1px solid #444', color:'#fff', cursor:'pointer'}}>
-                  <div style={{fontSize:'14px', fontWeight:'bold'}}>{['🛑 别管我，让我一个人待着', '🥣 我没力气，需要实际照顾', '🫂 我很脆弱，需要情绪陪伴'][i]}</div>
-                </button>
-              ))}
-            </div>
-          </div>
+        {/* === Onboarding 页面 === */}
+        {page === "onboarding" && (
+          <div style={{ pointerEvents: 'auto', background: '#0a0a0a', width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+            <h1 style={{ color: '#fff', marginBottom: '5px', fontSize: '2rem' }}>PainScape</h1>
+            <p style={{ color: '#aaa', marginBottom: '30px' }}>拒绝隐忍，让疼痛被看见</p>
 
-          <button style={{marginTop:'30px', width:'200px', padding:'14px', background:'#d32f2f', color:'#fff', border:'none', borderRadius:'25px', fontWeight:'bold', cursor:'pointer'}}
-            onClick={() => { pgFrontRef.current?.clear(); pgBackRef.current?.clear(); dynamicParticles.current=[]; staticParticles.current=[]; setPage("canvas"); }}>开始绘制</button>
-
-          <div style={{display:'flex', gap:'15px', marginTop:'20px'}}>
-            <button style={{background:'transparent', border:'1px solid #444', color:'#888', padding:'8px 16px', borderRadius:'20px', cursor:'pointer'}} onClick={() => setPage("community")}>🌍 探索广场</button>
-            <button style={{background:'transparent', border:'1px solid #444', color:'#888', padding:'8px 16px', borderRadius:'20px', cursor:'pointer'}} onClick={() => setPage("history")}>📅 疼痛日记</button>
-          </div>
-        </div>
-      )}
-
-      {/* === Canvas 绘画页面 === */}
-      {page === "canvas" && (
-        <div style={{position:'absolute', top:0, left:0, width:'100vw', height:'100vh', zIndex:10, pointerEvents:'none'}}>
-          <div style={{pointerEvents:'auto', display:'flex', flexDirection:'column', alignItems:'center', gap:'15px', padding:'15px'}}>
-            <div style={{display:'flex', justifyContent:'space-between', width:'100%'}}>
-              <span style={{color:'#fff', fontWeight:'bold', fontSize:'20px'}}>PainScape</span>
-              <button style={{background:'#d32f2f', color:'#fff', border:'none', padding:'6px 18px', borderRadius:'20px', cursor:'pointer', fontWeight:'bold'}} onClick={handleFinish}>生成</button>
+            <div style={{ background: 'rgba(255,255,255,0.05)', padding: '15px', borderRadius: '12px', width: '100%', maxWidth: '320px', marginBottom: '20px', textAlign: 'left' }}>
+              <p style={{ color: '#fff', fontSize: '13px', margin: '0 0 8px 0' }}><strong>🎨 快速指南：</strong></p>
+              <p style={{ color: '#888', fontSize: '12px', margin: '4px 0' }}>• 滑动或点击：绘制痛觉质地</p>
+              <p style={{ color: '#888', fontSize: '12px', margin: '4px 0' }}>• 长按 0.3 秒：拖拽移动画布</p>
+              <p style={{ color: '#888', fontSize: '12px', margin: '4px 0' }}>• 滚轮/双指：放大缩小身体细节</p>
             </div>
 
-            <div style={{display:'flex', background:'rgba(30,30,30,0.8)', borderRadius:'20px', padding:'4px', backdropFilter:'blur(10px)'}}>
-              <button style={{padding:'6px 15px', borderRadius:'16px', border:'none', cursor:'pointer', fontSize:'13px', fontWeight:'bold', background: bodyMode==='front'?'#4caf50':'transparent', color: bodyMode==='front'?'#fff':'#888'}} onClick={(e)=>{ e.stopPropagation(); setBodyMode('front'); }}>正面</button>
-              <button style={{padding:'6px 15px', borderRadius:'16px', border:'none', cursor:'pointer', fontSize:'13px', fontWeight:'bold', background: bodyMode==='back'?'#4caf50':'transparent', color: bodyMode==='back'?'#fff':'#888'}} onClick={(e)=>{ e.stopPropagation(); setBodyMode('back'); }}>背面</button>
-              <button style={{padding:'6px 15px', borderRadius:'16px', border:'none', cursor:'pointer', fontSize:'13px', fontWeight:'bold', background: bodyMode==='none'?'#d32f2f':'transparent', color: bodyMode==='none'?'#fff':'#888'}} onClick={(e)=>{ e.stopPropagation(); setBodyMode('none'); }}>沉浸盲画</button>
-            </div>
-          </div>
-
-          <div style={{pointerEvents:'auto', position:'absolute', right:'20px', top:'50%', transform:'translateY(-50%)', display:'flex', flexDirection:'column', gap:'15px'}}>
-            <button style={{background:'rgba(0,0,0,0.6)', backdropFilter:'blur(10px)', border:'1px solid #444', borderRadius:'30px', width:'50px', height:'50px', fontSize:'24px', cursor:'pointer'}} onClick={(e) => { e.stopPropagation(); handleUndo(); }}>↩️</button>
-            <button style={{background:'rgba(0,0,0,0.6)', backdropFilter:'blur(10px)', border:'1px solid #444', borderRadius:'30px', width:'50px', height:'50px', fontSize:'24px', cursor:'pointer'}} onClick={(e) => { e.stopPropagation(); handleRedo(); }}>↪️</button>
-            <button style={{background:'rgba(0,0,0,0.6)', backdropFilter:'blur(10px)', border:'1px solid #444', borderRadius:'30px', width:'50px', height:'50px', fontSize:'24px', cursor:'pointer'}} onClick={(e) => { e.stopPropagation(); handleClear(); }}>🗑️</button>
-          </div>
-
-          <div style={{pointerEvents:'auto', position:'absolute', bottom:'30px', left:'50%', transform:'translateX(-50%)', width:'90%', maxWidth:'380px', background:'rgba(20,20,20,0.9)', padding:'15px', borderRadius:'24px', backdropFilter:'blur(10px)'}}>
-            <div style={{display:'flex', justifyContent:'space-between', marginBottom:'10px'}}>
-              {Object.keys(BRUSHES).map(k => (
-                <button key={k} style={{flex:1, background:activeBrush===k?'#444':'transparent', border:'none', color:activeBrush===k?'#fff':'#888', padding:'8px 0', borderRadius:'10px', fontSize:'12px', display:'flex', flexDirection:'column', alignItems:'center', cursor:'pointer'}} onClick={() => setActiveBrush(activeBrush === k ? null : k)}>
-                  <span style={{fontSize:'20px', marginBottom:'4px'}}>{BRUSHES[k].icon}</span>
-                  <span>{BRUSHES[k].label.split(" ")[1]}</span>
-                </button>
-              ))}
-            </div>
-            <div style={{display:'flex', justifyContent:'center', gap:'20px'}}>
-              {Object.keys(PALETTES).map(k => (
-                <div key={k} style={{width:'30px', height:'30px', borderRadius:'50%', border:activeColor===k?'2px solid #fff':'2px solid #444', background:`rgb(${PALETTES[k].color.join(',')})`, cursor:'pointer', transform:activeColor===k?'scale(1.2)':'none'}} onClick={() => setActiveColor(k)} />
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* === Result 结果页面 === */}
-      {page === "result" && (() => {
-        const content = generateContent();
-        return (
-          <div style={{position:'absolute', top:0, left:0, width:'100vw', height:'100vh', zIndex:20, background:'rgba(10,10,10,0.75)', backdropFilter:'blur(8px)', padding:'20px', overflowY:'auto', display:'flex', flexDirection:'column', alignItems:'center'}}>
-
-            <img src={imgUrl} style={{width:'60%', maxWidth:'250px', marginTop:'20px', borderRadius:'12px', border:'2px solid #444'}} alt="pain" />
-
-            <div style={{display:'flex', gap:'10px', margin:'20px 0', width:'100%', maxWidth:'350px'}}>
-              {['partner','work','doctor','self'].map(tab => (
-                <button key={tab} style={{flex:1, padding:'10px 0', background:identity===tab?'#444':'rgba(30,30,30,0.8)', color:identity===tab?'#fff':'#888', border:'1px solid #444', borderRadius:'8px', fontSize:'13px', cursor:'pointer'}} onClick={()=>setIdentity(tab)}>
-                  {{partner:'伴侣', work:'请假', doctor:'医生', self:'自愈'}[tab]}
-                </button>
-              ))}
-            </div>
-
-            <div style={{background:'rgba(28,28,28,0.9)', padding:'20px', borderRadius:'12px', width:'100%', maxWidth:'350px', border:'1px solid #444', boxShadow:'0 10px 30px rgba(0,0,0,0.5)'}}>
-              {identity === 'partner' && (
-                <><h3 style={{color:'#fff', margin:'0 0 10px 0'}}>通感说明书</h3><p style={{color:'#ccc', fontSize:'14px', lineHeight:'1.5'}}>{content.analogy}</p><div style={{marginTop:'15px', padding:'15px', background:'rgba(211,47,47,0.1)', borderLeft:'3px solid #d32f2f', color:'#ffcdd2', fontSize:'13px', whiteSpace:'pre-wrap'}}>{content.action}</div></>
-              )}
-              {identity === 'work' && (
-                <><h3 style={{color:'#ff9800', margin:'0 0 10px 0'}}>不可见痛苦声明</h3><p style={{color:'#ccc', fontSize:'14px', lineHeight:'1.5'}}>主管/HR 您好：<br/>我今日突发严重原发性痛经（呈现强烈的<strong>{content.pain}</strong>），伴随体力透支，已无法维持正常专注度。</p><div style={{marginTop:'15px', padding:'15px', background:'rgba(255,152,0,0.1)', borderLeft:'3px solid #ff9800', color:'#ffcc80', fontSize:'13px'}}><strong>💼 诉求：</strong><br/>特申请今日居家休息。身体平复后第一时间处理工作，感谢批准。</div></>
-              )}
-              {identity === 'doctor' && (
-                <><h3 style={{color:'#2196f3', margin:'0 0 10px 0'}}>医疗辅助报告</h3><p style={{color:'#ccc', fontSize:'14px', lineHeight:'1.5'}}>{content.med}</p><div style={{marginTop:'15px', padding:'15px', background:'rgba(33,150,243,0.1)', borderLeft:'3px solid #2196f3', color:'#90caf9', fontSize:'13px'}}><strong>📋 记录：</strong> 患者具身痛苦图谱已记录如背景所示。</div></>
-              )}
-              {identity === 'self' && (
-                <><h3 style={{color:'#9c27b0', margin:'0 0 10px 0'}}>自愈与社群互助</h3><p style={{color:'#ccc', fontSize:'14px', lineHeight:'1.5'}}>亲爱的，你画出了你的风暴。现在，请允许自己休息。</p><div style={{marginTop:'15px', padding:'15px', background:'rgba(156,39,176,0.1)', borderLeft:'3px solid #9c27b0', color:'#e1bee7', fontSize:'13px', whiteSpace:'pre-wrap'}}>{content.selfCare}</div></>
-              )}
-            </div>
-
-            <div style={{display:'flex', gap:'10px', width:'100%', maxWidth:'350px', marginTop:'30px', marginBottom:'40px'}}>
-              <button style={{flex:2, padding:'14px', borderRadius:'20px', background:'#4caf50', color:'#fff', border:'none', fontWeight:'bold', cursor:'pointer'}} onClick={() => handleShare(content)}>一键分享卡片</button>
-              <button style={{flex:1.5, padding:'14px', borderRadius:'20px', background:'#2196f3', color:'#fff', border:'none', fontWeight:'bold', cursor:'pointer'}} onClick={() => setShowPostModal(true)}>发布到广场</button>
-              <button style={{flex:1, padding:'14px', borderRadius:'20px', background:'rgba(255,255,255,0.1)', border:'1px solid #555', color:'#fff', cursor:'pointer'}} onClick={()=>{ setPage("onboarding"); }}>返回主页</button>
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* === Community 广场页面（新增群组功能）=== */}
-      {page === "community" && (
-        <div style={{pointerEvents:'auto', background:'#0a0a0a', width:'100vw', height:'100vh', overflowY:'auto', padding:'20px', boxSizing:'border-box'}}>
-          <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'15px', position:'sticky', top:0, background:'#0a0a0a', paddingBottom:'10px'}}>
-            <h2 style={{color:'#fff', margin:0}}>探索共鸣广场</h2>
-            <button style={{background:'transparent', border:'1px solid #444', color:'#888', padding:'8px 16px', borderRadius:'20px', cursor:'pointer'}} onClick={() => setPage('onboarding')}>关闭 ✕</button>
-          </div>
-
-          {/* 群组筛选栏 */}
-          <div style={{display:'flex', gap:'10px', overflowX:'auto', paddingBottom:'10px', marginBottom:'15px'}}>
-            <button style={{background:communityFilter==='all'?'#d32f2f':'#222', color:'#fff', border:'none', padding:'6px 15px', borderRadius:'15px', whiteSpace:'nowrap', cursor:'pointer'}} onClick={()=>setCommunityFilter('all')}>🌍 全部</button>
-            {communityGroups.map(g => (
-              <button key={g.id} style={{background:communityFilter===g.id?'#d32f2f':'#222', color:'#fff', border:'none', padding:'6px 15px', borderRadius:'15px', whiteSpace:'nowrap', cursor:'pointer'}} onClick={()=>setCommunityFilter(g.id)}>{g.name}</button>
-            ))}
-            <button style={{background:'transparent', color:'#4caf50', border:'1px dashed #4caf50', padding:'6px 15px', borderRadius:'15px', whiteSpace:'nowrap', cursor:'pointer'}} onClick={handleCreateGroup}>+ 建群</button>
-            <button style={{background:'transparent', color:'#2196f3', border:'1px dashed #2196f3', padding:'6px 15px', borderRadius:'15px', whiteSpace:'nowrap', cursor:'pointer'}} onClick={handleJoinGroup}>+ 加入</button>
-          </div>
-
-          <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px'}}>
-            {posts.filter(p => communityFilter === 'all' || p.group === communityFilter).map((post) => (
-              <div key={post.id} onClick={() => setViewingPost(post)} style={{background:'#1c1c1c', borderRadius:'12px', padding:'10px', border:'1px solid #333', cursor:'pointer'}}>
-                <img src={post.img} style={{width:'100%', height:'120px', objectFit:'cover', borderRadius:'8px'}} alt="post" />
-                <p style={{color:'#ddd', fontSize:'12px', margin:'8px 0', display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden'}}>{post.text}</p>
-                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
-                  <span style={{color:'#d32f2f', fontSize:'11px'}}>{post.tags}</span>
-                  <span style={{color:'#888', fontSize:'12px'}}>❤️ {post.likes}</span>
-                </div>
+            <div style={{ width: '100%', maxWidth: '320px', textAlign: 'left' }}>
+              <label style={{ color: '#fff', marginBottom: '15px', display: 'block', fontSize: '1rem', fontWeight: 'bold' }}>当痛经发作时，你最需要伴侣/家人怎么做？</label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {['alone', 'care', 'comfort'].map((p, i) => (
+                  <button key={p} onClick={() => togglePref(p)} style={{ padding: '15px', borderRadius: '12px', textAlign: 'left', background: '#1e1e1e', border: userPrefs.includes(p) ? '2px solid #d32f2f' : '1px solid #444', color: '#fff', cursor: 'pointer' }}>
+                    <div style={{ fontSize: '14px', fontWeight: 'bold' }}>{['🛑 别管我，让我一个人待着', '🥣 我没力气，需要实际照顾', '🫂 我很脆弱，需要情绪陪伴'][i]}</div>
+                  </button>
+                ))}
               </div>
-            ))}
-          </div>
-        </div>
-      )}
+            </div>
 
-      {/* === History 历史页面 === */}
-      {page === "history" && (
-        <div style={{pointerEvents:'auto', background:'#0a0a0a', width:'100vw', height:'100vh', overflowY:'auto', padding:'20px', boxSizing:'border-box'}}>
-          <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'20px', position:'sticky', top:0, background:'#0a0a0a', paddingBottom:'10px'}}>
-            <h2 style={{color:'#fff', margin:0}}>我的疼痛档案</h2>
-            <button style={{background:'transparent', border:'1px solid #444', color:'#888', padding:'8px 16px', borderRadius:'20px', cursor:'pointer'}} onClick={() => setPage('onboarding')}>关闭 ✕</button>
-          </div>
+            <button style={{ marginTop: '30px', width: '200px', padding: '14px', background: '#d32f2f', color: '#fff', border: 'none', borderRadius: '25px', fontWeight: 'bold', cursor: 'pointer' }}
+              onClick={() => { pgFrontRef.current?.clear(); pgBackRef.current?.clear(); dynamicParticles.current = []; staticParticles.current = []; setPage("canvas"); }}>开始绘制</button>
 
-          {history.length === 0 ? (
-            <div style={{textAlign:'center', color:'#666', marginTop:'100px'}}>暂无记录，去画下你的第一张痛觉图吧。</div>
-          ) : (
-            <div style={{display:'flex', flexDirection:'column', gap:'12px'}}>
-              {history.map((record) => (
-                <div key={record.id} onClick={() => setViewingDiary(record)} style={{display:'flex', alignItems:'center', background:'#1c1c1c', padding:'15px', borderRadius:'12px', border:'1px solid #333', cursor:'pointer'}}>
-                  <img src={record.img} style={{width:'60px', height:'60px', borderRadius:'8px', objectFit:'cover', background:'#000'}} alt="record"/>
-                  <div style={{marginLeft:'15px'}}>
-                    <div style={{color:'#fff', fontWeight:'bold', fontSize:'15px'}}>{record.date}</div>
-                    <div style={{color:'#888', fontSize:'12px', marginTop:'5px'}}>{BRUSHES[record.type]?.label || '未知'} 主导</div>
+            <div style={{ display: 'flex', gap: '15px', marginTop: '20px' }}>
+              <button style={{ background: 'transparent', border: '1px solid #444', color: '#888', padding: '8px 16px', borderRadius: '20px', cursor: 'pointer' }} onClick={() => setPage("community")}>🌍 探索广场</button>
+              <button style={{ background: 'transparent', border: '1px solid #444', color: '#888', padding: '8px 16px', borderRadius: '20px', cursor: 'pointer' }} onClick={() => setPage("history")}>📅 疼痛日记</button>
+            </div>
+          </div>
+        )}
+
+        {/* === Canvas 绘画页面 === */}
+        {page === "canvas" && (
+          <div style={{ position: 'absolute', top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 10, pointerEvents: 'none' }}>
+            <div style={{ pointerEvents: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '15px', padding: '15px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+                <span style={{ color: '#fff', fontWeight: 'bold', fontSize: '20px' }}>PainScape</span>
+                <button style={{ background: '#d32f2f', color: '#fff', border: 'none', padding: '6px 18px', borderRadius: '20px', cursor: 'pointer', fontWeight: 'bold' }} onClick={handleFinish}>生成</button>
+              </div>
+
+              <div style={{ display: 'flex', background: 'rgba(30,30,30,0.8)', borderRadius: '20px', padding: '4px', backdropFilter: 'blur(10px)' }}>
+                <button style={{ padding: '6px 15px', borderRadius: '16px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 'bold', background: bodyMode === 'front' ? '#4caf50' : 'transparent', color: bodyMode === 'front' ? '#fff' : '#888' }} onClick={(e) => { e.stopPropagation(); setBodyMode('front'); }}>正面</button>
+                <button style={{ padding: '6px 15px', borderRadius: '16px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 'bold', background: bodyMode === 'back' ? '#4caf50' : 'transparent', color: bodyMode === 'back' ? '#fff' : '#888' }} onClick={(e) => { e.stopPropagation(); setBodyMode('back'); }}>背面</button>
+                <button style={{ padding: '6px 15px', borderRadius: '16px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 'bold', background: bodyMode === 'none' ? '#d32f2f' : 'transparent', color: bodyMode === 'none' ? '#fff' : '#888' }} onClick={(e) => { e.stopPropagation(); setBodyMode('none'); }}>沉浸盲画</button>
+              </div>
+            </div>
+
+            <div style={{ pointerEvents: 'auto', position: 'absolute', right: '20px', top: '50%', transform: 'translateY(-50%)', display: 'flex', flexDirection: 'column', gap: '15px' }}>
+              <button style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(10px)', border: '1px solid #444', borderRadius: '30px', width: '50px', height: '50px', fontSize: '24px', cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); handleUndo(); }}>↩️</button>
+              <button style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(10px)', border: '1px solid #444', borderRadius: '30px', width: '50px', height: '50px', fontSize: '24px', cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); handleRedo(); }}>↪️</button>
+              <button style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(10px)', border: '1px solid #444', borderRadius: '30px', width: '50px', height: '50px', fontSize: '24px', cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); handleClear(); }}>🗑️</button>
+            </div>
+
+            <div style={{ pointerEvents: 'auto', position: 'absolute', bottom: '30px', left: '50%', transform: 'translateX(-50%)', width: '90%', maxWidth: '380px', background: 'rgba(20,20,20,0.9)', padding: '15px', borderRadius: '24px', backdropFilter: 'blur(10px)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+                {Object.keys(BRUSHES).map(k => (
+                  <button key={k} style={{ flex: 1, background: activeBrush === k ? '#444' : 'transparent', border: 'none', color: activeBrush === k ? '#fff' : '#888', padding: '8px 0', borderRadius: '10px', fontSize: '12px', display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer' }} onClick={() => setActiveBrush(activeBrush === k ? null : k)}>
+                    <span style={{ fontSize: '20px', marginBottom: '4px' }}>{BRUSHES[k].icon}</span>
+                    <span>{BRUSHES[k].label.split(" ")[1]}</span>
+                  </button>
+                ))}
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'center', gap: '20px' }}>
+                {Object.keys(PALETTES).map(k => (
+                  <div key={k} style={{ width: '30px', height: '30px', borderRadius: '50%', border: activeColor === k ? '2px solid #fff' : '2px solid #444', background: `rgb(${PALETTES[k].color.join(',')})`, cursor: 'pointer', transform: activeColor === k ? 'scale(1.2)' : 'none' }} onClick={() => setActiveColor(k)} />
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* === Result 结果页面 === */}
+        {page === "result" && (() => {
+          const content = generateContent();
+          return (
+            <div style={{ pointerEvents: 'auto', position: 'absolute', top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 20, background: 'rgba(10,10,10,0.95)', backdropFilter: 'blur(8px)', padding: '20px', overflowY: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+
+              <img src={imgUrl} style={{ width: '60%', maxWidth: '250px', marginTop: '20px', borderRadius: '12px', border: '2px solid #444' }} alt="pain" />
+
+              <div style={{ display: 'flex', gap: '10px', margin: '20px 0', width: '100%', maxWidth: '350px' }}>
+                {['partner', 'work', 'doctor', 'self'].map(tab => (
+                  <button key={tab} style={{ flex: 1, padding: '10px 0', background: identity === tab ? '#444' : 'rgba(30,30,30,0.8)', color: identity === tab ? '#fff' : '#888', border: '1px solid #444', borderRadius: '8px', fontSize: '13px', cursor: 'pointer' }} onClick={() => setIdentity(tab)}>
+                    {{ partner: '伴侣', work: '请假', doctor: '医生', self: '自愈' }[tab]}
+                  </button>
+                ))}
+              </div>
+
+              <div style={{ background: 'rgba(28,28,28,0.9)', padding: '20px', borderRadius: '12px', width: '100%', maxWidth: '350px', border: '1px solid #444', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' }}>
+                {identity === 'partner' && (
+                  <><h3 style={{ color: '#fff', margin: '0 0 10px 0' }}>通感说明书</h3><p style={{ color: '#ccc', fontSize: '14px', lineHeight: '1.5' }}>{content.analogy}</p><div style={{ marginTop: '15px', padding: '15px', background: 'rgba(211,47,47,0.1)', borderLeft: '3px solid #d32f2f', color: '#ffcdd2', fontSize: '13px', whiteSpace: 'pre-wrap' }}>{content.action}</div></>
+                )}
+                {identity === 'work' && (
+                  <><h3 style={{ color: '#ff9800', margin: '0 0 10px 0' }}>不可见痛苦声明</h3><p style={{ color: '#ccc', fontSize: '14px', lineHeight: '1.5' }}>主管/HR 您好：<br />我今日突发严重原发性痛经（呈现强烈的<strong>{content.pain}</strong>），伴随体力透支，已无法维持正常专注度。</p><div style={{ marginTop: '15px', padding: '15px', background: 'rgba(255,152,0,0.1)', borderLeft: '3px solid #ff9800', color: '#ffcc80', fontSize: '13px' }}><strong>💼 诉求：</strong><br />特申请今日居家休息。身体平复后第一时间处理工作，感谢批准。</div></>
+                )}
+                {identity === 'doctor' && (
+                  <><h3 style={{ color: '#2196f3', margin: '0 0 10px 0' }}>医疗辅助报告</h3><p style={{ color: '#ccc', fontSize: '14px', lineHeight: '1.5' }}>{content.med}</p><div style={{ marginTop: '15px', padding: '15px', background: 'rgba(33,150,243,0.1)', borderLeft: '3px solid #2196f3', color: '#90caf9', fontSize: '13px' }}><strong>📋 记录：</strong> 患者具身痛苦图谱已记录如背景所示。</div></>
+                )}
+                {identity === 'self' && (
+                  <><h3 style={{ color: '#9c27b0', margin: '0 0 10px 0' }}>自愈与社群互助</h3><p style={{ color: '#ccc', fontSize: '14px', lineHeight: '1.5' }}>亲爱的，你画出了你的风暴。现在，请允许自己休息。</p><div style={{ marginTop: '15px', padding: '15px', background: 'rgba(156,39,176,0.1)', borderLeft: '3px solid #9c27b0', color: '#e1bee7', fontSize: '13px', whiteSpace: 'pre-wrap' }}>{content.selfCare}</div></>
+                )}
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', width: '100%', maxWidth: '350px', marginTop: '30px', marginBottom: '40px' }}>
+                <button style={{ flex: 2, padding: '14px', borderRadius: '20px', background: '#4caf50', color: '#fff', border: 'none', fontWeight: 'bold', cursor: 'pointer' }} onClick={() => handleShare(content)}>一键分享卡片</button>
+                <button style={{ flex: 1.5, padding: '14px', borderRadius: '20px', background: '#2196f3', color: '#fff', border: 'none', fontWeight: 'bold', cursor: 'pointer' }} onClick={() => setShowPostModal(true)}>发布到广场</button>
+                <button style={{ flex: 1, padding: '14px', borderRadius: '20px', background: 'rgba(255,255,255,0.1)', border: '1px solid #555', color: '#fff', cursor: 'pointer' }} onClick={() => { setPage("onboarding"); }}>返回主页</button>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* === Community 广场页面 === */}
+        {page === "community" && (
+          <div style={{ pointerEvents: 'auto', background: '#0a0a0a', width: '100vw', minHeight: '100vh', overflowY: 'auto', padding: '20px', boxSizing: 'border-box' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', position: 'sticky', top: 0, background: '#0a0a0a', paddingBottom: '10px', zIndex: 5 }}>
+              <h2 style={{ color: '#fff', margin: 0 }}>探索共鸣广场</h2>
+              <button style={{ background: 'transparent', border: '1px solid #444', color: '#888', padding: '8px 16px', borderRadius: '20px', cursor: 'pointer' }} onClick={() => setPage('onboarding')}>关闭 ✕</button>
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '10px', marginBottom: '15px' }}>
+              <button style={{ background: communityFilter === 'all' ? '#d32f2f' : '#222', color: '#fff', border: 'none', padding: '6px 15px', borderRadius: '15px', whiteSpace: 'nowrap', cursor: 'pointer' }} onClick={() => setCommunityFilter('all')}>🌍 全部</button>
+              {communityGroups.map(g => (
+                <button key={g.id} style={{ background: communityFilter === g.id ? '#d32f2f' : '#222', color: '#fff', border: 'none', padding: '6px 15px', borderRadius: '15px', whiteSpace: 'nowrap', cursor: 'pointer' }} onClick={() => setCommunityFilter(g.id)}>{g.name}</button>
+              ))}
+              <button style={{ background: 'transparent', color: '#4caf50', border: '1px dashed #4caf50', padding: '6px 15px', borderRadius: '15px', whiteSpace: 'nowrap', cursor: 'pointer' }} onClick={handleCreateGroup}>+ 建群</button>
+              <button style={{ background: 'transparent', color: '#2196f3', border: '1px dashed #2196f3', padding: '6px 15px', borderRadius: '15px', whiteSpace: 'nowrap', cursor: 'pointer' }} onClick={handleJoinGroup}>+ 加入</button>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              {posts.filter(p => communityFilter === 'all' || p.group === communityFilter).map((post) => (
+                <div key={post.id} onClick={() => setViewingPost(post)} style={{ background: '#1c1c1c', borderRadius: '12px', padding: '10px', border: '1px solid #333', cursor: 'pointer' }}>
+                  <img src={post.img} style={{ width: '100%', height: '120px', objectFit: 'cover', borderRadius: '8px', background: '#000' }} alt="post" />
+                  <p style={{ color: '#ddd', fontSize: '12px', margin: '8px 0', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{post.text}</p>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ color: '#d32f2f', fontSize: '11px' }}>{post.tags}</span>
+                    <span style={{ color: '#888', fontSize: '12px' }}>❤️ {post.likes}</span>
                   </div>
                 </div>
               ))}
             </div>
-          )}
-        </div>
-      )}
-    </div>
+          </div>
+        )}
 
-    {/* === 弹窗层 === */}
-    {/* 查看日记详情弹窗 */}
-    {viewingDiary && (
-      <div style={{position:'fixed', zIndex:500, top:0, left:0, width:'100vw', height:'100vh', background:'rgba(0,0,0,0.95)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'20px', boxSizing:'border-box'}} onClick={() => setViewingDiary(null)}>
-        <img src={viewingDiary.img} style={{width:'100%', maxWidth:'350px', borderRadius:'12px', border:'1px solid #444'}} alt="diary" />
-        <h3 style={{color:'#fff', marginTop:'20px'}}>{viewingDiary.date} 记录详情</h3>
-        <div style={{background:'rgba(28,28,28,0.9)', padding:'20px', borderRadius:'12px', width:'100%', maxWidth:'350px', marginTop:'10px'}}>
-          <p style={{color:'#ccc', fontSize:'14px', lineHeight:'1.5'}}>{viewingDiary.content?.analogy || '暂无描述'}</p>
-        </div>
-        <div style={{display:'flex', gap:'15px', marginTop:'20px'}}>
-          <button style={{padding:'12px 24px', borderRadius:'25px', background:'#4caf50', color:'#fff', border:'none', fontWeight:'bold', cursor:'pointer'}} onClick={(e)=>{ e.stopPropagation(); handleShare(viewingDiary.content); }}>分享此记录</button>
-          <button style={{padding:'12px 24px', borderRadius:'25px', background:'rgba(255,255,255,0.1)', border:'1px solid #555', color:'#fff', cursor:'pointer'}} onClick={() => setViewingDiary(null)}>关闭</button>
-        </div>
+        {/* === History 历史页面（按月归类）=== */}
+        {page === "history" && (
+          <div style={{ pointerEvents: 'auto', background: '#0a0a0a', width: '100vw', minHeight: '100vh', overflowY: 'auto', padding: '20px', boxSizing: 'border-box' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', position: 'sticky', top: 0, background: '#0a0a0a', paddingBottom: '10px', zIndex: 5 }}>
+              <h2 style={{ color: '#fff', margin: 0 }}>我的疼痛档案</h2>
+              <button style={{ background: 'transparent', border: '1px solid #444', color: '#888', padding: '8px 16px', borderRadius: '20px', cursor: 'pointer' }} onClick={() => setPage('onboarding')}>关闭 ✕</button>
+            </div>
+
+            {history.length === 0 ? (
+              <div style={{ textAlign: 'center', color: '#666', marginTop: '100px' }}>暂无记录，去画下你的第一张痛觉图吧。</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                {Object.entries(groupedHistory).sort((a, b) => b[0].localeCompare(a[0])).map(([month, records]) => (
+                  <div key={month}>
+                    <h3 style={{ color: '#d32f2f', fontSize: '16px', marginBottom: '10px', borderBottom: '1px solid #333', paddingBottom: '5px' }}>{month}</h3>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      {records.sort((a, b) => b.id - a.id).map((record) => (
+                        <div key={record.id} onClick={() => setViewingDiary(record)} style={{ display: 'flex', alignItems: 'center', background: '#1c1c1c', padding: '15px', borderRadius: '12px', border: '1px solid #333', cursor: 'pointer' }}>
+                          <img src={record.img} style={{ width: '60px', height: '60px', borderRadius: '8px', objectFit: 'cover', background: '#000' }} alt="record" />
+                          <div style={{ marginLeft: '15px', flex: 1 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <div style={{ color: '#fff', fontWeight: 'bold', fontSize: '15px' }}>{record.date}</div>
+                              <div style={{ color: '#888', fontSize: '12px' }}>{record.time}</div>
+                            </div>
+                            <div style={{ color: '#888', fontSize: '12px', marginTop: '5px' }}>{BRUSHES[record.type]?.label || '未知'} 主导</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
-    )}
 
-    {/* 查看帖子详情弹窗 */}
-    {viewingPost && (
-      <div style={{position:'fixed', zIndex:500, top:0, left:0, width:'100vw', height:'100vh', background:'rgba(0,0,0,0.95)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'20px', boxSizing:'border-box'}} onClick={() => setViewingPost(null)}>
-        <img src={viewingPost.img} style={{width:'100%', maxWidth:'350px', borderRadius:'12px', border:'1px solid #444'}} alt="post" />
-        <p style={{color:'#fff', fontSize:'16px', margin:'20px 0', textAlign:'left', width:'100%', maxWidth:'350px', lineHeight:'1.6'}}>{viewingPost.text}</p>
-        <div style={{display:'flex', gap:'15px', width:'100%', maxWidth:'350px'}}>
-          <button style={{flex:1, padding:'14px', borderRadius:'25px', background:'#d32f2f', color:'#fff', border:'none', fontWeight:'bold', cursor:'pointer'}} onClick={(e)=>{ e.stopPropagation(); alert('已发送温暖的抱抱！'); }}>❤️ 抱抱</button>
-          <button style={{flex:1, padding:'14px', borderRadius:'25px', background:'#2196f3', color:'#fff', border:'none', fontWeight:'bold', cursor:'pointer'}} onClick={(e)=>{ e.stopPropagation(); alert('已发送休息提醒！'); }}>🍵 多喝热水</button>
-        </div>
-        <button style={{marginTop:'30px', padding:'12px 40px', borderRadius:'25px', background:'rgba(255,255,255,0.1)', border:'1px solid #555', color:'#fff', cursor:'pointer'}} onClick={() => setViewingPost(null)}>关闭</button>
-      </div>
-    )}
-
-    {/* 发布弹窗 */}
-    {showPostModal && (
-      <div style={{position:'fixed', zIndex:500, top:0, left:0, width:'100vw', height:'100vh', background:'rgba(0,0,0,0.85)', display:'flex', justifyContent:'center', alignItems:'center', padding:'20px', boxSizing:'border-box'}}>
-        <div style={{background:'#1c1c1c', padding:'20px', borderRadius:'16px', width:'100%', maxWidth:'320px', border:'1px solid #444'}}>
-          <h3 style={{color:'#fff', marginTop:0}}>分享你的经历</h3>
-          {imgUrl && <img src={imgUrl} style={{width:'100%', borderRadius:'8px', marginBottom:'15px'}} alt="preview"/>}
-          <textarea value={postText} onChange={e=>setPostText(e.target.value)} placeholder="写点什么，或者吐槽一下这该死的痛经..." style={{width:'100%', height:'80px', background:'#111', color:'#fff', border:'1px solid #333', borderRadius:'8px', padding:'10px', boxSizing:'border-box', marginBottom:'15px'}}></textarea>
-          <div style={{display:'flex', gap:'10px'}}>
-            <button style={{flex:1, padding:'10px', background:'#333', color:'#fff', border:'none', borderRadius:'8px', cursor:'pointer'}} onClick={()=>setShowPostModal(false)}>取消</button>
-            <button style={{flex:1, padding:'10px', background:'#2196f3', color:'#fff', border:'none', borderRadius:'8px', fontWeight:'bold', cursor:'pointer'}} onClick={handlePublishPost}>发布</button>
+      {/* === 弹窗层 === */}
+      {viewingDiary && (
+        <div style={{ position: 'fixed', zIndex: 500, top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.95)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '20px', boxSizing: 'border-box' }} onClick={() => setViewingDiary(null)}>
+          <img src={viewingDiary.img} style={{ width: '100%', maxWidth: '350px', borderRadius: '12px', border: '1px solid #444' }} alt="diary" />
+          <h3 style={{ color: '#fff', marginTop: '20px' }}>{viewingDiary.date} {viewingDiary.time}</h3>
+          <div style={{ background: 'rgba(28,28,28,0.9)', padding: '20px', borderRadius: '12px', width: '100%', maxWidth: '350px', marginTop: '10px' }}>
+            <p style={{ color: '#ccc', fontSize: '14px', lineHeight: '1.5' }}>{viewingDiary.content?.analogy || '暂无描述'}</p>
+            <p style={{ color: '#4caf50', fontSize: '13px', marginTop: '10px' }}>{viewingDiary.content?.selfCare}</p>
+          </div>
+          <div style={{ display: 'flex', gap: '15px', marginTop: '20px' }}>
+            <button style={{ padding: '12px 24px', borderRadius: '25px', background: '#4caf50', color: '#fff', border: 'none', fontWeight: 'bold', cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); handleShare(viewingDiary.content); }}>分享此记录</button>
+            <button style={{ padding: '12px 24px', borderRadius: '25px', background: 'rgba(255,255,255,0.1)', border: '1px solid #555', color: '#fff', cursor: 'pointer' }} onClick={() => setViewingDiary(null)}>关闭</button>
           </div>
         </div>
-      </div>
-    )}
-  </>
-);
+      )}
+
+      {viewingPost && (
+        <div style={{ position: 'fixed', zIndex: 500, top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.95)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '20px', boxSizing: 'border-box' }} onClick={() => setViewingPost(null)}>
+          <img src={viewingPost.img} style={{ width: '100%', maxWidth: '350px', borderRadius: '12px', border: '1px solid #444' }} alt="post" />
+          <p style={{ color: '#fff', fontSize: '16px', margin: '20px 0', textAlign: 'left', width: '100%', maxWidth: '350px', lineHeight: '1.6' }}>{viewingPost.text}</p>
+          <div style={{ display: 'flex', gap: '15px', width: '100%', maxWidth: '350px' }}>
+            <button style={{ flex: 1, padding: '14px', borderRadius: '25px', background: '#d32f2f', color: '#fff', border: 'none', fontWeight: 'bold', cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); alert('已发送温暖的抱抱！'); }}>❤️ 抱抱</button>
+            <button style={{ flex: 1, padding: '14px', borderRadius: '25px', background: '#2196f3', color: '#fff', border: 'none', fontWeight: 'bold', cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); alert('已发送休息提醒！'); }}>🍵 多喝热水</button>
+          </div>
+          <button style={{ marginTop: '30px', padding: '12px 40px', borderRadius: '25px', background: 'rgba(255,255,255,0.1)', border: '1px solid #555', color: '#fff', cursor: 'pointer' }} onClick={() => setViewingPost(null)}>关闭</button>
+        </div>
+      )}
+
+      {showPostModal && (
+        <div style={{ position: 'fixed', zIndex: 500, top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.85)', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px', boxSizing: 'border-box' }}>
+          <div style={{ background: '#1c1c1c', padding: '20px', borderRadius: '16px', width: '100%', maxWidth: '320px', border: '1px solid #444' }}>
+            <h3 style={{ color: '#fff', marginTop: 0 }}>分享你的经历</h3>
+            {imgUrl && <img src={imgUrl} style={{ width: '100%', borderRadius: '8px', marginBottom: '15px' }} alt="preview" />}
+            <textarea value={postText} onChange={e => setPostText(e.target.value)} placeholder="写点什么，或者吐槽一下这该死的痛经..." style={{ width: '100%', height: '80px', background: '#111', color: '#fff', border: '1px solid #333', borderRadius: '8px', padding: '10px', boxSizing: 'border-box', marginBottom: '15px' }}></textarea>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button style={{ flex: 1, padding: '10px', background: '#333', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer' }} onClick={() => setShowPostModal(false)}>取消</button>
+              <button style={{ flex: 1, padding: '10px', background: '#2196f3', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }} onClick={handlePublishPost}>发布</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
 }
 
 export default App;
