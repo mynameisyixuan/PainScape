@@ -1,7 +1,17 @@
 import React, { useState, useRef, useEffect } from "react";
 import Sketch from "react-p5";
 
-// === 配置区 ===
+// === 1. 语录与配置区 ===
+const QUOTES = [
+  "慢性疼痛相当于长期的“unmaking”——把人困在身体牢笼里。\n—— Elaine Scarry",
+  "疼痛不仅是神经的电冲动，它是对自我边界的侵犯。",
+  "语言在痛苦面前总是匮乏的，而视觉是一道划破沉默的闪电。",
+  "不被看见的痛楚，往往需要承受双倍的煎熬。",
+  "拒绝隐忍，让不可言说之痛成为公共的视觉证据。",
+  "你的身体是一座战场，允许它留下风暴的痕迹。",
+  "这不是矫情，这是一场真切的生理型灾难。"
+];
+
 const BRUSHES = {
   twist: { label: "🌪️ 绞/拧", icon: "🌪️" },
   pierce: { label: "⚡️ 荆/刺", icon: "⚡️" },
@@ -18,9 +28,8 @@ const PALETTES = {
   blue:    { color: [80, 160, 220], label: "❄️" },
 };
 
-// === 粒子类 (v5) ===
+// === 2. 粒子引擎 (修复此消彼长，重压与刺钻重构) ===
 class PainParticle {
-  // 【新增 heading 参数，获取手指滑动的真实方向】
   constructor(p5, x, y, type, color, speed, heading) {
     this.p5 = p5; this.pos = p5.createVector(x, y);
     this.type = type; this.color = color;
@@ -28,162 +37,182 @@ class PainParticle {
     this.isDynamic = (type === 'wave' || type === 'twist');
 
     if (type === 'pierce') {
-      // 不再发散！顺着滑动的方向直愣愣扎进去
-      // 限制偏转角在极其狭窄的范围内 (p5.random(-0.15, 0.15))
-      let angle = heading + p5.random(-0.15, 0.15);
+      // ⚡️ 【重构】刺钻：控制范围，变得更短促尖锐
+      let angle = heading + p5.random(-0.1, 0.1);
       this.vel = p5.createVector(p5.cos(angle), p5.sin(angle));
-      this.vel.mult(p5.random(8, 18)); // 短促、极快的扎入速度
-      this.size = p5.random(1, 3); // 钻头/针尖的粗细
+      this.vel.mult(p5.random(12, 22)); // 长度减半，避免掩盖位置
+      this.size = p5.random(1.5, 3.5);
+      this.thorns = [];
+      let numThorns = p5.floor(p5.random(2, 4));
+      for(let i=0; i<numThorns; i++) {
+        this.thorns.push({
+          distRatio: p5.random(0.2, 0.8),
+          angleOffset: p5.random([p5.random(0.4, 0.7), p5.random(-0.7, -0.4)]),
+          len: p5.random(4, 10) // 倒刺变短
+        });
+      }
     }
     else if (type === 'heavy') {
-      this.vel = p5.createVector(p5.random(-0.2, 0.2), p5.random(0.5, 1.5));
-      this.size = p5.random(2, 4);
+      // 🪨 【重构】坠/压：沉重、钝角的铁块/秤砣感
+      this.vel = p5.createVector(p5.random(-0.05, 0.05), p5.random(1.0, 2.5)); // 初始下坠速度
+      this.size = p5.random(6, 12); // 控制单体大小
     }
     else if (type === 'twist') {
       this.vel = p5.createVector(0, 0);
-      this.size = p5.random(10, 25); this.angle = p5.random(p5.TWO_PI);
+      this.size = p5.random(15, 30); this.angle = p5.random(p5.TWO_PI);
     }
     else if (type === 'wave') {
       this.vel = p5.createVector(0, 0);
       this.size = p5.random(5, 15); this.maxSize = p5.random(30, 60);
     }
     else if (type === 'scrape') {
-      // 刮撕也顺着滑动方向
-      let angle = heading + p5.random(-0.25, 0.25);
+      let angle = p5.PI / 4 + p5.random(-0.15, 0.15);
       this.vel = p5.createVector(p5.cos(angle), p5.sin(angle));
-      this.vel.mult(p5.random(2, 6));
+      this.vel.mult(p5.random(15, 30)); this.size = p5.random(2, 6);
     }
   }
 
   update(p5) {
-    this.pos.add(this.vel);
-    if (this.type === 'twist') {
-      this.angle += 0.05; this.size *= 0.99;
-      if(this.size < 2) this.life = 0;
+    if (this.type === 'heavy') {
+      this.pos.add(this.vel);
+      this.life -= 10;
+      this.vel.y += 1.2; // 极大的重力加速度，使其瞬间坠落并停滞
+      this.vel.x *= 0.2;
+    } else {
+      this.pos.add(this.vel);
     }
-    else if (this.type === 'heavy') { this.life -= 4; this.vel.y += 0.3; }
-    else if (this.type === 'wave') { this.pulseSize = this.size + p5.sin(p5.frameCount * 0.05 + this.seed) * (this.maxSize - this.size); }
-    else if (this.type === 'scrape') { this.life -= 15; this.vel.mult(0.9); }
-    else { this.life -= 20; } // pierce 瞬间扎入，消失极快
+
+    if (this.type === 'twist') {
+      this.angle += 0.08; this.size *= 0.98; if(this.size < 3) this.life = 0;
+    }
+    else if (this.type === 'wave') {
+      this.pulseSize = this.size + p5.sin(p5.frameCount * 0.05 + this.seed) * (this.maxSize - this.size);
+    }
+    else if (this.type === 'scrape') {
+      this.life -= 15; this.vel.mult(0.85);
+    }
+    else if (this.type === 'pierce') {
+      this.life -= 25; this.vel.mult(0);
+    }
   }
 
   show(pg) {
     let p = pg || this.p5;
 
-    // 【核心滤镜隔离】：只有重压、胀气、绞痛需要发光发糊。
-    // 刺钻和刮撕必须极其锐利，绝不能加 shadowBlur！
-    if (this.type === 'wave' || this.type === 'heavy' || this.type === 'twist') {
-      p.drawingContext.shadowBlur = 15;
+    if (this.type === 'wave' || this.type === 'twist') {
+      p.drawingContext.shadowBlur = 10;
       p.drawingContext.shadowColor = `rgb(${this.color[0]}, ${this.color[1]}, ${this.color[2]})`;
-    } else {
-      p.drawingContext.shadowBlur = 0; // 关闭发光，保持锐利
-    }
+    } else { p.drawingContext.shadowBlur = 0; }
 
     if (this.type === 'pierce') {
-      // 【直刺特效】：冰冷、锐利的一刀扎入
-      p.stroke(255, 255, 255, 220); // 针身是高亮的白色
-      p.strokeWeight(this.size * 0.6); // 极细
-      p.line(this.pos.x, this.pos.y, this.pos.x + this.vel.x, this.pos.y + this.vel.y);
+      let endX = this.pos.x + this.vel.x; let endY = this.pos.y + this.vel.y;
+      p.noStroke(); p.fill(255, 255, 255, 220); p.beginShape();
+      let perpAngle = this.vel.heading() + p.PI/2; let halfW = this.size / 2;
+      p.vertex(this.pos.x + p.cos(perpAngle)*halfW, this.pos.y + p.sin(perpAngle)*halfW);
+      p.vertex(this.pos.x - p.cos(perpAngle)*halfW, this.pos.y - p.sin(perpAngle)*halfW);
+      p.vertex(endX, endY); p.endShape(p.CLOSE);
 
-      // 末端带有深色的血孔/钻孔
-      p.noStroke();
-      p.fill(this.color[0]*0.5, 0, 0, 255);
-      p.ellipse(this.pos.x + this.vel.x, this.pos.y + this.vel.y, this.size * 1.5, this.size * 1.5);
+      p.fill(this.color[0], 0, 0, 255);
+      this.thorns.forEach(thorn => {
+        let rootX = this.pos.x + this.vel.x * thorn.distRatio; let rootY = this.pos.y + this.vel.y * thorn.distRatio;
+        let thornEndX = rootX + p.cos(this.vel.heading() + thorn.angleOffset) * thorn.len;
+        let thornEndY = rootY + p.sin(this.vel.heading() + thorn.angleOffset) * thorn.len;
+        p.beginShape(); p.vertex(rootX + p.cos(perpAngle)*1, rootY + p.sin(perpAngle)*1); p.vertex(rootX - p.cos(perpAngle)*1, rootY - p.sin(perpAngle)*1); p.vertex(thornEndX, thornEndY); p.endShape(p.CLOSE);
+      });
     }
     else if (this.type === 'heavy') {
-      p.noStroke(); p.fill(this.color[0]*0.5, this.color[1]*0.5, this.color[2]*0.5, 150); p.ellipse(this.pos.x, this.pos.y, this.size, this.size * 2);
+      // 🪨 【重构视觉】：画一个沉重、钝角的石块
+      p.noStroke(); p.fill(this.color[0]*0.4, this.color[1]*0.4, this.color[2]*0.4, 220);
+      p.beginShape();
+      p.vertex(this.pos.x - this.size*0.8, this.pos.y); // 左上
+      p.vertex(this.pos.x + this.size*0.8, this.pos.y); // 右上
+      p.vertex(this.pos.x + this.size*1.5, this.pos.y + this.size*2.5 + p.random(-2,2)); // 右下（底部宽大且参差）
+      p.vertex(this.pos.x - this.size*1.5, this.pos.y + this.size*2.5 + p.random(-2,2)); // 左下
+      p.endShape(p.CLOSE);
+      // 中心加深阴影，增加重量感
+      p.fill(0, 0, 0, 150);
+      p.ellipse(this.pos.x, this.pos.y + this.size, this.size*1.5, this.size*1.5);
     }
     else if (this.type === 'twist') {
       p.push(); p.translate(this.pos.x, this.pos.y); p.rotate(this.angle);
-      p.stroke(this.color[0], this.color[1], this.color[2], 180); p.strokeWeight(1.5);
-      for(let i=0; i<6; i++) p.line(0, 0, this.size * p.cos(i * p.PI/3), this.size * p.sin(i * p.PI/3));
-      p.noStroke(); p.fill(this.color[0], this.color[1], this.color[2], 200); p.ellipse(0, 0, this.size * 0.3); p.pop();
+      p.noFill(); p.stroke(this.color[0], this.color[1], this.color[2], 100); p.strokeWeight(1.5);
+      p.arc(0, 0, this.size * 2, this.size * 2, 0, p.PI * 1.5);
+      p.stroke(this.color[0], this.color[1], this.color[2], 200); p.strokeWeight(1.5);
+      for(let i=0; i<5; i++) p.line(0, 0, this.size * p.cos(i * p.TWO_PI/5), this.size * p.sin(i * p.TWO_PI/5));
+      p.noStroke(); p.fill(this.color[0]*0.8, 0, 0, 220); p.ellipse(0, 0, this.size * 0.4); p.pop();
     }
     else if (this.type === 'wave') {
-      p.noStroke(); p.fill(this.color[0], this.color[1], this.color[2], 12); p.ellipse(this.pos.x, this.pos.y, this.pulseSize, this.pulseSize);
-      p.fill(this.color[0], this.color[1], this.color[2], 30); p.ellipse(this.pos.x, this.pos.y, this.pulseSize * 0.5, this.pulseSize * 0.5);
+      p.noStroke(); p.fill(this.color[0], this.color[1], this.color[2], 10); p.ellipse(this.pos.x, this.pos.y, this.pulseSize, this.pulseSize);
+      p.fill(this.color[0], this.color[1], this.color[2], 25); p.ellipse(this.pos.x, this.pos.y, this.pulseSize * 0.5, this.pulseSize * 0.5);
     }
     else if (this.type === 'scrape') {
-      // 【彻底去糊的刮肉感】：多条平行错落的锐利直线
-      p.stroke(this.color[0], this.color[1]*0.5, this.color[2]*0.5, 255);
-      p.strokeWeight(p.random(0.5, 2)); // 极细极锐利
-
-      let angle = this.vel.heading();
-      let len = p.random(10, 30);
-      let endX = this.pos.x + p.cos(angle)*len;
-      let endY = this.pos.y + p.sin(angle)*len;
-
-      // 主刮痕
-      p.line(this.pos.x, this.pos.y, endX, endY);
-
-      // 平行的辅刮痕，模拟皮肉撕裂的“丝丝缕缕”
-      if (p.random(1) > 0.4) {
-        let offset = p.random(-4, 4);
-        p.stroke(this.color[0]-60, 0, 0, 180); // 更暗的血痕
-        p.line(this.pos.x + offset, this.pos.y + offset, endX + offset, endY + offset);
-      }
-
-      // 末端的碎肉渣 (锐角三角形)
-      if (p.random(1) < 0.3) {
-        p.noStroke();
-        p.fill(this.color[0]*0.8, 0, 0, 255);
-        p.triangle(endX, endY, endX+p.random(-4,4), endY+p.random(-4,4), endX+p.random(-4,4), endY+p.random(-4,4));
+      let endX = this.pos.x + this.vel.x; let endY = this.pos.y + this.vel.y;
+      p.stroke(this.color[0]*0.5, 0, 0, 255); p.strokeWeight(this.size); p.line(this.pos.x, this.pos.y, endX, endY);
+      p.stroke(this.color[0], this.color[1]*0.3, this.color[2]*0.3, 180); p.strokeWeight(1);
+      p.line(this.pos.x + p.random(-8,8), this.pos.y + p.random(-8,8), endX + p.random(-8,8), endY + p.random(-8,8));
+      p.line(this.pos.x + p.random(-4,4), this.pos.y + p.random(-4,4), endX + p.random(-4,4), endY + p.random(-4,4));
+      if (p.random(1) < 0.6) {
+        p.noStroke(); p.fill(this.color[0], 0, 0, 220);
+        let spX = endX + p.random(-10, 10); let spY = endY + p.random(-10, 10);
+        p.triangle(spX, spY, spX+p.random(-4,4), spY+p.random(-4,4), spX+p.random(-4,4), spY+p.random(-4,4));
       }
     }
-
-    p.drawingContext.shadowBlur = 0; // 统一重置发光
+    p.drawingContext.shadowBlur = 0;
   }
   isDead() { return this.life < 0; }
 }
 
 function App() {
-  const [page, setPage] = useState("onboarding");
+  // === 【新增】开屏动画逻辑 ===
+  const [page, setPage] = useState("splash"); // 初始进入 splash
+  const [quote] = useState(() => QUOTES[Math.floor(Math.random() * QUOTES.length)]);
+  const [splashOpacity, setSplashOpacity] = useState(1);
+
   const [activeBrush, setActiveBrush] = useState(null);
   const [activeColor, setActiveColor] = useState("crimson");
   const [identity, setIdentity] = useState("partner");
   const [userPrefs, setUserPrefs] = useState(["care"]);
   const [imgUrl, setImgUrl] = useState(null);
-
   const [bodyMode, setBodyMode] = useState('front');
 
-  const [history, setHistory] = useState(() => {
-    const saved = localStorage.getItem('painscape_history');
-    return saved ? JSON.parse(saved) : [];
-  });
+  // ... (保留 history, posts, 以及弹窗 state) ...
+  const [history, setHistory] = useState(() => JSON.parse(localStorage.getItem('painscape_history') || '[]'));
   const [posts, setPosts] = useState([
-    { id: 1, text: "痛得下不了床，感觉像洗衣机在肚子里转...", img: "https://images.unsplash.com/photo-1550684848-fac1c5b4e853?q=80&w=200&auto=format&fit=crop", tags: "#绞痛 #冷汗", likes: 128 },
-    { id: 2, text: "腰快断了，一直有很重的下坠感。", img: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=200&auto=format&fit=crop", tags: "#下坠感 #无法站立", likes: 85 },
-    { id: 3, text: "吃布洛芬都没用，像有人拿刀在刮...", img: "https://images.unsplash.com/photo-1508163223045-1880bc36e222?q=80&w=200&auto=format&fit=crop", tags: "#撕裂感 #绝望", likes: 342 }
+    { id: 1, text: "痛得下不了床...", img: "https://images.unsplash.com/photo-1550684848-fac1c5b4e853?q=80&w=200", tags: "#绞痛", likes: 128 },
+    { id: 2, text: "腰快断了...", img: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=200", tags: "#坠痛", likes: 85 }
   ]);
   const [postText, setPostText] = useState("");
   const [showPostModal, setShowPostModal] = useState(false);
+  const [viewingDiary, setViewingDiary] = useState(null);
+  const [viewingPost, setViewingPost] = useState(null);
+  const [communityFilter, setCommunityFilter] = useState("all");
 
   const brushCounts = useRef({ twist: 0, pierce: 0, heavy: 0, wave: 0, scrape: 0 });
-  const staticParticles = useRef([]);
-  const dynamicParticles = useRef([]);
-
-  const p5Ref = useRef(null);
-  const bgFrontRef = useRef(null);
-  const bgBackRef = useRef(null);
+  const staticParticles = useRef([]); const dynamicParticles = useRef([]);
+  const p5Ref = useRef(null); const bgFrontRef = useRef(null); const bgBackRef = useRef(null);
   const pgRef = useRef(null);
-  const camRef = useRef({ x: 0, y: 0, zoom: 1.2 });
+  // 【修复】背景居中：x, y 初始化为 0，利用 imageMode(CENTER) 自然居中
+  const camRef = useRef({ x: 0, y: 0, zoom: 1.0 });
+  const pressTimer = useRef(0); const isLongPressing = useRef(false);
+  const undoStackRef = useRef([]); const redoStackRef = useRef([]); const hasSavedInitial = useRef(false);
 
-  const pressTimer = useRef(0);
-  const isLongPressing = useRef(false);
-
-  const undoStackRef = useRef([]);
-  const redoStackRef = useRef([]);
-  const hasSavedInitial = useRef(false);
+  // 【新增】开屏倒计时
+  useEffect(() => {
+    if (page === 'splash') {
+      const timer1 = setTimeout(() => setSplashOpacity(0), 3000); // 3秒后开始淡出
+      const timer2 = setTimeout(() => setPage('onboarding'), 4000); // 4秒后切换页面
+      return () => { clearTimeout(timer1); clearTimeout(timer2); };
+    }
+  }, [page]);
 
   useEffect(() => {
-    const preventDefault = (e) => e.preventDefault();
-    document.addEventListener("contextmenu", preventDefault);
-    return () => document.removeEventListener("contextmenu", preventDefault);
+    const pd = (e) => e.preventDefault(); document.addEventListener("contextmenu", pd);
+    return () => document.removeEventListener("contextmenu", pd);
   }, []);
 
   const preload = (p5) => {
-    bgFrontRef.current = p5.loadImage("body_front.png", () => {}, () => { console.log("缺失 body_front.png") });
-    bgBackRef.current = p5.loadImage("body_back.png", () => {}, () => { console.log("缺失 body_back.png") });
+    bgFrontRef.current = p5.loadImage("body_front.png");
+    bgBackRef.current = p5.loadImage("body_back.png");
   };
 
   const captureState = () => {
@@ -195,13 +224,9 @@ function App() {
     p5Ref.current = p5;
     p5.createCanvas(window.innerWidth, window.innerHeight).parent(canvasParentRef);
     pgRef.current = p5.createGraphics(window.innerWidth * 2, window.innerHeight * 2);
-    camRef.current.x = -window.innerWidth / 2;
-    camRef.current.y = -window.innerHeight / 4;
-
-    if(!hasSavedInitial.current) {
-      undoStackRef.current.push(captureState());
-      hasSavedInitial.current = true;
-    }
+    // 重置坐标为0，保证背景居中
+    camRef.current.x = 0; camRef.current.y = 0;
+    if(!hasSavedInitial.current) { undoStackRef.current.push(captureState()); hasSavedInitial.current = true; }
   };
 
   const isSafeToDraw = (p5) => {
@@ -215,41 +240,31 @@ function App() {
   const mouseReleased = (p5) => {
     if (!isSafeToDraw(p5) || p5.mouseButton === p5.RIGHT) return;
     let state = captureState();
-    if (state) {
-      undoStackRef.current.push(state);
-      if (undoStackRef.current.length > 20) undoStackRef.current.shift();
-      redoStackRef.current = [];
-    }
+    if (state) { undoStackRef.current.push(state); if (undoStackRef.current.length > 20) undoStackRef.current.shift(); redoStackRef.current = []; }
   };
 
   const handleUndo = () => {
     if (undoStackRef.current.length > 1) {
-      redoStackRef.current.push(captureState());
-      undoStackRef.current.pop();
-      let prevState = undoStackRef.current[undoStackRef.current.length - 1];
-      pgRef.current.clear(); pgRef.current.image(prevState.img, 0, 0);
-      dynamicParticles.current = [...prevState.dynamic]; staticParticles.current = [];
+      redoStackRef.current.push(captureState()); undoStackRef.current.pop();
+      let prev = undoStackRef.current[undoStackRef.current.length - 1];
+      pgRef.current.clear(); pgRef.current.image(prev.img, 0, 0);
+      dynamicParticles.current = [...prev.dynamic]; staticParticles.current = [];
     }
   };
 
   const handleRedo = () => {
     if (redoStackRef.current.length > 0) {
-      undoStackRef.current.push(captureState());
-      let nextState = redoStackRef.current.pop();
-      pgRef.current.clear(); pgRef.current.image(nextState.img, 0, 0);
-      dynamicParticles.current = [...nextState.dynamic]; staticParticles.current = [];
+      undoStackRef.current.push(captureState()); let next = redoStackRef.current.pop();
+      pgRef.current.clear(); pgRef.current.image(next.img, 0, 0);
+      dynamicParticles.current = [...next.dynamic]; staticParticles.current = [];
     }
   };
 
-  const handleClear = () => {
-    undoStackRef.current.push(captureState()); redoStackRef.current = [];
-    pgRef.current.clear(); dynamicParticles.current = []; staticParticles.current = [];
-  };
+  const handleClear = () => { undoStackRef.current.push(captureState()); redoStackRef.current = []; pgRef.current.clear(); dynamicParticles.current = []; staticParticles.current = []; };
 
   const mouseWheel = (p5, event) => {
     if(page !== 'canvas') return false;
-    let zoomAmount = event.delta > 0 ? -0.1 : 0.1;
-    camRef.current.zoom = Math.max(0.5, Math.min(camRef.current.zoom + zoomAmount, 3.0));
+    camRef.current.zoom = Math.max(0.5, Math.min(camRef.current.zoom + (event.delta > 0 ? -0.1 : 0.1), 3.0));
     return false;
   };
 
@@ -260,20 +275,11 @@ function App() {
 
     let realX = (p5.mouseX - x) / zoom, realY = (p5.mouseY - y) / zoom;
     let realPx = (p5.pmouseX - x) / zoom, realPy = (p5.pmouseY - y) / zoom;
-
-    let velX = realX - realPx;
-    let velY = realY - realPy;
     let speed = p5.dist(realX, realY, realPx, realPy);
+    let heading = (speed < 1) ? p5.PI / 2 : p5.atan2(realY - realPy, realX - realPx);
 
-    // 【捕获滑动方向】：如果只点击不滑动，则默认垂直向下扎入
-    let heading = (speed < 1) ? p5.PI / 2 : p5.atan2(velY, velX);
-
-    if (!isInteracting) {
-      pressTimer.current = 0; isLongPressing.current = false;
-    } else {
-      if (speed < 1) pressTimer.current++; else pressTimer.current = 0;
-      if (pressTimer.current > 20) isLongPressing.current = true;
-    }
+    if (!isInteracting) { pressTimer.current = 0; isLongPressing.current = false; }
+    else { if (speed < 1) pressTimer.current++; else pressTimer.current = 0; if (pressTimer.current > 20) isLongPressing.current = true; }
 
     let isPanning = (activeBrush === null) || isLongPressing.current || p5.mouseButton === p5.RIGHT || p5.touches.length >= 2;
 
@@ -285,41 +291,40 @@ function App() {
         dynamicParticles.current = dynamicParticles.current.filter(p => p5.dist(p.pos.x, p.pos.y, realX, realY) > 20);
       } else {
         brushCounts.current[activeBrush] += 1;
-        if (p5.frameCount % 2 === 0 || speed > 10) {
-          // 【传入 heading 参数，供刺钻和刮撕使用】
+        // 【修复】降低动态粒子生成频率，防止达到上限被清空
+        let spawnRate = (activeBrush === 'wave' || activeBrush === 'twist') ? 6 : 2;
+        if (p5.frameCount % spawnRate === 0 || speed > 10) {
           let pObj = new PainParticle(p5, realX, realY, activeBrush, PALETTES[activeColor].color, speed, heading);
           if (pObj.isDynamic) {
             dynamicParticles.current.push(pObj);
-            if (dynamicParticles.current.length > 150) dynamicParticles.current.shift();
-          } else { staticParticles.current.push(pObj); }
+            // 【修复】将上限扩大到 500，避免“此消彼长”当橡皮擦的 BUG
+            if (dynamicParticles.current.length > 500) dynamicParticles.current.shift();
+          }
+          else { staticParticles.current.push(pObj); }
         }
       }
     }
 
     let pg = pgRef.current;
     for (let i = staticParticles.current.length - 1; i >= 0; i--) {
-      let p = staticParticles.current[i];
-      p.update(p5); p.show(pg);
+      let p = staticParticles.current[i]; p.update(p5); p.show(pg);
       if (p.isDead()) staticParticles.current.splice(i, 1);
     }
 
     p5.push(); p5.translate(x, y); p5.scale(zoom);
 
-    let activeImg = null;
-    if (bodyMode === 'front' && bgFrontRef.current) activeImg = bgFrontRef.current;
-    if (bodyMode === 'back' && bgBackRef.current) activeImg = bgBackRef.current;
-
+    let activeImg = bodyMode === 'front' ? bgFrontRef.current : (bodyMode === 'back' ? bgBackRef.current : null);
     if (activeImg) {
       p5.imageMode(p5.CENTER); p5.tint(255, 40);
-      let imgScale = (p5.height * 0.9) / activeImg.height;
+      // 根据屏幕高度动态计算完美比例，保证图片在屏幕正中间
+      let imgScale = (p5.height * 0.8) / activeImg.height;
       p5.image(activeImg, p5.width/2, p5.height/2, activeImg.width * imgScale, activeImg.height * imgScale);
     }
 
     p5.noTint(); p5.imageMode(p5.CORNER); p5.image(pg, 0, 0);
 
     for (let i = dynamicParticles.current.length - 1; i >= 0; i--) {
-      let dp = dynamicParticles.current[i];
-      dp.update(p5); dp.show(p5);
+      let dp = dynamicParticles.current[i]; dp.update(p5); dp.show(p5);
       if (dp.isDead()) dynamicParticles.current.splice(i, 1);
     }
     p5.pop();
@@ -487,48 +492,50 @@ function App() {
         <Sketch setup={setup} draw={draw} preload={preload} mouseWheel={mouseWheel} mouseReleased={mouseReleased} touchEnded={mouseReleased}/>
       </div>
 
-      {page === "onboarding" && (
-        <div className="onboarding-container" style={{position:'absolute', zIndex:100, background:'#0a0a0a', padding: '30px', textAlign: 'center', overflowY:'auto'}}>
-          <h1 style={{marginBottom:'5px', letterSpacing:'4px'}}>PainScape</h1>
-          <p style={{marginBottom:'30px', fontSize:'0.9rem', color:'#aaa'}}>拒绝隐忍，让疼痛被看见</p>
+      <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 100, pointerEvents: 'none' }}>
 
-          <div style={{width:'100%', maxWidth:'320px', textAlign:'left'}}>
-            <label style={{color:'#fff', marginBottom:'5px', display:'block', fontSize:'1.1rem', fontWeight:'bold'}}>
-              当痛经发作时，你最需要伴侣/家人怎么做？
-            </label>
-            <p style={{color:'#777', fontSize:'12px', marginTop:0, marginBottom:'15px'}}>* 可多选复合需求</p>
-
-            <div className="pref-group" style={{display:'flex', flexDirection:'column', gap:'12px'}}>
-              <button className={`pref-btn ${userPrefs.includes('alone')?'active':''}`} onClick={()=>togglePref('alone')} style={{padding:'15px', borderRadius:'12px', textAlign:'left', background:'#222', border: userPrefs.includes('alone')?'2px solid #d32f2f':'1px solid #444', color:'#fff'}}>
-                <div style={{fontSize:'15px', fontWeight:'bold'}}>🛑 别管我，让我一个人待着</div>
-                <div style={{fontSize:'12px', color:'#888', marginTop:'5px'}}>只需备好药和水，禁止频繁打扰</div>
-              </button>
-              <button className={`pref-btn ${userPrefs.includes('care')?'active':''}`} onClick={()=>togglePref('care')} style={{padding:'15px', borderRadius:'12px', textAlign:'left', background:'#222', border: userPrefs.includes('care')?'2px solid #d32f2f':'1px solid #444', color:'#fff'}}>
-                <div style={{fontSize:'15px', fontWeight:'bold'}}>🥣 我没力气，需要实际照顾</div>
-                <div style={{fontSize:'12px', color:'#888', marginTop:'5px'}}>冲热饮、揉腰、包揽家务</div>
-              </button>
-              <button className={`pref-btn ${userPrefs.includes('comfort')?'active':''}`} onClick={()=>togglePref('comfort')} style={{padding:'15px', borderRadius:'12px', textAlign:'left', background:'#222', border: userPrefs.includes('comfort')?'2px solid #d32f2f':'1px solid #444', color:'#fff'}}>
-                <div style={{fontSize:'15px', fontWeight:'bold'}}>🫂 我很脆弱，需要情绪陪伴</div>
-                <div style={{fontSize:'12px', color:'#888', marginTop:'5px'}}>安静陪着我，握着手提供安全感</div>
-              </button>
-            </div>
+        {/* === 新增：Splash 开屏页 === */}
+        {page === "splash" && (
+          <div style={{pointerEvents:'auto', background:'#050505', width:'100vw', height:'100vh', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'40px', boxSizing:'border-box', opacity: splashOpacity, transition: 'opacity 1s ease-in-out'}}>
+            <h1 style={{color:'#fff', letterSpacing:'8px', marginBottom:'40px'}}>PainScape</h1>
+            <p style={{color:'#aaa', fontSize:'14px', lineHeight:'1.8', textAlign:'center', fontStyle:'italic', whiteSpace:'pre-wrap'}}>{quote}</p>
           </div>
+        )}
 
-          <button style={{marginTop:'35px', width:'100%', maxWidth:'320px', padding:'16px', background:'#d32f2f', color:'#fff', border:'none', borderRadius:'25px', fontSize:'16px', fontWeight:'bold', cursor:'pointer'}}
-            onClick={() => { pgRef.current.clear(); dynamicParticles.current=[]; staticParticles.current=[]; setPage("canvas"); }}>
-            🎨 开始绘制今日痛感
-          </button>
+        {/* === Onboarding 页面 === */}
+        {page === "onboarding" && (
+           <div className="onboarding-container" style={{pointerEvents:'auto', background:'#0a0a0a', width:'100%', height:'100%', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center'}}>
+              <h1 style={{color:'#fff', marginBottom:'5px', fontSize:'2rem'}}>PainScape</h1>
+              <p style={{color:'#aaa', marginBottom:'30px'}}>拒绝隐忍，让疼痛被看见</p>
 
-          <div style={{display:'flex', gap:'15px', marginTop:'15px', width:'100%', maxWidth:'320px'}}>
-             <button style={{flex:1, padding:'14px', background:'#222', color:'#ccc', border:'1px solid #444', borderRadius:'20px', fontSize:'14px', cursor:'pointer'}} onClick={() => setPage("community")}>
-              🌍 探索社群
-            </button>
-            <button style={{flex:1, padding:'14px', background:'#222', color:'#ccc', border:'1px solid #444', borderRadius:'20px', fontSize:'14px', cursor:'pointer'}} onClick={() => setPage("history")}>
-              📅 疼痛日记
-            </button>
-          </div>
-        </div>
-      )}
+              {/* === 【新增】简单使用指南 === */}
+              <div style={{background:'rgba(255,255,255,0.05)', padding:'15px', borderRadius:'12px', width:'100%', maxWidth:'320px', marginBottom:'20px', textAlign:'left'}}>
+                <p style={{color:'#fff', fontSize:'13px', margin:'0 0 8px 0'}}><strong>🎨 快速指南：</strong></p>
+                <p style={{color:'#888', fontSize:'12px', margin:'4px 0'}}>• 滑动或点击：绘制痛觉质地</p>
+                <p style={{color:'#888', fontSize:'12px', margin:'4px 0'}}>• 长按 0.3 秒：拖拽移动画布</p>
+                <p style={{color:'#888', fontSize:'12px', margin:'4px 0'}}>• 滚轮/双指：放大缩小身体细节</p>
+              </div>
+
+              <div style={{width:'100%', maxWidth:'320px', textAlign:'left'}}>
+                <label style={{color:'#fff', marginBottom:'15px', display:'block', fontSize:'1rem', fontWeight:'bold'}}>当痛经发作时，你最需要伴侣/家人怎么做？</label>
+                <div style={{display:'flex', flexDirection:'column', gap:'12px'}}>
+                  {['alone', 'care', 'comfort'].map((p, i) => (
+                    <button key={p} onClick={()=>togglePref(p)} style={{padding:'15px', borderRadius:'12px', textAlign:'left', background:'#1e1e1e', border: userPrefs.includes(p)?'2px solid #d32f2f':'1px solid #444', color:'#fff', cursor:'pointer'}}>
+                      <div style={{fontSize:'14px', fontWeight:'bold'}}>{['🛑 别管我，让我一个人待着', '🥣 我没力气，需要实际照顾', '🫂 我很脆弱，需要情绪陪伴'][i]}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <button style={{marginTop:'30px', width:'200px', padding:'14px', background:'#d32f2f', color:'#fff', border:'none', borderRadius:'25px', fontWeight:'bold', cursor:'pointer'}}
+                onClick={() => { pgRef.current.clear(); dynamicParticles.current=[]; staticParticles.current=[]; setPage("canvas"); }}>开始绘制</button>
+
+              <div style={{display:'flex', gap:'15px', marginTop:'20px'}}>
+                <button style={{background:'transparent', border:'1px solid #444', color:'#888', padding:'8px 16px', borderRadius:'20px'}} onClick={() => setPage("community")}>🌍 探索广场</button>
+                <button style={{background:'transparent', border:'1px solid #444', color:'#888', padding:'8px 16px', borderRadius:'20px'}} onClick={() => setPage("history")}>📅 疼痛日记</button>
+              </div>
+           </div>
+        )}
 
       {page === "canvas" && (
         <div style={{position:'absolute', top:0, left:0, width:'100vw', height:'100vh', zIndex:10, pointerEvents:'none'}}>
@@ -678,7 +685,8 @@ function App() {
           )}
         </div>
       )}
-    </>
+    </div>
+   </>
   );
 }
 
