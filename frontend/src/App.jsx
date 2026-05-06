@@ -176,7 +176,18 @@ function App() {
   const [page, setPage] = useState("splash");
   const [quote] = useState(() => QUOTES[Math.floor(Math.random() * QUOTES.length)]);
   const [splashOpacity, setSplashOpacity] = useState(1);
+  // 新增状态变量
+  const [showGuide, setShowGuide] = useState(false);
+  const [showMedicalOpt, setShowMedicalOpt] = useState(false);
+  const [medicalBackground, setMedicalBackground] = useState({
+    diagnosed: '',
+    allergies: '',
+  });
+  const [tonePreference, setTonePreference] = useState('gentle');
 
+  // 新增 ref
+  const particlePositions = useRef([]);
+  const speedHistory = useRef([]);
   const [activeBrush, setActiveBrush] = useState(null);
   const [activeColor, setActiveColor] = useState("crimson");
   const [identity, setIdentity] = useState("partner");
@@ -186,8 +197,24 @@ function App() {
 
   const [history, setHistory] = useState(() => JSON.parse(localStorage.getItem('painscape_history') || '[]'));
   const [posts, setPosts] = useState([
-    { id: 1, text: "痛得下不了床...", img: "https://images.unsplash.com/photo-1550684848-fac1c5b4e853?q=80&w=200", tags: "#绞痛", likes: 128, group: "family" },
-    { id: 2, text: "腰快断了，一直坠坠的。", img: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=200", tags: "#坠痛", likes: 85, group: "friend" }
+    {
+      id: 1,
+      text: "痛得下不了床...",
+      img: "https://images.unsplash.com/photo-1550684848-fac1c5b4e853?q=80&w=200",
+      tags: "#绞痛",
+      likes: 128,
+      group: "family",
+      analogy: "🌪️ 像拧毛巾一样，一圈一圈拧紧"
+    },
+    {
+      id: 2,
+      text: "腰快断了，一直坠坠的。",
+      img: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=200",
+      tags: "#坠痛",
+      likes: 85,
+      group: "friend",
+      analogy: "🪨 像绑了沙袋往下坠，站着就想蹲下"
+    }
   ]);
 
   const [postText, setPostText] = useState("");
@@ -195,7 +222,7 @@ function App() {
   const [viewingDiary, setViewingDiary] = useState(null);
   const [viewingPost, setViewingPost] = useState(null);
   const [communityFilter, setCommunityFilter] = useState("all");
-  const [communityGroups, setCommunityGroups] = useState([{ id: 'family', name: '👩‍👧 家庭群' }, { id: 'friend', name: '👯‍♀️ 闺蜜群' }]);
+  const [communityGroups, setCommunityGroups] = useState([{ id: 'family', name: '👩‍👧 家庭群' }, { id: 'friend', name: '🤝 朋友群' }]);
 
   const brushCounts = useRef({ twist: 0, pierce: 0, heavy: 0, wave: 0, scrape: 0 });
   const staticParticles = useRef([]); const dynamicParticles = useRef([]);
@@ -244,7 +271,7 @@ function App() {
   };
 
   const isSafeToDraw = (p5) => {
-    if (page !== 'canvas' || bodyMode === 'none') return false;
+    if (page !== 'canvas') return false;
     let currentY = p5.touches.length > 0 ? p5.touches[0].y : p5.mouseY;
     let currentX = p5.touches.length > 0 ? p5.touches[0].x : p5.mouseX;
     if (currentY < 100 || currentY > window.innerHeight - 150 || currentX > window.innerWidth - 80) return false;
@@ -286,6 +313,8 @@ function App() {
 
   const draw = (p5) => {
     p5.background(0);
+    // 只在画板页才绘制人体底图
+    if (page !== 'canvas') return;
     let { x, y, zoom } = camRef.current;
     let isInteracting = (p5.mouseIsPressed || p5.touches.length > 0) && isSafeToDraw(p5);
 
@@ -293,7 +322,9 @@ function App() {
     let realPx = (p5.pmouseX - x) / zoom, realPy = (p5.pmouseY - y) / zoom;
     let speed = p5.dist(realX, realY, realPx, realPy);
     let heading = (speed < 1) ? p5.PI / 2 : p5.atan2(realY - realPy, realX - realPx);
-
+    if (speedHistory.current.length > 200) speedHistory.current.shift();
+    speedHistory.current.push(speed);
+    if (speedHistory.current.length > 200) speedHistory.current.shift();
     if (!isInteracting) { pressTimer.current = 0; isLongPressing.current = false; }
     else { if (speed < 1) pressTimer.current++; else pressTimer.current = 0; if (pressTimer.current > 20) isLongPressing.current = true; }
 
@@ -311,6 +342,13 @@ function App() {
         let spawnRate = (activeBrush === 'wave' || activeBrush === 'twist' || activeBrush === 'heavy') ? 6 : 2;
         if (p5.frameCount % spawnRate === 0 || speed > 10) {
           let pObj = new PainParticle(p5, realX, realY, activeBrush, PALETTES[activeColor].color, speed, heading, bodyMode);
+
+          // === 新增：记录粒子位置和速度 ===
+          particlePositions.current.push({ x: realX, y: realY, bodyMode });
+          speedHistory.current.push(speed);
+          if (speedHistory.current.length > 200) speedHistory.current.shift();
+          // === 新增结束 ===
+
           if (pObj.isDynamic) {
             dynamicParticles.current.push(pObj);
             if (dynamicParticles.current.length > 500) dynamicParticles.current.shift();
@@ -329,7 +367,6 @@ function App() {
     }
 
     p5.push(); p5.translate(x, y); p5.scale(zoom);
-
     let activeImg = bodyMode === 'front' ? bgFrontRef.current : (bodyMode === 'back' ? bgBackRef.current : null);
     if (activeImg) {
       p5.imageMode(p5.CENTER); p5.tint(255, 40);
@@ -337,9 +374,8 @@ function App() {
       p5.image(activeImg, p5.width / 2, p5.height / 2, activeImg.width * imgScale, activeImg.height * imgScale);
     }
 
-    if (bodyMode !== 'none') {
-      p5.noTint(); p5.imageMode(p5.CORNER); p5.image(currentPg, 0, 0);
-    }
+    // 始终显示离屏画布（包含静态粒子）
+    p5.noTint(); p5.imageMode(p5.CORNER); p5.image(currentPg, 0, 0);
 
     for (let i = dynamicParticles.current.length - 1; i >= 0; i--) {
       let dp = dynamicParticles.current[i];
@@ -348,6 +384,7 @@ function App() {
       if (dp.isDead()) dynamicParticles.current.splice(i, 1);
     }
     p5.pop();
+
   };
   // 分享预览相关状态
   const [showSharePreview, setShowSharePreview] = useState(false);
@@ -525,7 +562,7 @@ function App() {
 
         const actionText = shareText.action.replace(/🛑|🥣|🫂|❤️|复合指令：|偏好指令：/g, '').trim();
         const firstLine = actionText.split('\n')[0];
-        ctx.fillText(`💡 ${firstLine}`, 70, 200 + imgHeight);
+        ctx.fillText(firstLine, 70, 200 + imgHeight);
       }
 
       finalUrl = cvs.toDataURL('image/jpeg', 0.9);
@@ -546,7 +583,6 @@ function App() {
         link.click();
         alert("已为您生成分享卡片并下载。");
       }
-
       setShowSharePreview(false);
     } catch (e) {
       console.log("分享被取消", e);
@@ -613,9 +649,22 @@ function App() {
   };
   const handlePublishPost = () => {
     if (!postText) return alert("写点什么吧~");
-    const dominant = Object.keys(brushCounts.current).reduce((a, b) => brushCounts.current[a] > brushCounts.current[b] ? a : b) || 'twist';
-    setPosts([{ id: Date.now(), text: postText, img: imgUrl, tags: `#${BRUSHES[dominant].label.split(" ")[1]}`, likes: 0, group: communityFilter }, ...posts]);
-    setShowPostModal(false); setPostText(""); setPage("community");
+    const dominant = Object.keys(brushCounts.current).reduce((a, b) =>
+      brushCounts.current[a] > brushCounts.current[b] ? a : b
+    ) || 'twist';
+    const content = generateContent(dominant);
+    setPosts([{
+      id: Date.now(),
+      text: postText,
+      img: imgUrl,
+      tags: `#${BRUSHES[dominant].label.split(" ")[1]}`,
+      likes: 0,
+      group: communityFilter,
+      analogy: content.analogy?.slice(0, 50) || '' // 新增：图片上的文案
+    }, ...posts]);
+    setShowPostModal(false);
+    setPostText("");
+    setPage("community");
   };
 
   const handleCreateGroup = () => {
@@ -645,27 +694,160 @@ function App() {
     }
   };
 
-  const generateContent = (overrideType) => {
-    const dominant = overrideType || (Object.keys(brushCounts.current).reduce((a, b) => brushCounts.current[a] > brushCounts.current[b] ? a : b) || 'twist');
-    let actionText = "";
-    if (userPrefs.includes('alone')) actionText = "🛑 偏好指令：【需要绝对独处】\n1. 帮她倒一杯温水，备好布洛芬放在床头。\n2. 调暗房间光源，关门出去，给她绝对的个人空间。\n3. 不要每隔十分钟进房询问，这会加重烦躁。";
-    else {
-      let parts = [];
-      if (userPrefs.includes('care')) parts.push("🥣 【物理照顾】\n1. 请主动冲热饮或准备热水袋。\n2. 帮她热敷腰骶部，或用热手掌捂在小腹上。\n3. 主动包揽家务，让她安心平躺。");
-      if (userPrefs.includes('comfort')) parts.push("🫂 【情绪安抚】\n1. 请放下手机，安静地陪着她。\n2. 握着她的手，提供心理安全感。");
-      actionText = parts.length > 1 ? "❤️ 复合指令：【需双重呵护】\n" + parts.join("\n\n") : parts[0];
-    }
+  const generateContent = (overrideType, llmMed, llmAction) => {
+    const dominant = overrideType || (Object.keys(brushCounts.current).reduce((a, b) =>
+      brushCounts.current[a] > brushCounts.current[b] ? a : b
+    ) || 'twist');
+
     const painName = { twist: "绞痛", pierce: "刺痛", heavy: "严重坠胀", wave: "弥漫性胀痛", scrape: "撕裂样锐痛" };
     const TEXTS = {
-      twist: { analogy: "🌪️ 痛觉通感：想象把一条湿毛巾用力拧干，再拧一圈，并持续保持紧绷状态。", med: "主诉：腹部持续性绞痛，呈阵发性/螺旋状收缩。建议排查子宫痉挛。", selfCare: "💡 缓解建议：尝试【婴儿蜷缩式】侧卧，抱紧膝盖减缓肌肉紧绷。" },
-      pierce: { analogy: "⚡️ 痛觉通感：想象不打麻药进行根管治疗，或者冰冷的针尖持续扎入腹部深处。", med: "主诉：锐痛（Sharp Pain），呈放射状，伴随间歇性神经刺痛。", selfCare: "💡 缓解建议：刺痛发作时极易引发冷汗，请立刻加盖毛毯保暖。尽量平躺避免牵扯。" },
-      heavy: { analogy: "🪨 痛觉通感：想象在腹部绑了5公斤沙袋跑800米，每一步内脏都在受重力拉扯。", med: "主诉：下腹部严重坠胀感（Bearing-down），伴随盆腔充血与腰骶部酸痛。", selfCare: "💡 缓解建议：尝试【臀部垫高平躺】，拿两个枕头垫在臀部下，缓解盆腔充血。" },
-      wave: { analogy: "🎈 痛觉通感：想象肚子里有个气球在不断充气，内脏处于极度的高压水肿状态。", med: "主诉：弥漫性胀痛，边界不清，伴随腹部水肿感。", selfCare: "💡 缓解建议：穿着极度宽松衣物，解开任何勒住腰部的松紧带，轻轻顺时针抚摸腹部。" },
-      scrape: { analogy: "🔪 痛觉通感：像一颗未完全成熟的果实被强行剥皮，皮上带着丝丝缕缕的血肉被不断撕扯。", med: "主诉：强烈的撕裂样锐痛，伴随组织剥离感。", selfCare: "💡 缓解建议：这是最耗费体力的痛感，请直接服用布洛芬等抑制剂。听白噪音强行切断对痛觉的过度专注。" }
+      twist: {
+        analogy: "🌪️ 像把一条湿毛巾用力拧干，再拧一圈，持续保持紧绷。",
+        med: "主诉：腹部持续性绞痛，呈阵发性螺旋状收缩。建议排查子宫痉挛。",
+        selfCare: "尝试婴儿蜷缩式侧卧，抱紧膝盖减缓肌肉紧绷。"
+      },
+      pierce: {
+        analogy: "⚡️ 像不打麻药进行根管治疗，冰冷的针尖持续扎入腹部深处。",
+        med: "主诉：锐痛，呈放射状，伴随间歇性神经刺痛。建议排查神经性疼痛。",
+        selfCare: "刺痛发作时极易引发冷汗，请加盖毛毯保暖，尽量平躺避免牵扯。"
+      },
+      heavy: {
+        analogy: "🪨 像在腹部绑了5公斤沙袋跑800米，内脏受重力拉扯。",
+        med: "主诉：下腹部严重坠胀感，伴随盆腔充血与腰骶部酸痛。建议排查盆腔充血。",
+        selfCare: "尝试臀部垫高平躺，用两个枕头垫在臀部下，缓解盆腔充血。"
+      },
+      wave: {
+        analogy: "🎈 像肚子里有个气球在不断充气，内脏处于高压水肿状态。",
+        med: "主诉：弥漫性胀痛，边界不清，伴随腹部水肿感。建议排查水肿或肠胀气。",
+        selfCare: "穿着极度宽松衣物，解开勒住腰部的松紧带，轻轻顺时针抚摸腹部。"
+      },
+      scrape: {
+        analogy: "🔪 像未成熟的果实被强行剥皮，皮上带着血肉被不断撕扯。",
+        med: "主诉：强烈的撕裂样锐痛，伴随组织剥离感。建议排查组织粘连或腹膜刺激。",
+        selfCare: "这是最耗费体力的痛感，请服用布洛芬等抑制剂。听白噪音切断对痛觉的过度专注。"
+      }
     };
-    return { ...TEXTS[dominant], action: actionText, pain: painName[dominant] };
+
+    // LLM 优先，本地字典降级
+    let med = llmMed || TEXTS[dominant].med;
+    let baseAction = llmAction || '';
+
+    // 伴侣指令
+    let actionText = "";
+
+    if (userPrefs.includes('alone')) {
+      if (medicalBackground.allergies === 'nsaids' || medicalBackground.allergies === 'ibuprofen') {
+        actionText = baseAction || "她需要独处。把止痛药和温水放在床头，灯光调暗，关上门。不要每隔十分钟进房询问。她缓过来会自己出来的。";
+      } else {
+        actionText = baseAction || "她需要独处。将布洛芬和温水放在床头，灯光调暗，关上门。不要每隔十分钟进房询问。她缓过来会自己出来的。";
+      }
+    } else {
+      let parts = [];
+      if (userPrefs.includes('care')) {
+        if (medicalBackground.allergies === 'nsaids' || medicalBackground.allergies === 'ibuprofen') {
+          parts.push(baseAction || "把手掌搓热，捂在她小腹或后腰上。暖宝宝贴在后腰，热水袋放在脚边。包揽今天的家务，让她安心平躺。止痛药放在床头，她需要的时候会自己拿。");
+        } else {
+          parts.push(baseAction || "把手掌搓热，捂在她小腹或后腰上。暖宝宝贴在后腰，热水袋放在脚边。布洛芬和温水一起放在床头。包揽今天的家务，让她安心平躺。");
+        }
+      }
+      if (userPrefs.includes('comfort')) {
+        parts.push("不用做什么，坐在旁边握着她的手。如果她蜷起来了，帮她掖一下毯子。不用说话。");
+      }
+      actionText = parts.join("\n\n") || baseAction;
+    }
+    // 病史补充 - 扩展为结构化的辅助信息
+    let auxiliaryInfo = [];
+
+    // 1. 过敏史相关的药物建议
+    if (medicalBackground.allergies === 'ibuprofen') {
+      auxiliaryInfo.push('• 药物注意：用户布洛芬过敏，建议使用对乙酰氨基酚（扑热息痛）作为替代止痛方案。非NSAIDs类药物通常不会引起交叉过敏。');
+    } else if (medicalBackground.allergies === 'aspirin') {
+      auxiliaryInfo.push('• 药物注意：用户阿司匹林过敏，避免使用水杨酸类药物。可考虑对乙酰氨基酚作为替代，必要时在医生指导下使用COX-2选择性抑制剂。');
+    } else if (medicalBackground.allergies === 'nsaids') {
+      auxiliaryInfo.push('• 药物注意：用户对多种NSAIDs过敏，所有非甾体抗炎药（布洛芬、萘普生、双氯芬酸等）均应避免。可考虑对乙酰氨基酚，但需注意其对严重疼痛的效果可能有限。');
+    }
+
+    // 2. 既往诊断相关的排查建议
+    if (medicalBackground.diagnosed === 'endometriosis') {
+      auxiliaryInfo.push('• 病史关联：已确诊子宫内膜异位症，本次疼痛可能与内异症病灶周期性出血及炎症反应有关。建议每6-12个月复查盆腔超声，监测囊肿大小变化。CA125可作为辅助监测指标，但特异性有限。');
+      auxiliaryInfo.push('• 治疗参考：激素类药物（如短效避孕药、地诺孕素）可抑制病灶活动，但需结合生育计划选择方案。如囊肿较大（>4cm）或疼痛进行性加重，需考虑手术评估。');
+    }
+    if (medicalBackground.diagnosed === 'adenomyosis') {
+      auxiliaryInfo.push('• 病史关联：已确诊子宫腺肌症，疼痛可能与异位内膜在肌层内的周期性出血及周围平滑肌增生有关。建议定期复查盆腔超声，关注肌层回声及子宫大小变化。');
+      auxiliaryInfo.push('• 治疗参考：曼月乐环（LNG-IUS）对腺肌症引起的痛经和月经过多有较好效果。如症状进行性加重，可考虑GnRH-a短期治疗或手术评估。');
+    }
+    if (medicalBackground.diagnosed === 'pcos') {
+      auxiliaryInfo.push('• 病史关联：已确诊多囊卵巢综合征（PCOS）。如本次疼痛与月经周期不规律相关，可能与无排卵性出血或卵巢增大有关。'); auxiliaryInfo.push('• 治疗参考：短效避孕药可调节周期并减轻疼痛。如合并胰岛素抵抗，二甲双胍可能有辅助作用。');
+    }
+    if (medicalBackground.diagnosed === 'unchecked') {
+      auxiliaryInfo.push('• 建议初筛：用户既往未做过妇科相关检查。建议首先完成盆腔超声检查，了解子宫、双侧附件及盆腔基本情况。如痛经持续加重或伴随其他症状（异常出血、性交痛等），进一步考虑MRI或腹腔镜检查。');
+    }
+
+    // 3. 疼痛性质相关的通用建议
+    if (dominant === 'heavy' || dominant === 'twist') {
+      auxiliaryInfo.push('• 疼痛性质参考：绞痛/坠痛多与平滑肌痉挛或盆腔充血有关。热敷下腹部和腰骶部可能有助于缓解。如伴随月经量过多，需排查子宫肌瘤或子宫腺肌症。');
+    }
+    if (dominant === 'pierce' || dominant === 'scrape') {
+      auxiliaryInfo.push('• 疼痛性质参考：锐痛/撕裂痛可能提示子宫内膜异位症或盆腔粘连。如疼痛在特定体位（如性生活、排便）时加重，需排查子宫直肠陷凹病变。');
+    }
+
+    // 拼接辅助信息
+    if (auxiliaryInfo.length > 0) {
+      med += '\n\n【供您参考——请与医生讨论】\n' + auxiliaryInfo.join('\n');
+      med += '\n\n*以上为基于您提供信息的通用参考，不构成医疗建议。具体诊断和治疗方案请咨询执业医师。*';
+    }
+    // 语气偏好
+    let selfCare = TEXTS[dominant].selfCare;
+    if (tonePreference === 'gentle') {
+      selfCare = selfCare + '\n\n你已经很努力了。痛不是你的错，休息一下吧。';
+    }
+
+    return {
+      ...TEXTS[dominant],
+      action: actionText,
+      pain: painName[dominant],
+      med: med,
+      selfCare: selfCare
+    };
+  };
+  // 计算空间分布
+  const calculateSpatialMap = () => {
+    const positions = particlePositions.current;
+    if (positions.length === 0) return null;
+
+    const canvasHeight = window.innerHeight;
+    let upper = 0, middle = 0, lower = 0;
+
+    positions.forEach(p => {
+      const ratio = p.y / canvasHeight;
+      if (ratio < 0.35) upper++;
+      else if (ratio < 0.65) middle++;
+      else lower++;
+    });
+
+    const total = positions.length;
+    return {
+      abdomen: parseFloat((middle / total).toFixed(2)),
+      lowerBack: parseFloat((lower / total).toFixed(2)),
+      upperBody: parseFloat((upper / total).toFixed(2))
+    };
   };
 
+  // 计算行为强度
+  const calculateIntensity = () => {
+    const speeds = speedHistory.current;
+    if (speeds.length === 0) return null;
+
+    const avg = speeds.reduce((s, v) => s + v, 0) / speeds.length;
+    const peak = Math.max(...speeds);
+    const variance = speeds.reduce((s, v) => s + Math.pow(v - avg, 2), 0) / speeds.length;
+
+    return {
+      avgSpeed: parseFloat(avg.toFixed(1)),
+      peakSpeed: parseFloat(peak.toFixed(1)),
+      variance: parseFloat(variance.toFixed(2))
+    };
+  };
   const handleFinish = async () => {
     if (p5Ref.current) {
       const url = document.querySelector("canvas").toDataURL("image/jpeg", 0.5);
@@ -675,23 +857,49 @@ function App() {
         brushCounts.current[a] > brushCounts.current[b] ? a : b
       ) || 'twist';
 
-      const content = generateContent(dominant);
-
-      const painNameMap = {
-        twist: "绞痛",
-        pierce: "刺痛",
-        heavy: "坠痛",
-        wave: "胀痛",
-        scrape: "撕裂痛"
+      // === 构建完整 Payload ===
+      const payload = {
+        dominantPain: dominant,
+        userPref: userPrefs.join(','),
+        painScore: Object.values(brushCounts.current).reduce((sum, v) => sum + v, 0),
+        brushCounts: brushCounts.current,
+        spatialMap: calculateSpatialMap(),
+        intensityProfile: calculateIntensity(),
+        colorPalette: activeColor,
+        bodyMode: bodyMode,
+        medicalBackground: {
+          diagnosed: medicalBackground.diagnosed,
+          allergies: medicalBackground.allergies,
+        },
+        tonePreference: tonePreference,
       };
+      console.log('📤 Payload:', payload);
 
-      const iconMap = {
-        twist: "🌪️",
-        pierce: "⚡️",
-        heavy: "🪨",
-        wave: "〰️",
-        scrape: "🔪"
-      };
+      // === 尝试调用后端 ===
+      let llmMed = null;
+      let llmAction = null;
+      try {
+        const response = await fetch('http://localhost:8000/api/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const data = await response.json();
+        if (data.status === 'success') {
+          llmMed = data.med;
+          llmAction = data.action;
+          console.log('✅ LLM 返回成功');
+        }
+      } catch (e) {
+        console.log('⚠️ LLM 调用失败，使用本地字典降级', e);
+      }
+
+      // === 生成内容 ===
+      const content = generateContent(dominant, llmMed, llmAction);
+
+      // === 存储日记记录 ===
+      const painNameMap = { twist: "绞痛", pierce: "刺痛", heavy: "坠痛", wave: "胀痛", scrape: "撕裂痛" };
+      const iconMap = { twist: "🌪️", pierce: "⚡️", heavy: "🪨", wave: "〰️", scrape: "🔪" };
 
       const newRecord = {
         id: Date.now(),
@@ -712,10 +920,13 @@ function App() {
       setHistory(newHistory);
       localStorage.setItem('painscape_history', JSON.stringify(newHistory));
 
+      // 清空粒子记录
+      particlePositions.current = [];
+      speedHistory.current = [];
+
       setPage("result");
     }
   };
-
   const updateRecordInfo = (recordId, field, value) => {
     const updatedHistory = history.map(r =>
       r.id === recordId ? { ...r, [field]: value } : r
@@ -730,7 +941,7 @@ function App() {
 
   return (
     <>
-      <div style={{ position: 'fixed', top: 0, left: 0, zIndex: 1, touchAction: 'none' }}>
+      <div style={{ position: 'fixed', top: 0, left: 0, zIndex: 1 }}>
         <Sketch setup={setup} draw={draw} preload={preload} mouseWheel={mouseWheel} mouseReleased={mouseReleased} touchEnded={mouseReleased} />
       </div>
 
@@ -747,34 +958,82 @@ function App() {
 
         {/* === Onboarding 页面 === */}
         {page === "onboarding" && (
-          <div style={{ pointerEvents: 'auto', background: '#0a0a0a', width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-            <h1 style={{ color: '#fff', marginBottom: '5px', fontSize: '2rem' }}>PainScape</h1>
-            <p style={{ color: '#aaa', marginBottom: '30px' }}>拒绝隐忍，让疼痛被看见</p>
+          <div style={{ pointerEvents: 'auto', background: '#0a0a0a', width: '100%', minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '20px', boxSizing: 'border-box' }}>
 
-            <div style={{ background: 'rgba(255,255,255,0.05)', padding: '15px', borderRadius: '12px', width: '100%', maxWidth: '320px', marginBottom: '20px', textAlign: 'left' }}>
-              <p style={{ color: '#fff', fontSize: '13px', margin: '0 0 8px 0' }}><strong>🎨 快速指南：</strong></p>
-              <p style={{ color: '#888', fontSize: '12px', margin: '4px 0' }}>• 滑动或点击：绘制痛觉质地</p>
-              <p style={{ color: '#888', fontSize: '12px', margin: '4px 0' }}>• 长按 0.3 秒：拖拽移动画布</p>
-              <p style={{ color: '#888', fontSize: '12px', margin: '4px 0' }}>• 滚轮/双指：放大缩小身体细节</p>
+            {/* 快速指南问号按钮 */}
+            <div style={{ position: 'absolute', top: '15px', right: '15px', zIndex: 10 }}>
+              <button onClick={() => setShowGuide(!showGuide)}
+                style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid #444', color: '#888', width: '32px', height: '32px', borderRadius: '50%', fontSize: '16px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                ?
+              </button>
+              {showGuide && (
+                <div style={{ position: 'absolute', top: '40px', right: '0', background: 'rgba(30,30,30,0.95)', border: '1px solid #444', borderRadius: '10px', padding: '12px', width: '220px', backdropFilter: 'blur(10px)' }}>
+                  <p style={{ color: '#fff', fontSize: '12px', margin: '0 0 6px 0' }}><strong>操作指南</strong></p>
+                  <p style={{ color: '#888', fontSize: '11px', margin: '3px 0' }}>• 滑动或点击：绘制痛觉质地</p>
+                  <p style={{ color: '#888', fontSize: '11px', margin: '3px 0' }}>• 长按 0.3 秒：拖拽移动画布</p>
+                  <p style={{ color: '#888', fontSize: '11px', margin: '3px 0' }}>• 滚轮/双指：放大缩小身体细节</p>
+                  <button onClick={() => setShowGuide(false)} style={{ marginTop: '6px', background: 'transparent', border: '1px solid #444', color: '#888', padding: '4px 10px', borderRadius: '10px', fontSize: '10px', cursor: 'pointer' }}>知道了</button>
+                </div>
+              )}
             </div>
 
+            <h1 style={{ color: '#fff', marginBottom: '5px', fontSize: '2rem' }}>PainScape</h1>
+            <p style={{ color: '#aaa', marginBottom: '20px' }}>让说不出的痛，换一种方式抵达</p>
+
             <div style={{ width: '100%', maxWidth: '320px', textAlign: 'left' }}>
-              <label style={{ color: '#fff', marginBottom: '15px', display: 'block', fontSize: '1rem', fontWeight: 'bold' }}>当痛经发作时，你最需要伴侣/家人怎么做？</label>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <label style={{ color: '#fff', marginBottom: '10px', display: 'block', fontSize: '0.9rem', fontWeight: 'bold' }}>当痛经发作时，你最需要伴侣/家人怎么做？</label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {['alone', 'care', 'comfort'].map((p, i) => (
-                  <button key={p} onClick={() => togglePref(p)} style={{ padding: '15px', borderRadius: '12px', textAlign: 'left', background: '#1e1e1e', border: userPrefs.includes(p) ? '2px solid #d32f2f' : '1px solid #444', color: '#fff', cursor: 'pointer' }}>
-                    <div style={{ fontSize: '14px', fontWeight: 'bold' }}>{['🛑 别管我，让我一个人待着', '🥣 我没力气，需要实际照顾', '🫂 我很脆弱，需要情绪陪伴'][i]}</div>
+                  <button key={p} onClick={() => togglePref(p)} style={{ padding: '12px', borderRadius: '10px', textAlign: 'left', background: '#1e1e1e', border: userPrefs.includes(p) ? '2px solid #d32f2f' : '1px solid #444', color: '#fff', cursor: 'pointer' }}>
+                    <div style={{ fontSize: '13px', fontWeight: 'bold' }}>{['🛑 别管我，让我一个人待着', '🥣 我没力气，需要实际照顾', '🫂 我很脆弱，需要情绪陪伴'][i]}</div>
                   </button>
                 ))}
               </div>
             </div>
 
-            <button style={{ marginTop: '30px', width: '200px', padding: '14px', background: '#d32f2f', color: '#fff', border: 'none', borderRadius: '25px', fontWeight: 'bold', cursor: 'pointer' }}
-              onClick={() => { pgFrontRef.current?.clear(); pgBackRef.current?.clear(); dynamicParticles.current = []; staticParticles.current = []; setPage("canvas"); }}>开始绘制</button>
+            {/* 选填：健康信息 */}
+            <div style={{ width: '100%', maxWidth: '320px', marginTop: '15px' }}>
+              <button onClick={() => setShowMedicalOpt(!showMedicalOpt)}
+                style={{ background: 'transparent', border: '1px solid #444', color: '#888', padding: '8px 14px', borderRadius: '20px', fontSize: '12px', cursor: 'pointer', width: '100%' }}>
+                {showMedicalOpt ? '收起 ↑' : '填写健康信息（可选，用于生成更准确的医疗建议）'}
+              </button>
+              {showMedicalOpt && (
+                <div style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <select value={medicalBackground.diagnosed} onChange={(e) => setMedicalBackground({ ...medicalBackground, diagnosed: e.target.value })}
+                    style={{ width: '100%', padding: '8px', background: '#1e1e1e', color: '#fff', border: '1px solid #444', borderRadius: '8px', fontSize: '12px' }}>
+                    <option value="">既往诊断（可选）</option>
+                    <option value="none">无确诊</option>
+                    <option value="endometriosis">子宫内膜异位症</option>
+                    <option value="adenomyosis">子宫腺肌症</option>
+                    <option value="pcos">多囊卵巢综合征</option>
+                    <option value="unchecked">未做过相关检查</option>
+                  </select>
+                  <select value={medicalBackground.allergies} onChange={(e) => setMedicalBackground({ ...medicalBackground, allergies: e.target.value })}
+                    style={{ width: '100%', padding: '8px', background: '#1e1e1e', color: '#fff', border: '1px solid #444', borderRadius: '8px', fontSize: '12px' }}>
+                    <option value="">药物过敏史（可选）</option>
+                    <option value="none">无已知过敏</option>
+                    <option value="aspirin">阿司匹林过敏</option>
+                    <option value="ibuprofen">布洛芬过敏</option>
+                    <option value="nsaids">多种NSAIDs过敏</option>
+                    <option value="unknown">未留意过</option>
+                  </select>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button onClick={() => setTonePreference('gentle')} style={{ flex: 1, padding: '8px', borderRadius: '8px', fontSize: '12px', cursor: 'pointer', background: tonePreference === 'gentle' ? '#4caf50' : '#1e1e1e', color: tonePreference === 'gentle' ? '#fff' : '#888', border: tonePreference === 'gentle' ? '2px solid #4caf50' : '1px solid #444' }}>🌿 温和</button>
+                    <button onClick={() => setTonePreference('direct')} style={{ flex: 1, padding: '8px', borderRadius: '8px', fontSize: '12px', cursor: 'pointer', background: tonePreference === 'direct' ? '#2196f3' : '#1e1e1e', color: tonePreference === 'direct' ? '#fff' : '#888', border: tonePreference === 'direct' ? '2px solid #2196f3' : '1px solid #444' }}>💬 直接</button>
+                  </div>
+                  <p style={{ color: '#666', fontSize: '10px', margin: '0' }}>温和：安抚为主 / 直接：只说方法</p>
+                </div>
+              )}
+            </div>
 
-            <div style={{ display: 'flex', gap: '15px', marginTop: '20px' }}>
-              <button style={{ background: 'transparent', border: '1px solid #444', color: '#888', padding: '8px 16px', borderRadius: '20px', cursor: 'pointer' }} onClick={() => setPage("community")}>🌍 探索广场</button>
-              <button style={{ background: 'transparent', border: '1px solid #444', color: '#888', padding: '8px 16px', borderRadius: '20px', cursor: 'pointer' }} onClick={() => setPage("history")}>📅 疼痛日记</button>
+            <button style={{ marginTop: '20px', width: '200px', padding: '14px', background: '#d32f2f', color: '#fff', border: 'none', borderRadius: '25px', fontWeight: 'bold', cursor: 'pointer' }}
+              onClick={() => { pgFrontRef.current?.clear(); pgBackRef.current?.clear(); dynamicParticles.current = []; staticParticles.current = []; particlePositions.current = []; speedHistory.current = []; setPage("canvas"); }}>
+              开始绘制
+            </button>
+
+            <div style={{ display: 'flex', gap: '15px', marginTop: '15px', marginBottom: '10px' }}>
+              <button style={{ background: 'transparent', border: '1px solid #444', color: '#888', padding: '8px 16px', borderRadius: '20px', cursor: 'pointer', fontSize: '12px' }} onClick={() => setPage("community")}>🌍 探索广场</button>
+              <button style={{ background: 'transparent', border: '1px solid #444', color: '#888', padding: '8px 16px', borderRadius: '20px', cursor: 'pointer', fontSize: '12px' }} onClick={() => setPage("history")}>📅 疼痛日记</button>
             </div>
           </div>
         )}
@@ -783,7 +1042,25 @@ function App() {
         {page === "canvas" && (
           <div style={{ position: 'absolute', top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 10, pointerEvents: 'none' }}>
             <div style={{ pointerEvents: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '15px', padding: '15px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <button
+                  onClick={() => setPage("onboarding")}
+                  style={{
+                    background: 'transparent',
+                    border: '1px solid #444',
+                    color: '#888',
+                    width: '36px',
+                    height: '36px',
+                    borderRadius: '50%',
+                    fontSize: '18px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                >
+                  ←
+                </button>
                 <span style={{ color: '#fff', fontWeight: 'bold', fontSize: '20px' }}>PainScape</span>
                 <button style={{ background: '#d32f2f', color: '#fff', border: 'none', padding: '6px 18px', borderRadius: '20px', cursor: 'pointer', fontWeight: 'bold' }} onClick={handleFinish}>生成</button>
               </div>
@@ -843,8 +1120,49 @@ function App() {
                   <><h3 style={{ color: '#ff9800', margin: '0 0 10px 0' }}>不可见痛苦声明</h3><p style={{ color: '#ccc', fontSize: '14px', lineHeight: '1.5' }}>主管/HR 您好：<br />我今日突发严重原发性痛经（呈现强烈的<strong>{content.pain}</strong>），伴随体力透支，已无法维持正常专注度。</p><div style={{ marginTop: '15px', padding: '15px', background: 'rgba(255,152,0,0.1)', borderLeft: '3px solid #ff9800', color: '#ffcc80', fontSize: '13px' }}><strong>💼 诉求：</strong><br />特申请今日居家休息。身体平复后第一时间处理工作，感谢批准。</div></>
                 )}
                 {identity === 'doctor' && (
-                  <><h3 style={{ color: '#2196f3', margin: '0 0 10px 0' }}>医疗辅助报告</h3><p style={{ color: '#ccc', fontSize: '14px', lineHeight: '1.5' }}>{content.med}</p><div style={{ marginTop: '15px', padding: '15px', background: 'rgba(33,150,243,0.1)', borderLeft: '3px solid #2196f3', color: '#90caf9', fontSize: '13px' }}><strong>📋 记录：</strong> 患者具身痛苦图谱已记录如背景所示。</div></>
-                )}
+  <>
+    <h3 style={{ color: '#2196f3', margin: '0 0 10px 0' }}>医疗辅助报告</h3>
+    
+    {/* 临床主诉 */}
+    <div style={{ marginBottom: '15px' }}>
+      <p style={{ color: '#ccc', fontSize: '14px', lineHeight: '1.6', margin: 0 }}>
+        {content.med.split('【供您参考')[0].trim()}
+      </p>
+    </div>
+    
+    {/* 图谱记录 - 改为更自然的表述 */}
+    <div style={{ 
+      marginBottom: '15px', 
+      padding: '10px', 
+      background: 'rgba(33,150,243,0.08)', 
+      borderLeft: '3px solid #2196f3', 
+      borderRadius: '4px' 
+    }}>
+      <p style={{ color: '#90caf9', fontSize: '13px', margin: 0 }}>
+        📊 本次疼痛图谱已附在报告后方，可向医生展示
+      </p>
+    </div>
+    
+    {/* 供您参考的辅助信息 */}
+    {content.med.includes('【供您参考') && (
+      <div style={{ 
+        padding: '12px', 
+        background: 'rgba(33,150,243,0.05)', 
+        borderRadius: '8px',
+        border: '1px solid rgba(33,150,243,0.2)'
+      }}>
+        <p style={{ color: '#90caf9', fontSize: '12px', fontWeight: 'bold', margin: '0 0 8px 0' }}>
+          📋 供您参考——请与医生讨论
+        </p>
+        {content.med.split('【供您参考——请与医生讨论】')[1]?.split('*以上为基于')[0]?.split('•').filter(item => item.trim()).map((item, i) => (
+          <p key={i} style={{ color: '#aaa', fontSize: '12px', lineHeight: '1.6', margin: '4px 0', paddingLeft: '8px' }}>
+            • {item.trim()}
+          </p>
+        ))}
+      </div>
+    )}
+  </>
+)}
                 {identity === 'self' && (
                   <><h3 style={{ color: '#9c27b0', margin: '0 0 10px 0' }}>自愈与社群互助</h3><p style={{ color: '#ccc', fontSize: '14px', lineHeight: '1.5' }}>亲爱的，你画出了你的风暴。现在，请允许自己休息。</p><div style={{ marginTop: '15px', padding: '15px', background: 'rgba(156,39,176,0.1)', borderLeft: '3px solid #9c27b0', color: '#e1bee7', fontSize: '13px', whiteSpace: 'pre-wrap' }}>{content.selfCare}</div></>
                 )}
@@ -913,7 +1231,8 @@ function App() {
               minHeight: '100vh',
               overflowY: 'auto',
               padding: '20px',
-              boxSizing: 'border-box'
+              boxSizing: 'border-box',
+              WebkitOverflowScrolling: 'touch'
             }}>
               {/* 头部 */}
               <div style={{
