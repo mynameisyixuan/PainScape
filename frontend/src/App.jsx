@@ -176,6 +176,7 @@ function App() {
   const [page, setPage] = useState("splash");
   const [quote] = useState(() => QUOTES[Math.floor(Math.random() * QUOTES.length)]);
   const [splashOpacity, setSplashOpacity] = useState(1);
+  const [llmData, setLlmData] = useState(null); // 【新增】：专门用来存大模型返回的数据
   // 新增状态变量
   const [showGuide, setShowGuide] = useState(false);
   const [showMedicalOpt, setShowMedicalOpt] = useState(false);
@@ -184,7 +185,7 @@ function App() {
     allergies: '',
   });
   const [tonePreference, setTonePreference] = useState('gentle');
-
+  const [isLoading, setIsLoading] = useState(false);
   // 新增 ref
   const particlePositions = useRef([]);
   const speedHistory = useRef([]);
@@ -696,13 +697,18 @@ function App() {
 
   // === 2. 重构 generateContent 函数 (融合所有行为数据) ===
   const generateContent = (overrideType, llmMed, llmAction) => {
+     // 【核心修复 1】：如果外部没传参数，优先使用全局 state 里的数据
+    const activeLlmMed = llmMed || (llmData?.status === 'success' ? llmData.med : null);
+    const activeLlmAction = llmAction || (llmData?.status === 'success' ? llmData.action : null);
+
     const dominant = overrideType || (Object.keys(brushCounts.current).reduce((a, b) =>
       brushCounts.current[a] > brushCounts.current[b] ? a : b
     ) || 'twist');
 
     const painName = { twist: "严重绞痛", pierce: "神经性刺痛", heavy: "严重坠胀痛", wave: "弥漫性胀痛", scrape: "撕裂样锐痛" };
-
-    // 【核心修复1】：必须先把 TEXTS 定义在最前面，供后续所有逻辑使用！
+    let actionParts = [];
+    const safePainkiller = (!medicalBackground.allergies || medicalBackground.allergies === 'none' || medicalBackground.allergies === 'unknown') ? "布洛芬" : "止痛药";
+    // 必须先把 TEXTS 定义在最前面，供后续所有逻辑使用！
     const TEXTS = {
       twist: {
         analogy: "想象把一条湿毛巾用力拧干，再拧一圈，子宫正处于这种持续紧绷的痉挛状态。",
@@ -730,11 +736,8 @@ function App() {
         selfCare: "✨ 这是最耗费体力的痛感，请直接服用布洛芬等抑制剂。\n✨ 听白噪音或冥想音频，强行切断对痛觉的过度专注。"
       }
     };
-
+    let actionText = activeLlmAction || actionParts.join("\n\n");
     // 伴侣 Checklist 逻辑
-    let actionParts = [];
-    const safePainkiller = (!medicalBackground.allergies || medicalBackground.allergies === 'none' || medicalBackground.allergies === 'unknown') ? "布洛芬" : "止痛药";
-
     if (userPrefs.includes('alone')) {
       actionParts.push(`☑️ 帮她倒一杯温水，备好${safePainkiller}放在床头。`);
       actionParts.push("☑️ 调暗房间光源，关门出去，给她绝对的个人空间。");
@@ -766,19 +769,23 @@ function App() {
     if (medicalBackground.diagnosed === 'pcos') auxiliaryInfo.push('• 病史关联：已确诊多囊卵巢综合征（PCOS）。');
     if (medicalBackground.diagnosed === 'unchecked') auxiliaryInfo.push('• 建议初筛：未做过妇科检查，建议首选盆腔超声。');
 
-    // 拼接最终的医疗主诉（优先用 LLM 的，如果没有就用本地拼接的）
+    // 【核心修复 2】：根据大模型返回的结构进行智能判定
     let finalMedProfile = `患者绘制痛觉呈现强烈的${painName[dominant]}特征。`;
     let finalMedComplaint = TEXTS[dominant].med;
-    let finalMedReference = auxiliaryInfo.length > 0 ? auxiliaryInfo.join('\n') : '• 建议初筛：进行常规盆腔超声检查，排查器质性病变。';
+    let finalMedReference = auxiliaryInfo.length > 0 ? auxiliaryInfo.join('\n') : '• 建议初筛：进行常规盆腔超声检查。';
 
-    // 如果 LLM 成功返回，覆盖本地拼凑的变量（这里假设你的 main.py 已经重构成返回这三个字段）
-    if (llmMed && typeof llmMed === 'object') {
-      finalMedProfile = llmMed.med_profile || finalMedProfile;
-      finalMedComplaint = llmMed.med_complaint || finalMedComplaint;
-      finalMedReference = llmMed.med_reference || finalMedReference;
-    } else if (typeof llmMed === 'string') {
-      // 兼容旧版只有一个字符串的情况
-      finalMedComplaint = llmMed;
+    if (activeLlmMed) {
+      if (typeof activeLlmMed === 'string') {
+        // 如果后端像你截图里那样，只传回了一个长字符串 med
+        finalMedComplaint = activeLlmMed; 
+        finalMedProfile = "AI 基于您的绘画特征生成的深度主诉";
+        finalMedReference = "• 请与接诊医生讨论上述表现。";
+      } else {
+        // 如果后端传回的是我们之前设计的 med_profile 等对象
+        finalMedProfile = activeLlmMed.med_profile || finalMedProfile;
+        finalMedComplaint = activeLlmMed.med_complaint || finalMedComplaint;
+        finalMedReference = activeLlmMed.med_reference || finalMedReference;
+      }
     }
 
     // 语气偏好处理自愈建议
@@ -849,19 +856,24 @@ function App() {
       peakSpeed: parseFloat(peak.toFixed(1))
     };
   };
-  // 【终极防卡死版 handleFinish：带有硬核 Timeout 断路器】
+   const getDominantPain = () => {
+    const counts = brushCounts.current;
+    const maxVal = Math.max(...Object.values(counts));
+    // 找出使用次数最多的画笔，如果都没用过，默认返回 'twist'
+    return maxVal > 0 ? Object.keys(counts).reduce((a, b) => counts[a] > counts[b] ? a : b) : 'twist';
+  };
   const handleFinish = async () => {
     if (!p5Ref.current) return;
+    
+    // 1. 开启 Loading，防止用户重复点击
+    setIsLoading(true); 
 
-    // 1. 保存截图
+    // 2. 捕获当前画布截图
     const url = document.querySelector("canvas").toDataURL("image/jpeg", 0.5);
     setImgUrl(url);
 
-    // 2. 提取核心绘图参数
-    const dominant = Object.keys(brushCounts.current).reduce((a, b) =>
-      brushCounts.current[a] > brushCounts.current[b] ? a : b
-    ) || 'twist';
-
+    // 3. 获取主导痛觉及构建发送载荷
+    const dominant = getDominantPain();
     const payload = {
       dominantPain: dominant,
       userPref: userPrefs.join(','),
@@ -874,68 +886,61 @@ function App() {
       tonePreference: tonePreference,
     };
 
-    let llmMed = null;
-    let llmAction = null;
-
-    // 3. 极其安全的带超时机制的 Fetch (5秒必断)
+    // 4. 发起后端异步请求
     try {
-      console.log('📤 尝试请求大模型...');
+      console.log('📤 正在请求后端大模型 (15秒超时限制)...');
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5秒断路器
+      const timeoutId = setTimeout(() => controller.abort(), 30000)// 设置15秒超时
 
       const response = await fetch('http://localhost:8000/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
-        signal: controller.signal // 绑定打断信号
+        signal: controller.signal
       });
-      clearTimeout(timeoutId);
+      
+      clearTimeout(timeoutId); // 请求回来了，清除定时器
 
       if (response.ok) {
-        const data = await response.json();
+        const data = await response.json(); // 【核心】：只解析一次 JSON
         if (data.status === 'success') {
-          llmMed = data.med;
-          llmAction = data.action;
-          console.log('✅ LLM 返回成功');
+          console.log('✅ 大模型转译成功：', data);
+          setLlmData(data); // 将返回的 {med, action} 存入 State
         }
       }
-    } catch (e) {
-      // 网络未连、跨域、或5秒超时都会进入这里
-      console.warn('⚠️ 后端调用失败，瞬间切换至本地字典降级', e);
-    }
+    } catch (error) {
+      // 捕获：超时、断网、后端没开、或者报错
+      if (error.name === 'AbortError') {
+        console.warn('⚠️ 后端请求超时，已自动转入本地离线模式');
+      } else {
+        console.warn('⚠️ 后端连接失败，已转入本地离线模式', error);
+      }
+      setLlmData(null); // 确保清空旧的 AI 数据，强制使用本地字典
+    } finally {
+      // 5. 无论成功还是失败，最后都要做的：保存历史、关闭 Loading、跳转页面
+      
+      // 构造历史记录对象
+      const newRecord = {
+        id: Date.now(),
+        date: new Date().toLocaleDateString(),
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        img: url,
+        type: dominant,
+        // 如果 AI 成功，日记存 AI 的，否则存本地的
+        content: generateContent(dominant, null, null) 
+      };
 
-    // 4. 【核心保证】：无论如何，必须生成 Content 并切换页面！
-    const content = generateContent(dominant, llmMed, llmAction);
-
-    const painNameMap = { twist: "绞痛", pierce: "刺痛", heavy: "坠痛", wave: "胀痛", scrape: "撕裂痛" };
-    const iconMap = { twist: "🌪️", pierce: "⚡️", heavy: "🪨", wave: "〰️", scrape: "🔪" };
-
-    const newRecord = {
-      id: Date.now(),
-      date: new Date().toLocaleDateString(),
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      img: url,
-      type: dominant,
-      painName: painNameMap[dominant],
-      icon: iconMap[dominant],
-      content: content
-    };
-
-    // 5. 保存历史记录
-    const newHistory = [newRecord, ...history].slice(0, 50);
-    setHistory(newHistory);
-    try {
+      // 更新历史状态并写入本地存储
+      const newHistory = [newRecord, ...history].slice(0, 10);
+      setHistory(newHistory);
       localStorage.setItem('painscape_history', JSON.stringify(newHistory));
-    } catch (e) {
-      console.warn("存储受限，仅保留最新一条", e);
-      setHistory([newRecord]);
-      localStorage.setItem('painscape_history', JSON.stringify([newRecord]));
-    }
 
-    // 6. 清理内存并跳转 (绝对执行！)
-    particlePositions.current = [];
-    speedHistory.current = [];
-    setPage("result");
+      // 重置交互数据，关闭加载动画，跳转到结果页
+      particlePositions.current = [];
+      speedHistory.current = [];
+      setIsLoading(false); 
+      setPage("result");
+    }
   };
   const updateRecordInfo = (recordId, field, value) => {
     const updatedHistory = history.map(r =>
@@ -1158,13 +1163,23 @@ function App() {
                       <span style={{ color: '#666', fontSize: '10px', background: '#111', padding: '2px 8px', borderRadius: '10px' }}>算法生成 · 仅供参考</span>
                     </div>
 
-                    {/* 1. 临床主诉 (核心高亮) */}
-                    <div style={{ marginBottom: '15px' }}>
-                      <h4 style={{ color: '#90caf9', margin: '0 0 5px 0', fontSize: '13px' }}>🩺 临床主诉</h4>
-                      <p style={{ color: '#fff', fontSize: '15px', lineHeight: '1.5', margin: 0, fontWeight: 'bold' }}>
-                        {content.med_complaint}
+                   {/* 1. 临床主诉 (核心高亮) */}
+                    <div style={{marginBottom:'15px'}}>
+                      <h4 style={{color:'#90caf9', margin:'0 0 5px 0', fontSize:'13px'}}>🩺 临床诊断建议</h4>
+                      <p style={{color:'#fff', fontSize:'14px', lineHeight:'1.6', margin:0}}>
+                        {content.med_complaint} {/* 这里会直接显示你截图中那段长长的文字 */}
                       </p>
                     </div>
+
+                    {/* 如果有 profile 信息才显示这一块，否则隐藏 */}
+                    {content.med_profile !== "AI 基于您的绘画特征生成的深度主诉" && (
+                      <div style={{marginBottom:'15px'}}>
+                        <h4 style={{color:'#90caf9', margin:'0 0 5px 0', fontSize:'13px'}}>📊 疼痛画像</h4>
+                        <p style={{color:'#ccc', fontSize:'12px', lineHeight:'1.5', margin:0}}>
+                          {content.med_profile}
+                        </p>
+                      </div>
+                    )}
 
                     {/* 2. 疼痛画像 (客观描述) */}
                     <div style={{ marginBottom: '15px' }}>
@@ -1986,6 +2001,23 @@ function App() {
                 </button>
               </div>
             </div>
+          </div>
+        )}
+        {/* --- 全局 Loading 遮罩层 --- */}
+        {isLoading && (
+          <div style={{
+            position: 'fixed', zIndex: 9999, top: 0, left: 0, width: '100vw', height: '100vh',
+            background: 'rgba(0,0,0,0.85)', display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center'
+          }}>
+            <div style={{
+              width: '40px', height: '40px', border: '3px solid rgba(255,255,255,0.3)',
+              borderTop: '3px solid #d32f2f', borderRadius: '50%',
+              animation: 'spin 1s linear infinite' // 这里用一段简单的内联动画
+            }} />
+            <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
+            <p style={{ color: '#fff', marginTop: '20px', letterSpacing: '2px' }}>AI 医疗助理转译中...</p>
+            <p style={{ color: '#666', fontSize: '12px' }}>正在基于您的痛觉参数生成多语境报告</p>
           </div>
         )}
       </div>
