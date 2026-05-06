@@ -694,124 +694,125 @@ function App() {
     }
   };
 
+  // === 2. 重构 generateContent 函数 (融合所有行为数据) ===
   const generateContent = (overrideType, llmMed, llmAction) => {
     const dominant = overrideType || (Object.keys(brushCounts.current).reduce((a, b) =>
       brushCounts.current[a] > brushCounts.current[b] ? a : b
     ) || 'twist');
 
-    const painName = { twist: "绞痛", pierce: "刺痛", heavy: "严重坠胀", wave: "弥漫性胀痛", scrape: "撕裂样锐痛" };
+    const painName = { twist: "严重绞痛", pierce: "神经性刺痛", heavy: "严重坠胀痛", wave: "弥漫性胀痛", scrape: "撕裂样锐痛" };
+
+    // 【核心修复1】：必须先把 TEXTS 定义在最前面，供后续所有逻辑使用！
     const TEXTS = {
       twist: {
-        analogy: "🌪️ 像把一条湿毛巾用力拧干，再拧一圈，持续保持紧绷。",
-        med: "主诉：腹部持续性绞痛，呈阵发性螺旋状收缩。建议排查子宫痉挛。",
-        selfCare: "尝试婴儿蜷缩式侧卧，抱紧膝盖减缓肌肉紧绷。"
+        analogy: "想象把一条湿毛巾用力拧干，再拧一圈，子宫正处于这种持续紧绷的痉挛状态。",
+        med: "下腹部持续性绞痛，呈阵发性/螺旋状收缩。建议排查子宫痉挛。",
+        selfCare: "✨ 尝试【婴儿蜷缩式】侧卧，抱紧膝盖减缓肌肉紧绷。\n✨ 用暖宝宝贴在【八髎穴】(后腰尾骨处) 缓解神经放射痛。\n✨ 避免剧烈呼吸，尝试腹式呼吸缓慢吐气。"
       },
       pierce: {
-        analogy: "⚡️ 像不打麻药进行根管治疗，冰冷的针尖持续扎入腹部深处。",
-        med: "主诉：锐痛，呈放射状，伴随间歇性神经刺痛。建议排查神经性疼痛。",
-        selfCare: "刺痛发作时极易引发冷汗，请加盖毛毯保暖，尽量平躺避免牵扯。"
+        analogy: "想象不打麻药进行根管治疗，或者冰冷的针尖正持续扎入腹部深处。",
+        med: "锐痛（Sharp Pain），呈放射状，伴随间歇性神经刺痛。建议排查神经性疼痛。",
+        selfCare: "✨ 刺痛发作时极易引发冷汗，请立刻加盖毛毯保暖。\n✨ 尽量平躺，避免任何牵扯盆腔周围韧带的动作。"
       },
       heavy: {
-        analogy: "🪨 像在腹部绑了5公斤沙袋跑800米，内脏受重力拉扯。",
-        med: "主诉：下腹部严重坠胀感，伴随盆腔充血与腰骶部酸痛。建议排查盆腔充血。",
-        selfCare: "尝试臀部垫高平躺，用两个枕头垫在臀部下，缓解盆腔充血。"
+        analogy: "像在腹部绑了5公斤沙袋跑800米，每一步内脏都在受重力向下死死拉扯。",
+        med: "下腹部严重坠胀感（Bearing-down），伴随盆腔充血与腰骶部酸痛。建议排查盆腔充血。",
+        selfCare: "✨ 尝试【臀部垫高平躺】，拿两个枕头垫在臀部下方，通过重力倒流缓解盆腔充血。\n✨ 绝对避免久站或下蹲！"
       },
       wave: {
-        analogy: "🎈 像肚子里有个气球在不断充气，内脏处于高压水肿状态。",
-        med: "主诉：弥漫性胀痛，边界不清，伴随腹部水肿感。建议排查水肿或肠胀气。",
-        selfCare: "穿着极度宽松衣物，解开勒住腰部的松紧带，轻轻顺时针抚摸腹部。"
+        analogy: "像肚子里有个气球在不断充气，内脏正处于极度的高压水肿状态。",
+        med: "弥漫性胀痛，边界不清，伴随腹部水肿感。建议排查水肿或肠胀气。",
+        selfCare: "✨ 穿着极度宽松的衣物，解开任何勒住腰部的松紧带。\n✨ 轻轻顺时针抚摸腹部，千万不要用力按压。"
       },
       scrape: {
-        analogy: "🔪 像未成熟的果实被强行剥皮，皮上带着血肉被不断撕扯。",
-        med: "主诉：强烈的撕裂样锐痛，伴随组织剥离感。建议排查组织粘连或腹膜刺激。",
-        selfCare: "这是最耗费体力的痛感，请服用布洛芬等抑制剂。听白噪音切断对痛觉的过度专注。"
+        analogy: "像一颗未成熟的果实被强行剥皮，皮上带着血肉被不断撕扯。",
+        med: "强烈的撕裂样锐痛，伴随组织剥离感。建议排查组织粘连或腹膜刺激。",
+        selfCare: "✨ 这是最耗费体力的痛感，请直接服用布洛芬等抑制剂。\n✨ 听白噪音或冥想音频，强行切断对痛觉的过度专注。"
       }
     };
 
-    // LLM 优先，本地字典降级
-    let med = llmMed || TEXTS[dominant].med;
-    let baseAction = llmAction || '';
-
-    // 伴侣指令
-    let actionText = "";
+    // 伴侣 Checklist 逻辑
+    let actionParts = [];
+    const safePainkiller = (!medicalBackground.allergies || medicalBackground.allergies === 'none' || medicalBackground.allergies === 'unknown') ? "布洛芬" : "止痛药";
 
     if (userPrefs.includes('alone')) {
-      if (medicalBackground.allergies === 'nsaids' || medicalBackground.allergies === 'ibuprofen') {
-        actionText = baseAction || "她需要独处。把止痛药和温水放在床头，灯光调暗，关上门。不要每隔十分钟进房询问。她缓过来会自己出来的。";
-      } else {
-        actionText = baseAction || "她需要独处。将布洛芬和温水放在床头，灯光调暗，关上门。不要每隔十分钟进房询问。她缓过来会自己出来的。";
-      }
+      actionParts.push(`☑️ 帮她倒一杯温水，备好${safePainkiller}放在床头。`);
+      actionParts.push("☑️ 调暗房间光源，关门出去，给她绝对的个人空间。");
+      actionParts.push("☑️ 不要每隔十分钟进房询问“好点没”，这会加重她的烦躁。");
     } else {
-      let parts = [];
       if (userPrefs.includes('care')) {
-        if (medicalBackground.allergies === 'nsaids' || medicalBackground.allergies === 'ibuprofen') {
-          parts.push(baseAction || "把手掌搓热，捂在她小腹或后腰上。暖宝宝贴在后腰，热水袋放在脚边。包揽今天的家务，让她安心平躺。止痛药放在床头，她需要的时候会自己拿。");
-        } else {
-          parts.push(baseAction || "把手掌搓热，捂在她小腹或后腰上。暖宝宝贴在后腰，热水袋放在脚边。布洛芬和温水一起放在床头。包揽今天的家务，让她安心平躺。");
-        }
+        actionParts.push("☑️ 把手掌搓热，捂在她小腹或后腰上。暖宝宝贴在后腰，热水袋放在脚边。");
+        actionParts.push(`☑️ 将${safePainkiller}和温水一起放在床头。包揽今天的家务，让她安心平躺。`);
       }
       if (userPrefs.includes('comfort')) {
-        parts.push("不用做什么，坐在旁边握着她的手。如果她蜷起来了，帮她掖一下毯子。不用说话。");
+        actionParts.push("☑️ 不用做什么，坐在旁边握着她的手。如果她蜷起来了，帮她掖一下毯子。不用说话。");
       }
-      actionText = parts.join("\n\n") || baseAction;
     }
-    // 病史补充 - 扩展为结构化的辅助信息
+
+    // 职场请假模板
+    const workTemplate = `领导/HR 您好：\n抱歉临时申请。我今日突发严重原发性痛经（表现为剧烈的${painName[dominant]}），伴随冷汗与体力透支。目前状态已无法维持正常的工作专注度。\n\n为避免影响工作质量，特申请今日居家休息。紧急事务已交接。我会在身体平复后第一时间处理消息。感谢批准。`;
+
+    // ============ 病史辅助信息 (重构给医生的 Med 结构) ============
     let auxiliaryInfo = [];
 
-    // 1. 过敏史相关的药物建议
-    if (medicalBackground.allergies === 'ibuprofen') {
-      auxiliaryInfo.push('• 药物注意：用户布洛芬过敏，建议使用对乙酰氨基酚（扑热息痛）作为替代止痛方案。非NSAIDs类药物通常不会引起交叉过敏。');
-    } else if (medicalBackground.allergies === 'aspirin') {
-      auxiliaryInfo.push('• 药物注意：用户阿司匹林过敏，避免使用水杨酸类药物。可考虑对乙酰氨基酚作为替代，必要时在医生指导下使用COX-2选择性抑制剂。');
-    } else if (medicalBackground.allergies === 'nsaids') {
-      auxiliaryInfo.push('• 药物注意：用户对多种NSAIDs过敏，所有非甾体抗炎药（布洛芬、萘普生、双氯芬酸等）均应避免。可考虑对乙酰氨基酚，但需注意其对严重疼痛的效果可能有限。');
+    // 1. 过敏史
+    if (medicalBackground.allergies === 'ibuprofen') auxiliaryInfo.push('• 药物注意：用户布洛芬过敏，建议使用对乙酰氨基酚。');
+    else if (medicalBackground.allergies === 'aspirin') auxiliaryInfo.push('• 药物注意：用户阿司匹林过敏，避免使用水杨酸类药物。');
+    else if (medicalBackground.allergies === 'nsaids') auxiliaryInfo.push('• 药物注意：用户对多种NSAIDs过敏，应避免使用常见非甾体抗炎药。');
+
+    // 2. 既往诊断
+    if (medicalBackground.diagnosed === 'endometriosis') auxiliaryInfo.push('• 病史关联：已确诊子宫内膜异位症，本次疼痛可能与病灶出血有关。');
+    if (medicalBackground.diagnosed === 'adenomyosis') auxiliaryInfo.push('• 病史关联：已确诊子宫腺肌症，建议关注肌层回声变化。');
+    if (medicalBackground.diagnosed === 'pcos') auxiliaryInfo.push('• 病史关联：已确诊多囊卵巢综合征（PCOS）。');
+    if (medicalBackground.diagnosed === 'unchecked') auxiliaryInfo.push('• 建议初筛：未做过妇科检查，建议首选盆腔超声。');
+
+    // 拼接最终的医疗主诉（优先用 LLM 的，如果没有就用本地拼接的）
+    let finalMedProfile = `患者绘制痛觉呈现强烈的${painName[dominant]}特征。`;
+    let finalMedComplaint = TEXTS[dominant].med;
+    let finalMedReference = auxiliaryInfo.length > 0 ? auxiliaryInfo.join('\n') : '• 建议初筛：进行常规盆腔超声检查，排查器质性病变。';
+
+    // 如果 LLM 成功返回，覆盖本地拼凑的变量（这里假设你的 main.py 已经重构成返回这三个字段）
+    if (llmMed && typeof llmMed === 'object') {
+      finalMedProfile = llmMed.med_profile || finalMedProfile;
+      finalMedComplaint = llmMed.med_complaint || finalMedComplaint;
+      finalMedReference = llmMed.med_reference || finalMedReference;
+    } else if (typeof llmMed === 'string') {
+      // 兼容旧版只有一个字符串的情况
+      finalMedComplaint = llmMed;
     }
 
-    // 2. 既往诊断相关的排查建议
-    if (medicalBackground.diagnosed === 'endometriosis') {
-      auxiliaryInfo.push('• 病史关联：已确诊子宫内膜异位症，本次疼痛可能与内异症病灶周期性出血及炎症反应有关。建议每6-12个月复查盆腔超声，监测囊肿大小变化。CA125可作为辅助监测指标，但特异性有限。');
-      auxiliaryInfo.push('• 治疗参考：激素类药物（如短效避孕药、地诺孕素）可抑制病灶活动，但需结合生育计划选择方案。如囊肿较大（>4cm）或疼痛进行性加重，需考虑手术评估。');
-    }
-    if (medicalBackground.diagnosed === 'adenomyosis') {
-      auxiliaryInfo.push('• 病史关联：已确诊子宫腺肌症，疼痛可能与异位内膜在肌层内的周期性出血及周围平滑肌增生有关。建议定期复查盆腔超声，关注肌层回声及子宫大小变化。');
-      auxiliaryInfo.push('• 治疗参考：曼月乐环（LNG-IUS）对腺肌症引起的痛经和月经过多有较好效果。如症状进行性加重，可考虑GnRH-a短期治疗或手术评估。');
-    }
-    if (medicalBackground.diagnosed === 'pcos') {
-      auxiliaryInfo.push('• 病史关联：已确诊多囊卵巢综合征（PCOS）。如本次疼痛与月经周期不规律相关，可能与无排卵性出血或卵巢增大有关。'); auxiliaryInfo.push('• 治疗参考：短效避孕药可调节周期并减轻疼痛。如合并胰岛素抵抗，二甲双胍可能有辅助作用。');
-    }
-    if (medicalBackground.diagnosed === 'unchecked') {
-      auxiliaryInfo.push('• 建议初筛：用户既往未做过妇科相关检查。建议首先完成盆腔超声检查，了解子宫、双侧附件及盆腔基本情况。如痛经持续加重或伴随其他症状（异常出血、性交痛等），进一步考虑MRI或腹腔镜检查。');
-    }
-
-    // 3. 疼痛性质相关的通用建议
-    if (dominant === 'heavy' || dominant === 'twist') {
-      auxiliaryInfo.push('• 疼痛性质参考：绞痛/坠痛多与平滑肌痉挛或盆腔充血有关。热敷下腹部和腰骶部可能有助于缓解。如伴随月经量过多，需排查子宫肌瘤或子宫腺肌症。');
-    }
-    if (dominant === 'pierce' || dominant === 'scrape') {
-      auxiliaryInfo.push('• 疼痛性质参考：锐痛/撕裂痛可能提示子宫内膜异位症或盆腔粘连。如疼痛在特定体位（如性生活、排便）时加重，需排查子宫直肠陷凹病变。');
-    }
-
-    // 拼接辅助信息
-    if (auxiliaryInfo.length > 0) {
-      med += '\n\n【供您参考——请与医生讨论】\n' + auxiliaryInfo.join('\n');
-      med += '\n\n*以上为基于您提供信息的通用参考，不构成医疗建议。具体诊断和治疗方案请咨询执业医师。*';
-    }
-    // 语气偏好
+    // 语气偏好处理自愈建议
     let selfCare = TEXTS[dominant].selfCare;
     if (tonePreference === 'gentle') {
-      selfCare = selfCare + '\n\n你已经很努力了。痛不是你的错，休息一下吧。';
+      selfCare = selfCare + '\n\n✨ 你已经很努力了。痛不是你的错，允许自己今天做一个废物，好好休息吧。';
     }
 
     return {
-      ...TEXTS[dominant],
-      action: actionText,
       pain: painName[dominant],
-      med: med,
-      selfCare: selfCare
+      analogy: TEXTS[dominant].analogy,
+      action: llmAction || actionParts.join("\n\n"),
+      workText: workTemplate,
+      selfCare: selfCare,
+      // 将打碎的医疗数据输出
+      med_profile: finalMedProfile,
+      med_complaint: finalMedComplaint,
+      med_reference: finalMedReference
     };
   };
-  // 计算空间分布
+
+  // 【新增】：一键复制功能
+  const handleCopy = (text) => {
+    navigator.clipboard.writeText(text).then(() => {
+      alert("文案已复制到剪贴板，可直接粘贴至微信！");
+    }).catch(err => {
+      console.error('复制失败', err);
+    });
+  };
+  // === 1. 优化数据提取计算函数 ===
   const calculateSpatialMap = () => {
+    // 盲画模式不计算解剖位置
+    if (bodyMode === 'none') return null;
+
     const positions = particlePositions.current;
     if (positions.length === 0) return null;
 
@@ -819,13 +820,17 @@ function App() {
     let upper = 0, middle = 0, lower = 0;
 
     positions.forEach(p => {
+      // 过滤掉非当前面的粒子
+      if (p.bodyMode !== bodyMode) return;
       const ratio = p.y / canvasHeight;
       if (ratio < 0.35) upper++;
       else if (ratio < 0.65) middle++;
       else lower++;
     });
 
-    const total = positions.length;
+    const total = upper + middle + lower;
+    if (total === 0) return null;
+
     return {
       abdomen: parseFloat((middle / total).toFixed(2)),
       lowerBack: parseFloat((lower / total).toFixed(2)),
@@ -833,99 +838,104 @@ function App() {
     };
   };
 
-  // 计算行为强度
   const calculateIntensity = () => {
     const speeds = speedHistory.current;
     if (speeds.length === 0) return null;
 
     const avg = speeds.reduce((s, v) => s + v, 0) / speeds.length;
     const peak = Math.max(...speeds);
-    const variance = speeds.reduce((s, v) => s + Math.pow(v - avg, 2), 0) / speeds.length;
-
     return {
       avgSpeed: parseFloat(avg.toFixed(1)),
-      peakSpeed: parseFloat(peak.toFixed(1)),
-      variance: parseFloat(variance.toFixed(2))
+      peakSpeed: parseFloat(peak.toFixed(1))
     };
   };
+  // 【终极防卡死版 handleFinish：带有硬核 Timeout 断路器】
   const handleFinish = async () => {
-    if (p5Ref.current) {
-      const url = document.querySelector("canvas").toDataURL("image/jpeg", 0.5);
-      setImgUrl(url);
+    if (!p5Ref.current) return;
 
-      const dominant = Object.keys(brushCounts.current).reduce((a, b) =>
-        brushCounts.current[a] > brushCounts.current[b] ? a : b
-      ) || 'twist';
+    // 1. 保存截图
+    const url = document.querySelector("canvas").toDataURL("image/jpeg", 0.5);
+    setImgUrl(url);
 
-      // === 构建完整 Payload ===
-      const payload = {
-        dominantPain: dominant,
-        userPref: userPrefs.join(','),
-        painScore: Object.values(brushCounts.current).reduce((sum, v) => sum + v, 0),
-        brushCounts: brushCounts.current,
-        spatialMap: calculateSpatialMap(),
-        intensityProfile: calculateIntensity(),
-        colorPalette: activeColor,
-        bodyMode: bodyMode,
-        medicalBackground: {
-          diagnosed: medicalBackground.diagnosed,
-          allergies: medicalBackground.allergies,
-        },
-        tonePreference: tonePreference,
-      };
-      console.log('📤 Payload:', payload);
+    // 2. 提取核心绘图参数
+    const dominant = Object.keys(brushCounts.current).reduce((a, b) =>
+      brushCounts.current[a] > brushCounts.current[b] ? a : b
+    ) || 'twist';
 
-      // === 尝试调用后端 ===
-      let llmMed = null;
-      let llmAction = null;
-      try {
-        const response = await fetch('http://localhost:8000/api/generate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
+    const payload = {
+      dominantPain: dominant,
+      userPref: userPrefs.join(','),
+      painScore: Object.values(brushCounts.current).reduce((sum, v) => sum + v, 0),
+      spatialMap: calculateSpatialMap(),
+      intensityProfile: calculateIntensity(),
+      colorPalette: activeColor,
+      bodyMode: bodyMode,
+      medicalBackground: medicalBackground,
+      tonePreference: tonePreference,
+    };
+
+    let llmMed = null;
+    let llmAction = null;
+
+    // 3. 极其安全的带超时机制的 Fetch (5秒必断)
+    try {
+      console.log('📤 尝试请求大模型...');
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5秒断路器
+
+      const response = await fetch('http://localhost:8000/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: controller.signal // 绑定打断信号
+      });
+      clearTimeout(timeoutId);
+
+      if (response.ok) {
         const data = await response.json();
         if (data.status === 'success') {
           llmMed = data.med;
           llmAction = data.action;
           console.log('✅ LLM 返回成功');
         }
-      } catch (e) {
-        console.log('⚠️ LLM 调用失败，使用本地字典降级', e);
       }
-
-      // === 生成内容 ===
-      const content = generateContent(dominant, llmMed, llmAction);
-
-      // === 存储日记记录 ===
-      const painNameMap = { twist: "绞痛", pierce: "刺痛", heavy: "坠痛", wave: "胀痛", scrape: "撕裂痛" };
-      const iconMap = { twist: "🌪️", pierce: "⚡️", heavy: "🪨", wave: "〰️", scrape: "🔪" };
-
-      const newRecord = {
-        id: Date.now(),
-        date: new Date().toLocaleDateString(),
-        timestamp: Date.now(),
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        img: url,
-        type: dominant,
-        painName: painNameMap[dominant],
-        icon: iconMap[dominant],
-        content: content,
-        duration: null,
-        reliefMethod: null,
-        notes: null
-      };
-
-      const newHistory = [newRecord, ...history].slice(0, 50);
-      setHistory(newHistory);
-      localStorage.setItem('painscape_history', JSON.stringify(newHistory));
-
-      // 清空粒子记录
-      particlePositions.current = [];
-      speedHistory.current = [];
-
-      setPage("result");
+    } catch (e) {
+      // 网络未连、跨域、或5秒超时都会进入这里
+      console.warn('⚠️ 后端调用失败，瞬间切换至本地字典降级', e);
     }
+
+    // 4. 【核心保证】：无论如何，必须生成 Content 并切换页面！
+    const content = generateContent(dominant, llmMed, llmAction);
+
+    const painNameMap = { twist: "绞痛", pierce: "刺痛", heavy: "坠痛", wave: "胀痛", scrape: "撕裂痛" };
+    const iconMap = { twist: "🌪️", pierce: "⚡️", heavy: "🪨", wave: "〰️", scrape: "🔪" };
+
+    const newRecord = {
+      id: Date.now(),
+      date: new Date().toLocaleDateString(),
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      img: url,
+      type: dominant,
+      painName: painNameMap[dominant],
+      icon: iconMap[dominant],
+      content: content
+    };
+
+    // 5. 保存历史记录
+    const newHistory = [newRecord, ...history].slice(0, 50);
+    setHistory(newHistory);
+    try {
+      localStorage.setItem('painscape_history', JSON.stringify(newHistory));
+    } catch (e) {
+      console.warn("存储受限，仅保留最新一条", e);
+      setHistory([newRecord]);
+      localStorage.setItem('painscape_history', JSON.stringify([newRecord]));
+    }
+
+    // 6. 清理内存并跳转 (绝对执行！)
+    particlePositions.current = [];
+    speedHistory.current = [];
+    setPage("result");
   };
   const updateRecordInfo = (recordId, field, value) => {
     const updatedHistory = history.map(r =>
@@ -938,7 +948,6 @@ function App() {
       setViewingDiary({ ...viewingDiary, [field]: value });
     }
   };
-
   return (
     <>
       <div style={{ position: 'fixed', top: 0, left: 0, zIndex: 1 }}>
@@ -1087,10 +1096,16 @@ function App() {
                   </button>
                 ))}
               </div>
-              <div style={{ display: 'flex', justifyContent: 'center', gap: '20px' }}>
-                {Object.keys(PALETTES).map(k => (
-                  <div key={k} style={{ width: '30px', height: '30px', borderRadius: '50%', border: activeColor === k ? '2px solid #fff' : '2px solid #444', background: `rgb(${PALETTES[k].color.join(',')})`, cursor: 'pointer', transform: activeColor === k ? 'scale(1.2)' : 'none' }} onClick={() => setActiveColor(k)} />
-                ))}
+              {/* 画板的颜色选择器 */}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                <div style={{ display: 'flex', justifyContent: 'center', gap: '20px' }}>
+                  {Object.keys(PALETTES).map(k => (
+                    <div key={k} style={{ width: '30px', height: '30px', borderRadius: '50%', border: activeColor === k ? '2px solid #fff' : '2px solid #444', background: `rgb(${PALETTES[k].color.join(',')})`, cursor: 'pointer', transform: activeColor === k ? 'scale(1.2)' : 'none' }} onClick={() => setActiveColor(k)} />
+                  ))}
+                </div>
+                <span style={{ color: '#666', fontSize: '10px', marginTop: '8px' }}>
+                  {activeColor === 'crimson' ? '深红：急性锐痛/充血' : activeColor === 'dark' ? '暗灰：沉重钝痛/抑郁' : activeColor === 'purple' ? '紫：神经性放射痛' : '冰蓝：发冷/发僵'}
+                </span>
               </div>
             </div>
           </div>
@@ -1114,57 +1129,75 @@ function App() {
 
               <div style={{ background: 'rgba(28,28,28,0.9)', padding: '20px', borderRadius: '12px', width: '100%', maxWidth: '350px', border: '1px solid #444', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' }}>
                 {identity === 'partner' && (
-                  <><h3 style={{ color: '#fff', margin: '0 0 10px 0' }}>通感说明书</h3><p style={{ color: '#ccc', fontSize: '14px', lineHeight: '1.5' }}>{content.analogy}</p><div style={{ marginTop: '15px', padding: '15px', background: 'rgba(211,47,47,0.1)', borderLeft: '3px solid #d32f2f', color: '#ffcdd2', fontSize: '13px', whiteSpace: 'pre-wrap' }}>{content.action}</div></>
+                  <>
+                    <h3 style={{ color: '#fff', margin: '0 0 15px 0' }}>通感说明书</h3>
+                    <div style={{ background: 'rgba(211,47,47,0.1)', padding: '12px', borderRadius: '8px', borderLeft: '3px solid #d32f2f' }}>
+                      <p style={{ color: '#ffcdd2', fontSize: '13px', margin: 0, lineHeight: '1.5' }}>她正在经历强烈的<strong>{content.pain}</strong>。{content.analogy}</p>
+                    </div>
+                    <div style={{ marginTop: '20px' }}>
+                      <strong style={{ color: '#fff', fontSize: '14px' }}>💡 请立刻执行以下操作：</strong>
+                      <p style={{ color: '#ccc', fontSize: '13px', lineHeight: '1.8', whiteSpace: 'pre-wrap', marginTop: '10px' }}>{content.action}</p>
+                    </div>
+                    <button onClick={() => handleCopy(content.action)} style={{ marginTop: '15px', width: '100%', padding: '10px', background: 'transparent', border: '1px dashed #d32f2f', color: '#ffcdd2', borderRadius: '8px', cursor: 'pointer' }}>📋 复制实操指令</button>
+                  </>
                 )}
                 {identity === 'work' && (
-                  <><h3 style={{ color: '#ff9800', margin: '0 0 10px 0' }}>不可见痛苦声明</h3><p style={{ color: '#ccc', fontSize: '14px', lineHeight: '1.5' }}>主管/HR 您好：<br />我今日突发严重原发性痛经（呈现强烈的<strong>{content.pain}</strong>），伴随体力透支，已无法维持正常专注度。</p><div style={{ marginTop: '15px', padding: '15px', background: 'rgba(255,152,0,0.1)', borderLeft: '3px solid #ff9800', color: '#ffcc80', fontSize: '13px' }}><strong>💼 诉求：</strong><br />特申请今日居家休息。身体平复后第一时间处理工作，感谢批准。</div></>
+                  <>
+                    <h3 style={{ color: '#ff9800', margin: '0 0 15px 0' }}>高情商请假模板</h3>
+                    <p style={{ color: '#888', fontSize: '12px', marginBottom: '10px' }}>客观描述生理状况，不卑不亢，并留出交接空间。</p>
+                    <div style={{ background: 'rgba(255,152,0,0.05)', padding: '15px', borderRadius: '8px', border: '1px solid rgba(255,152,0,0.3)', color: '#ccc', fontSize: '13px', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>
+                      {content.workText}
+                    </div>
+                    <button onClick={() => handleCopy(content.workText)} style={{ marginTop: '15px', width: '100%', padding: '10px', background: 'transparent', border: '1px dashed #ff9800', color: '#ffcc80', borderRadius: '8px', cursor: 'pointer' }}>📋 复制请假模板</button>
+                  </>
                 )}
                 {identity === 'doctor' && (
-  <>
-    <h3 style={{ color: '#2196f3', margin: '0 0 10px 0' }}>医疗辅助报告</h3>
-    
-    {/* 临床主诉 */}
-    <div style={{ marginBottom: '15px' }}>
-      <p style={{ color: '#ccc', fontSize: '14px', lineHeight: '1.6', margin: 0 }}>
-        {content.med.split('【供您参考')[0].trim()}
-      </p>
-    </div>
-    
-    {/* 图谱记录 - 改为更自然的表述 */}
-    <div style={{ 
-      marginBottom: '15px', 
-      padding: '10px', 
-      background: 'rgba(33,150,243,0.08)', 
-      borderLeft: '3px solid #2196f3', 
-      borderRadius: '4px' 
-    }}>
-      <p style={{ color: '#90caf9', fontSize: '13px', margin: 0 }}>
-        📊 本次疼痛图谱已附在报告后方，可向医生展示
-      </p>
-    </div>
-    
-    {/* 供您参考的辅助信息 */}
-    {content.med.includes('【供您参考') && (
-      <div style={{ 
-        padding: '12px', 
-        background: 'rgba(33,150,243,0.05)', 
-        borderRadius: '8px',
-        border: '1px solid rgba(33,150,243,0.2)'
-      }}>
-        <p style={{ color: '#90caf9', fontSize: '12px', fontWeight: 'bold', margin: '0 0 8px 0' }}>
-          📋 供您参考——请与医生讨论
-        </p>
-        {content.med.split('【供您参考——请与医生讨论】')[1]?.split('*以上为基于')[0]?.split('•').filter(item => item.trim()).map((item, i) => (
-          <p key={i} style={{ color: '#aaa', fontSize: '12px', lineHeight: '1.6', margin: '4px 0', paddingLeft: '8px' }}>
-            • {item.trim()}
-          </p>
-        ))}
-      </div>
-    )}
-  </>
-)}
+                  <>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #333', paddingBottom: '10px', marginBottom: '15px' }}>
+                      <h3 style={{ color: '#2196f3', margin: 0 }}>医疗辅助报告</h3>
+                      <span style={{ color: '#666', fontSize: '10px', background: '#111', padding: '2px 8px', borderRadius: '10px' }}>算法生成 · 仅供参考</span>
+                    </div>
+
+                    {/* 1. 临床主诉 (核心高亮) */}
+                    <div style={{ marginBottom: '15px' }}>
+                      <h4 style={{ color: '#90caf9', margin: '0 0 5px 0', fontSize: '13px' }}>🩺 临床主诉</h4>
+                      <p style={{ color: '#fff', fontSize: '15px', lineHeight: '1.5', margin: 0, fontWeight: 'bold' }}>
+                        {content.med_complaint}
+                      </p>
+                    </div>
+
+                    {/* 2. 疼痛画像 (客观描述) */}
+                    <div style={{ marginBottom: '15px' }}>
+                      <h4 style={{ color: '#90caf9', margin: '0 0 5px 0', fontSize: '13px' }}>📊 疼痛画像分析</h4>
+                      <p style={{ color: '#ccc', fontSize: '13px', lineHeight: '1.6', margin: 0 }}>
+                        {content.med_profile}
+                      </p>
+                    </div>
+
+                    {/* 3. 图谱提示 */}
+                    <div style={{ marginBottom: '20px', padding: '10px', background: 'rgba(33,150,243,0.08)', borderLeft: '3px solid #2196f3', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <img src={imgUrl} style={{ width: '30px', height: '30px', borderRadius: '4px', objectFit: 'cover' }} alt="thumb" />
+                      <p style={{ color: '#90caf9', fontSize: '12px', margin: 0 }}>本次多维痛觉图谱已附在报告后方，可向接诊医生展示。</p>
+                    </div>
+
+                    {/* 4. 诊疗参考清单 (病史联动) */}
+                    <div style={{ padding: '15px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid #333' }}>
+                      <h4 style={{ color: '#e0e0e0', fontSize: '13px', margin: '0 0 10px 0' }}>📋 供您与医生讨论参考：</h4>
+                      <div style={{ color: '#aaa', fontSize: '12px', lineHeight: '1.8', whiteSpace: 'pre-wrap' }}>
+                        {content.med_reference}
+                      </div>
+                    </div>
+                  </>
+                )}
                 {identity === 'self' && (
-                  <><h3 style={{ color: '#9c27b0', margin: '0 0 10px 0' }}>自愈与社群互助</h3><p style={{ color: '#ccc', fontSize: '14px', lineHeight: '1.5' }}>亲爱的，你画出了你的风暴。现在，请允许自己休息。</p><div style={{ marginTop: '15px', padding: '15px', background: 'rgba(156,39,176,0.1)', borderLeft: '3px solid #9c27b0', color: '#e1bee7', fontSize: '13px', whiteSpace: 'pre-wrap' }}>{content.selfCare}</div></>
+                  <>
+                    <h3 style={{ color: '#9c27b0', margin: '0 0 15px 0' }}>自愈与社群互助</h3>
+                    <p style={{ color: '#ccc', fontSize: '13px', lineHeight: '1.5', marginBottom: '15px' }}>亲爱的，你画出了你的风暴。痛不是你的错，允许自己今天做一个废物，好好休息吧。</p>
+                    <div style={{ background: 'rgba(156,39,176,0.1)', padding: '15px', borderRadius: '8px', borderLeft: '3px solid #9c27b0' }}>
+                      <p style={{ color: '#e1bee7', fontSize: '13px', lineHeight: '1.6', margin: 0, whiteSpace: 'pre-wrap' }}>{content.selfCare}</p>
+                    </div>
+                    <button onClick={() => handleCopy(content.selfCare)} style={{ marginTop: '15px', width: '100%', padding: '10px', background: 'transparent', border: '1px dashed #9c27b0', color: '#e1bee7', borderRadius: '8px', cursor: 'pointer' }}>📋 复制建议保存</button>
+                  </>
                 )}
               </div>
 
@@ -1959,5 +1992,4 @@ function App() {
     </>
   );
 }
-
 export default App;
