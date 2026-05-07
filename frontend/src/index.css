@@ -202,3 +202,20 @@ canvas {
   border-left: 3px solid #2196f3; color: #90caf9; font-size: 0.9rem; white-space: pre-wrap;
 }
 .retry-btn { width: 100%; max-width: 350px; padding: 12px; background: transparent; border: 1px solid #444; color: #888; border-radius: 20px; margin-bottom: 40px;}
+/* 修复移动端全局滚动冲突 */
+.history-screen {
+  overflow-y: scroll !important;
+  height: 100vh;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 隐藏滚动条美化（可选，让页面更干净） */
+.history-screen::-webkit-scrollbar {
+  display: none;
+}
+
+/* 增加点击反馈动画 */
+.history-screen div:active {
+  transform: scale(0.98);
+  background: #252525 !important;
+}

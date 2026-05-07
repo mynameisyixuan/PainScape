@@ -27,7 +27,24 @@ const PALETTES = {
   purple: { color: [140, 50, 200], label: "🔮" },
   blue: { color: [80, 160, 220], label: "❄️" },
 };
-
+const EXAM_DATABASE = {
+  "盆腔超声": {
+    prep: "需在检查前 1 小时饮水 500-800ml，保持充盈膀胱（憋尿）。",
+    purpose: "观察子宫形态、内膜厚度，排除肌瘤、腺肌症或卵巢囊肿。"
+  },
+  "经阴道超声": {
+    prep: "检查前需排空尿液。如无性生活史请务必告知医生，改为经腹超声。",
+    purpose: "更清晰地观察内膜异位病灶及盆腔粘连。建议在月经干净后 3-7 天复查。"
+  },
+  "激素六项": {
+    prep: "建议在月经周期的第 2-3 天清晨空劳抽血，检查前静坐 10 分钟。",
+    purpose: "评估内分泌状态，排查由于激素失调（如多囊）引起的疼痛。"
+  },
+  "腹腔镜": {
+    prep: "这属于微创手术，需住院进行。术前需禁食禁饮。",
+    purpose: "子宫内膜异位症诊断的‘金标准’，可同时进行病灶剥离。"
+  }
+};
 // === 粒子引擎 (重构重力悬停、动态呼吸) ===
 class PainParticle {
   constructor(p5, x, y, type, color, speed, heading, bodyMode) {
@@ -171,7 +188,28 @@ class PainParticle {
   }
   isDead() { return this.life < 0; }
 }
+// 【新增】：Canvas 文字自动换行工具
+const wrapText = (ctx, text, x, y, maxWidth, lineHeight) => {
+  if (!text) return y;
+  const words = text.split("");
+  let line = "";
+  let currentY = y;
 
+  for (let n = 0; n < words.length; n++) {
+    let testLine = line + words[n];
+    let metrics = ctx.measureText(testLine);
+    let testWidth = metrics.width;
+    if (testWidth > maxWidth && n > 0) {
+      ctx.fillText(line, x, currentY);
+      line = words[n];
+      currentY += lineHeight;
+    } else {
+      line = testLine;
+    }
+  }
+  ctx.fillText(line, x, currentY);
+  return currentY + lineHeight; // 返回最后一行的高度，方便后续排版
+};
 function App() {
   const [page, setPage] = useState("splash");
   const [quote] = useState(() => QUOTES[Math.floor(Math.random() * QUOTES.length)]);
@@ -186,6 +224,11 @@ function App() {
   });
   const [tonePreference, setTonePreference] = useState('gentle');
   const [isLoading, setIsLoading] = useState(false);
+  // 新增：内容可编辑
+  const [editedContents, setEditedContents] = useState({});  // { fieldKey: '编辑后文字' }
+  const [editingField, setEditingField] = useState(null);     // 当前正在编辑的字段名
+  // 新增：选择分享身份
+  const [diaryShareIdentity, setDiaryShareIdentity] = useState('partner');
   // 新增 ref
   const particlePositions = useRef([]);
   const speedHistory = useRef([]);
@@ -261,7 +304,10 @@ function App() {
       dynamic: [...dynamicParticles.current]
     };
   };
-
+  const getExamReminders = (medText) => {
+    if (!medText) return [];
+    return Object.keys(EXAM_DATABASE).filter(keyword => medText.includes(keyword));
+  };
   const setup = (p5, canvasParentRef) => {
     p5Ref.current = p5;
     p5.createCanvas(window.innerWidth, window.innerHeight).parent(canvasParentRef);
@@ -311,7 +357,24 @@ function App() {
     camRef.current.zoom = Math.max(0.5, Math.min(camRef.current.zoom + (event.delta > 0 ? -0.1 : 0.1), 3.0));
     return false;
   };
+  const getFullShareText = (idty, content) => {
+    const safeAction = content.action.replace(/🛑|🥣|🫂|❤️|复合指令：|偏好指令：/g, '').trim();
+    const safeSelfCare = content.selfCare.replace(/✨/g, '•').trim();
 
+    switch (idty) {
+      case 'partner':
+        return `【痛觉通感】\n${content.analogy}\n\n【你可以为她做的事】\n${safeAction}`;
+      case 'work':
+        return `【请假声明】\n${content.workText}`;
+      case 'doctor':
+        // 整合：画像 + 主诉 + 补充参考（包含检查建议）
+        return `【痛觉画像】\n${content.med_profile}\n\n【临床主诉】\n${content.med_complaint}\n\n【诊疗补充参考】\n${content.med_reference}`;
+      case 'self':
+        return `【疼痛复盘】\n${content.analogy}\n\n【针对性缓解方案】\n${safeSelfCare}`;
+      default:
+        return "";
+    }
+  };
   const draw = (p5) => {
     p5.background(0);
     // 只在画板页才绘制人体底图
@@ -392,9 +455,16 @@ function App() {
   const [shareContent, setShareContent] = useState(null);
 
   const prepareSharePreview = (content) => {
+    // 将用户编辑过的字段合并进 shareContent
     setShareContent({
       ...content,
-      identity: identity  // 保存当前选择的身份
+      analogy: getEditedOrDefault('analogy', content.analogy),
+      action: getEditedOrDefault('action', content.action),
+      workText: getEditedOrDefault('workText', content.workText),
+      med_complaint: getEditedOrDefault('med_complaint', content.med_complaint),
+      med_reference: getEditedOrDefault('med_reference', content.med_reference),
+      selfCare: getEditedOrDefault('selfCare', content.selfCare),
+      identity: identity
     });
     setShowSharePreview(true);
   };
@@ -402,194 +472,89 @@ function App() {
   // 第二步：确认分享（生成最终图片并分享）
   const confirmShare = async () => {
     if (!shareContent) return;
+    setIsLoading(true); // 开启加载状态提示
 
     try {
       const cvs = document.createElement('canvas');
       const ctx = cvs.getContext('2d');
+      const fullText = getFullShareText(shareContent.identity, shareContent);
 
-      // 使用新的检测函数
-      const hasFront = !isSideEmpty('front');
-      const hasBack = !isSideEmpty('back');
+      // 1. 预估文字高度（每行 28px）来决定画布总高度
+      const textWidth = 480;
+      const charPerLine = 22;
+      const estimatedLines = Math.ceil(fullText.length / charPerLine) + (fullText.split('\n').length * 1.5);
+      const textHeight = estimatedLines * 28 + 150;
 
-      console.log('confirmShare - hasFront:', hasFront, 'hasBack:', hasBack);
-
-      let finalUrl;
-
-      if (hasFront && hasBack) {
-        // 正反面并排
-        cvs.width = 900;
-        cvs.height = 800;
-      } else {
-        // 只有单面
-        cvs.width = 600;
-        cvs.height = 900;
-      }
+      cvs.width = 600;
+      cvs.height = 600 + textHeight; // 动态高度：图片区 + 文字区
 
       ctx.fillStyle = '#0a0a0a';
       ctx.fillRect(0, 0, cvs.width, cvs.height);
 
-      // 定义 roundRect 方法
-      ctx.roundRect = function (x, y, w, h, r) {
-        this.beginPath();
-        this.moveTo(x + r, y);
-        this.lineTo(x + w - r, y);
-        this.quadraticCurveTo(x + w, y, x + w, y + r);
-        this.lineTo(x + w, y + h - r);
-        this.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-        this.lineTo(x + r, y + h);
-        this.quadraticCurveTo(x, y + h, x, y + h - r);
-        this.lineTo(x, y + r);
-        this.quadraticCurveTo(x, y, x + r, y);
-        this.closePath();
-        return this;
-      };
+      // 2. 绘制痛觉图谱
+      const mainImg = new Image();
+      mainImg.src = shareContent.historyImg || imgUrl;
+      await new Promise(r => mainImg.onload = r);
+      ctx.drawImage(mainImg, 40, 40, 520, 520);
 
-      // 根据身份生成不同的分享文案
-      const getShareText = (identityType, content) => {
-        switch (identityType) {
-          case 'partner':
-            return {
-              title: '通感说明书',
-              subtitle: `我正在经历强烈的 ${content.pain}`,
-              action: content.action
-            };
-          case 'work':
-            return {
-              title: '不可见痛苦声明',
-              subtitle: `因严重${content.pain}申请居家休息`,
-              action: '特申请今日居家休息，身体平复后处理工作。'
-            };
-          case 'doctor':
-            return {
-              title: '医疗辅助报告',
-              subtitle: `主诉：${content.pain}`,
-              action: content.med || '患者具身痛苦图谱已记录。'
-            };
-          case 'self':
-            return {
-              title: '自愈与社群互助',
-              subtitle: '亲爱的，你画出了你的风暴',
-              action: content.selfCare || '请允许自己休息。'
-            };
-          default:
-            return {
-              title: '不可见痛苦声明',
-              subtitle: `我正在经历强烈的 ${content.pain}`,
-              action: content.action
-            };
-        }
-      };
+      // 3. 绘制半透明装饰框
+      ctx.fillStyle = '#1c1c1c';
+      roundRect(ctx, 30, 580, 540, textHeight - 40, 20);
+      ctx.fill();
 
-      const shareText = getShareText(shareContent.identity, shareContent);
+      // 4. 绘制文字
+      ctx.fillStyle = '#ff9800';
+      ctx.font = 'bold 26px sans-serif';
+      const titleMap = { partner: '通感说明书', work: '不可见痛苦声明', doctor: '医疗辅助报告', self: '自愈建议' };
+      ctx.fillText(titleMap[shareContent.identity], 60, 630);
 
-      if (hasFront && hasBack) {
-        // 使用 p5 方式捕获
-        const frontCanvas = captureFullCanvas('front');
-        const backCanvas = captureFullCanvas('back');
+      ctx.fillStyle = '#eee';
+      ctx.font = '16px "Microsoft YaHei", sans-serif';
+      // 调用之前定义的 wrapText，它会处理自动换行
+      wrapText(ctx, fullText, 60, 680, 480, 30);
 
-        const imgFront = new Image();
-        imgFront.src = frontCanvas.toDataURL();
-        await new Promise(resolve => { imgFront.onload = resolve; });
+      // 5. 底部品牌标识
+      ctx.fillStyle = '#444';
+      ctx.font = '12px sans-serif';
+      ctx.fillText('PainScape - 让不可见的痛苦被看见', 60, cvs.height - 40);
 
-        const imgBack = new Image();
-        imgBack.src = backCanvas.toDataURL();
-        await new Promise(resolve => { imgBack.onload = resolve; });
-
-        // 并排绘制
-        const imgWidth = 380;
-        const imgHeight = (imgWidth / imgFront.width) * imgFront.height;
-
-        // 正面（左侧）
-        ctx.drawImage(imgFront, 50, 80, imgWidth, imgHeight);
-        ctx.fillStyle = '#fff';
-        ctx.font = 'bold 16px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('正面', 50 + imgWidth / 2, 60);
-
-        // 背面（右侧）
-        ctx.drawImage(imgBack, 50 + imgWidth + 40, 80, imgWidth, imgHeight);
-        ctx.fillText('背面', 50 + imgWidth + 40 + imgWidth / 2, 60);
-
-        // 文字区域（下方）
-        ctx.fillStyle = '#1c1c1c';
-        ctx.roundRect(50, 100 + imgHeight, 800, 180, 20);
-        ctx.fill();
-
-        ctx.fillStyle = '#ff9800';
-        ctx.font = 'bold 22px sans-serif';
-        ctx.textAlign = 'left';
-        ctx.fillText(shareText.title, 70, 140 + imgHeight);
-
-        ctx.fillStyle = '#ccc';
-        ctx.font = '16px sans-serif';
-        ctx.fillText(shareText.subtitle, 70, 180 + imgHeight);
-
-        // 截取行动文案
-        const actionText = shareText.action.replace(/🛑|🥣|🫂|❤️|复合指令：|偏好指令：/g, '').trim();
-        const firstLine = actionText.split('\n')[0].slice(0, 40);
-        ctx.fillText(`💡 ${firstLine}${actionText.length > 40 ? '...' : ''}`, 70, 220 + imgHeight);
-
-      } else {
-        // 单面展示
-        const activeSide = hasFront ? 'front' : 'back';
-        const sideLabel = hasFront ? '正面' : '背面';
-
-        const activeCanvas = captureFullCanvas(activeSide);
-        const img = new Image();
-        img.src = activeCanvas.toDataURL();
-        await new Promise(resolve => { img.onload = resolve; });
-
-        const imgHeight = (500 / img.width) * img.height;
-        ctx.drawImage(img, 50, 50, 500, imgHeight);
-
-        // 标注正面/背面
-        ctx.fillStyle = '#fff';
-        ctx.font = 'bold 14px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText(sideLabel, 300, 40);
-        ctx.textAlign = 'left';
-
-        ctx.fillStyle = '#1c1c1c';
-        ctx.roundRect(50, 70 + imgHeight, 500, 200, 20);
-        ctx.fill();
-
-        ctx.fillStyle = '#ff9800';
-        ctx.font = 'bold 24px sans-serif';
-        ctx.fillText(shareText.title, 70, 120 + imgHeight);
-
-        ctx.fillStyle = '#ccc';
-        ctx.font = '16px sans-serif';
-        ctx.fillText(shareText.subtitle, 70, 160 + imgHeight);
-
-        const actionText = shareText.action.replace(/🛑|🥣|🫂|❤️|复合指令：|偏好指令：/g, '').trim();
-        const firstLine = actionText.split('\n')[0];
-        ctx.fillText(firstLine, 70, 200 + imgHeight);
-      }
-
-      finalUrl = cvs.toDataURL('image/jpeg', 0.9);
-
-      // 分享或下载
+      const finalUrl = cvs.toDataURL('image/jpeg', 0.9);
       const blob = await (await fetch(finalUrl)).blob();
-      const file = new File([blob], 'painscape_card.jpg', { type: 'image/jpeg' });
+      const file = new File([blob], 'painscape_share.jpg', { type: 'image/jpeg' });
 
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({
-          title: 'PainScape 痛觉通感卡',
+          title: '我的痛觉声明卡',
           files: [file]
         });
       } else {
+        // 如果环境不支持分享（如普通 PC 浏览器），则触发下载
         const link = document.createElement('a');
         link.href = finalUrl;
-        link.download = 'painscape_card.jpg';
+        link.download = `PainScape_${new Date().getTime()}.jpg`;
         link.click();
-        alert("已为您生成分享卡片并下载。");
+        alert("已为您保存精美分享卡片！");
       }
       setShowSharePreview(false);
     } catch (e) {
-      console.log("分享被取消", e);
+      console.error("生成分享卡片失败:", e);
+      alert("生成分享卡片失败，可能是图片加载超时。请尝试直接截图分享。");
     }
   };
-
+  // ── 辅助函数 ──
+  const roundRect = (ctx, x, y, w, h, r) => {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+  };
   // 捕获包含动态粒子的完整画面
   const captureFullCanvas = (side) => {
     const p5 = p5Ref.current;
@@ -621,51 +586,42 @@ function App() {
     return captureGraphics.elt;
   };
 
-  // 检查某一面是否有任何内容（静态 + 动态）
+  // 检查某一面是否有任何内容（静态笔触 + 动态粒子）
   const isSideEmpty = (side) => {
-    const pg = side === 'front' ? pgFrontRef.current : pgBackRef.current;
-    if (!pg) return true;
+    // 1. 检查画笔计数器（最快最准）
+    const totalCount = Object.values(brushCounts.current).reduce((a, b) => a + b, 0);
+    if (totalCount > 10) return false; // 只要画了超过10个粒子就肯定不为空
 
-    // 检查静态图层
-    try {
-      const ctx = pg.drawingContext;
-      if (!ctx) return true;
-
-      const imageData = ctx.getImageData(0, 0, pg.width, pg.height);
-      const data = imageData.data;
-      for (let i = 3; i < data.length; i += 4) {
-        if (data[i] > 0) return false;
-      }
-    } catch (e) {
-      console.error("检测静态画布失败:", e);
-    }
-
-    // 检查动态粒子
-    if (dynamicParticles.current) {
-      const hasDynamicParticles = dynamicParticles.current.some(dp => dp.bodyMode === side);
-      if (hasDynamicParticles) return false;
+    // 2. 检查动态粒子（针对刚画完还没计入总数的情况）
+    if (dynamicParticles.current && dynamicParticles.current.some(dp => dp.bodyMode === side)) {
+      return false;
     }
 
     return true;
   };
   const handlePublishPost = () => {
-    if (!postText) return alert("写点什么吧~");
-    const dominant = Object.keys(brushCounts.current).reduce((a, b) =>
-      brushCounts.current[a] > brushCounts.current[b] ? a : b
-    ) || 'twist';
+    if (!postText) return alert("写下你的感受吧~");
+
+    const dominant = getDominantPain();
+    // 重新生成一份当前的内容快照，存入帖子
     const content = generateContent(dominant);
-    setPosts([{
+
+    const experienceData = {
       id: Date.now(),
       text: postText,
-      img: imgUrl,
-      tags: `#${BRUSHES[dominant].label.split(" ")[1]}`,
-      likes: 0,
-      group: communityFilter,
-      analogy: content.analogy?.slice(0, 50) || '' // 新增：图片上的文案
-    }, ...posts]);
+      img: imgUrl, // 这是一个 Base64 字符串
+      likes: Math.floor(Math.random() * 10),
+      group: communityFilter === 'all' ? 'family' : communityFilter, // 模拟发布到当前群组
+      painTag: BRUSHES[dominant].label.split(" ")[1],
+      reliefExperience: "静卧休息与热敷", // 默认值
+      analogy: content.analogy,
+      action: content.action // 把照顾建议也存进去，供别人参考
+    };
+
+    setPosts(prev => [experienceData, ...prev]);
     setShowPostModal(false);
     setPostText("");
-    setPage("community");
+    setPage("community"); // 强制跳转回广场，能看到新帖子
   };
 
   const handleCreateGroup = () => {
@@ -695,118 +651,134 @@ function App() {
     }
   };
 
-  // === 2. 重构 generateContent 函数 (融合所有行为数据) ===
-  const generateContent = (overrideType, llmMed, llmAction) => {
-     // 【核心修复 1】：如果外部没传参数，优先使用全局 state 里的数据
-    const activeLlmMed = llmMed || (llmData?.status === 'success' ? llmData.med : null);
-    const activeLlmAction = llmAction || (llmData?.status === 'success' ? llmData.action : null);
+  // === 2.generateContent ===
+const generateContent = (overrideType) => {
+    // 0. 基础判定
+    const hasLlm = llmData?.status === 'success';
+    const dominant = overrideType || getDominantPain();
+    const painNameMap = { twist: "严重绞痛", pierce: "神经性刺痛", heavy: "严重坠胀痛", wave: "弥漫性胀痛", scrape: "撕裂样锐痛" };
+    const painName = painNameMap[dominant];
+    const safePainkiller = (!medicalBackground.allergies || medicalBackground.allergies === 'none') ? "布洛芬" : "对乙酰氨基酚";
 
-    const dominant = overrideType || (Object.keys(brushCounts.current).reduce((a, b) =>
-      brushCounts.current[a] > brushCounts.current[b] ? a : b
-    ) || 'twist');
-
-    const painName = { twist: "严重绞痛", pierce: "神经性刺痛", heavy: "严重坠胀痛", wave: "弥漫性胀痛", scrape: "撕裂样锐痛" };
-    let actionParts = [];
-    const safePainkiller = (!medicalBackground.allergies || medicalBackground.allergies === 'none' || medicalBackground.allergies === 'unknown') ? "布洛芬" : "止痛药";
-    // 必须先把 TEXTS 定义在最前面，供后续所有逻辑使用！
+    // 1. TEXTS 字典 (保持不变)
     const TEXTS = {
-      twist: {
-        analogy: "想象把一条湿毛巾用力拧干，再拧一圈，子宫正处于这种持续紧绷的痉挛状态。",
-        med: "下腹部持续性绞痛，呈阵发性/螺旋状收缩。建议排查子宫痉挛。",
-        selfCare: "✨ 尝试【婴儿蜷缩式】侧卧，抱紧膝盖减缓肌肉紧绷。\n✨ 用暖宝宝贴在【八髎穴】(后腰尾骨处) 缓解神经放射痛。\n✨ 避免剧烈呼吸，尝试腹式呼吸缓慢吐气。"
-      },
-      pierce: {
-        analogy: "想象不打麻药进行根管治疗，或者冰冷的针尖正持续扎入腹部深处。",
-        med: "锐痛（Sharp Pain），呈放射状，伴随间歇性神经刺痛。建议排查神经性疼痛。",
-        selfCare: "✨ 刺痛发作时极易引发冷汗，请立刻加盖毛毯保暖。\n✨ 尽量平躺，避免任何牵扯盆腔周围韧带的动作。"
-      },
-      heavy: {
-        analogy: "像在腹部绑了5公斤沙袋跑800米，每一步内脏都在受重力向下死死拉扯。",
-        med: "下腹部严重坠胀感（Bearing-down），伴随盆腔充血与腰骶部酸痛。建议排查盆腔充血。",
-        selfCare: "✨ 尝试【臀部垫高平躺】，拿两个枕头垫在臀部下方，通过重力倒流缓解盆腔充血。\n✨ 绝对避免久站或下蹲！"
-      },
-      wave: {
-        analogy: "像肚子里有个气球在不断充气，内脏正处于极度的高压水肿状态。",
-        med: "弥漫性胀痛，边界不清，伴随腹部水肿感。建议排查水肿或肠胀气。",
-        selfCare: "✨ 穿着极度宽松的衣物，解开任何勒住腰部的松紧带。\n✨ 轻轻顺时针抚摸腹部，千万不要用力按压。"
-      },
-      scrape: {
-        analogy: "像一颗未成熟的果实被强行剥皮，皮上带着血肉被不断撕扯。",
-        med: "强烈的撕裂样锐痛，伴随组织剥离感。建议排查组织粘连或腹膜刺激。",
-        selfCare: "✨ 这是最耗费体力的痛感，请直接服用布洛芬等抑制剂。\n✨ 听白噪音或冥想音频，强行切断对痛觉的过度专注。"
-      }
+      twist: { analogy: "想象把一条湿毛巾用力拧干...", med: "下腹部持续性绞痛，建议排查子宫痉挛。", selfCare: "✨ 尝试【婴儿蜷缩式】侧卧..." },
+      pierce: { analogy: "想象不打麻药进行根管治疗...", med: "锐痛（Sharp Pain），建议排查神经性疼痛。", selfCare: "✨ 刺痛发作易引发冷汗..." },
+      heavy: { analogy: "像在腹部绑了5公斤沙袋...", med: "下腹部严重坠胀感，建议排查盆腔充血。", selfCare: "✨ 尝试【臀部垫高平躺】..." },
+      wave: { analogy: "像肚子里有个气球在不断充气...", med: "弥漫性胀痛，建议排查水肿或肠胀气。", selfCare: "✨ 穿着极度宽松的衣物..." },
+      scrape: { analogy: "像一颗未成熟的果实被强行剥皮...", med: "强烈的撕裂样锐痛，建议排查组织粘连。", selfCare: "✨ 这是最耗费体力的痛感..." }
     };
-    let actionText = activeLlmAction || actionParts.join("\n\n");
-    // 伴侣 Checklist 逻辑
-    if (userPrefs.includes('alone')) {
-      actionParts.push(`☑️ 帮她倒一杯温水，备好${safePainkiller}放在床头。`);
-      actionParts.push("☑️ 调暗房间光源，关门出去，给她绝对的个人空间。");
-      actionParts.push("☑️ 不要每隔十分钟进房询问“好点没”，这会加重她的烦躁。");
-    } else {
-      if (userPrefs.includes('care')) {
-        actionParts.push("☑️ 把手掌搓热，捂在她小腹或后腰上。暖宝宝贴在后腰，热水袋放在脚边。");
-        actionParts.push(`☑️ 将${safePainkiller}和温水一起放在床头。包揽今天的家务，让她安心平躺。`);
-      }
-      if (userPrefs.includes('comfort')) {
-        actionParts.push("☑️ 不用做什么，坐在旁边握着她的手。如果她蜷起来了，帮她掖一下毯子。不用说话。");
-      }
-    }
 
-    // 职场请假模板
-    const workTemplate = `领导/HR 您好：\n抱歉临时申请。我今日突发严重原发性痛经（表现为剧烈的${painName[dominant]}），伴随冷汗与体力透支。目前状态已无法维持正常的工作专注度。\n\n为避免影响工作质量，特申请今日居家休息。紧急事务已交接。我会在身体平复后第一时间处理消息。感谢批准。`;
+    // 2. 医疗主诉 (优先大模型)
+    let finalMedComplaint = hasLlm ? llmData.med : TEXTS[dominant].med;
 
-    // ============ 病史辅助信息 (重构给医生的 Med 结构) ============
+    // 3. 智能匹配检查须知 (增加“继发性”触发超声)
+    let examPreps = [];
+    const EXAM_KEYWORDS = {
+      "盆腔超声": ["盆腔超声", "腹部超声", "B超", "超声检查", "继发性", "子宫内膜异位", "腺肌症"],
+      "经阴道超声": ["经阴道超声", "阴超"],
+      "激素六项": ["激素六项", "性激素", "内分泌"],
+      "腹腔镜": ["腹腔镜", "微创手术"]
+    };
+
+    Object.keys(EXAM_KEYWORDS).forEach(standardName => {
+      if (EXAM_KEYWORDS[standardName].some(alias => finalMedComplaint.includes(alias))) {
+        examPreps.push(`📝【${standardName}须知】: ${EXAM_DATABASE[standardName].prep}`);
+      }
+    });
+
+    // 4. 病史辅助信息
     let auxiliaryInfo = [];
-
-    // 1. 过敏史
-    if (medicalBackground.allergies === 'ibuprofen') auxiliaryInfo.push('• 药物注意：用户布洛芬过敏，建议使用对乙酰氨基酚。');
-    else if (medicalBackground.allergies === 'aspirin') auxiliaryInfo.push('• 药物注意：用户阿司匹林过敏，避免使用水杨酸类药物。');
-    else if (medicalBackground.allergies === 'nsaids') auxiliaryInfo.push('• 药物注意：用户对多种NSAIDs过敏，应避免使用常见非甾体抗炎药。');
-
-    // 2. 既往诊断
-    if (medicalBackground.diagnosed === 'endometriosis') auxiliaryInfo.push('• 病史关联：已确诊子宫内膜异位症，本次疼痛可能与病灶出血有关。');
-    if (medicalBackground.diagnosed === 'adenomyosis') auxiliaryInfo.push('• 病史关联：已确诊子宫腺肌症，建议关注肌层回声变化。');
-    if (medicalBackground.diagnosed === 'pcos') auxiliaryInfo.push('• 病史关联：已确诊多囊卵巢综合征（PCOS）。');
-    if (medicalBackground.diagnosed === 'unchecked') auxiliaryInfo.push('• 建议初筛：未做过妇科检查，建议首选盆腔超声。');
-
-    // 【核心修复 2】：根据大模型返回的结构进行智能判定
-    let finalMedProfile = `患者绘制痛觉呈现强烈的${painName[dominant]}特征。`;
-    let finalMedComplaint = TEXTS[dominant].med;
-    let finalMedReference = auxiliaryInfo.length > 0 ? auxiliaryInfo.join('\n') : '• 建议初筛：进行常规盆腔超声检查。';
-
-    if (activeLlmMed) {
-      if (typeof activeLlmMed === 'string') {
-        // 如果后端像你截图里那样，只传回了一个长字符串 med
-        finalMedComplaint = activeLlmMed; 
-        finalMedProfile = "AI 基于您的绘画特征生成的深度主诉";
-        finalMedReference = "• 请与接诊医生讨论上述表现。";
-      } else {
-        // 如果后端传回的是我们之前设计的 med_profile 等对象
-        finalMedProfile = activeLlmMed.med_profile || finalMedProfile;
-        finalMedComplaint = activeLlmMed.med_complaint || finalMedComplaint;
-        finalMedReference = activeLlmMed.med_reference || finalMedReference;
-      }
+    const diagMap = { 'endometriosis': '子宫内膜异位症', 'adenomyosis': '子宫腺肌症', 'pcos': '多囊卵巢综合征' };
+    if (medicalBackground.diagnosed && medicalBackground.diagnosed !== 'none') {
+      auxiliaryInfo.push(`• 既往诊断：患者曾确诊 [${diagMap[medicalBackground.diagnosed] || medicalBackground.diagnosed}]。`);
+    }
+    if (medicalBackground.allergies && medicalBackground.allergies !== 'none') {
+      auxiliaryInfo.push(`• 药物过敏：对 [${medicalBackground.allergies}] 过敏。`);
     }
 
-    // 语气偏好处理自愈建议
-    let selfCare = TEXTS[dominant].selfCare;
-    if (tonePreference === 'gentle') {
-      selfCare = selfCare + '\n\n✨ 你已经很努力了。痛不是你的错，允许自己今天做一个废物，好好休息吧。';
+    // 5. 整合参考清单 (med_reference)
+    let finalMedReference = auxiliaryInfo.join('\n');
+    if (examPreps.length > 0) {
+      finalMedReference += (finalMedReference ? '\n' : '') + examPreps.join('\n');
+    } else if (!finalMedReference) {
+      finalMedReference = "• 建议向医生详细描述本次记录的痛觉质地与发作时间。";
+    }
+
+    // 6. 伴侣指令 (action)
+    let actionParts = [];
+    if (userPrefs.includes('alone')) {
+      actionParts.push(`☑️ 帮她倒杯温水，备好${safePainkiller}。`);
+      actionParts.push("☑️ 调暗灯光，关门出去，不要频繁询问。");
+    } else {
+      if (userPrefs.includes('care')) actionParts.push("☑️ 搓热手掌捂在她小腹或后腰。主动承担家务。");
+      if (userPrefs.includes('comfort')) actionParts.push("☑️ 坐在旁边握着她的手，不用说话，给予安全感。");
+    }
+
+    // 7. 职场请假模板
+    const workTemplate = `领导/HR 您好：本人今日突发严重原发性痛经（${painName}），伴随体力透支与冷汗。目前状态已无法维持正常专注度，特申请今日居家休息。紧急事务已交接。感谢批准。`;
+
+    // 8. 语气偏好处理自愈
+    let finalSelfCare = hasLlm ? llmData.selfCare : TEXTS[dominant].selfCare;
+    if (tonePreference === 'gentle' && !hasLlm) {
+      finalSelfCare += "\n\n✨ 允许自己今天做一个废物，好好休息。";
     }
 
     return {
-      pain: painName[dominant],
-      analogy: TEXTS[dominant].analogy,
-      action: llmAction || actionParts.join("\n\n"),
-      workText: workTemplate,
-      selfCare: selfCare,
-      // 将打碎的医疗数据输出
-      med_profile: finalMedProfile,
+      pain: painName,
+      analogy: hasLlm ? llmData.analogy : TEXTS[dominant].analogy,
       med_complaint: finalMedComplaint,
-      med_reference: finalMedReference
+      med_reference: finalMedReference,
+      selfCare: finalSelfCare,
+      workText: hasLlm ? llmData.work : workTemplate,
+      action: actionParts.join("\n") // 这里统一使用本地生成的 Checklist，因为大模型生成的 action 通常不够干货
     };
   };
+  // ✅ 可编辑内容辅助函数
+  const getEditedOrDefault = (key, defaultVal) =>
+    editedContents[key] !== undefined ? editedContents[key] : defaultVal;
 
+  const EditableBlock = ({ fieldKey, defaultValue, color = '#ccc', style = {} }) => {
+    const value = getEditedOrDefault(fieldKey, defaultValue);
+    const isEditing = editingField === fieldKey;
+
+    if (isEditing) {
+      return (
+        <textarea
+          autoFocus
+          value={value}
+          onChange={e => setEditedContents(prev => ({ ...prev, [fieldKey]: e.target.value }))}
+          onBlur={() => setEditingField(null)}
+          style={{
+            width: '100%', background: 'rgba(255,255,255,0.05)',
+            color: '#fff', border: '1px solid #555', borderRadius: '8px',
+            padding: '10px', fontSize: '13px', lineHeight: '1.6',
+            resize: 'vertical', minHeight: '80px', boxSizing: 'border-box',
+            fontFamily: 'inherit', ...style
+          }}
+        />
+      );
+    }
+
+    return (
+      <div
+        onClick={() => setEditingField(fieldKey)}
+        title="点击编辑"
+        style={{
+          color, fontSize: '13px', lineHeight: '1.6', whiteSpace: 'pre-wrap',
+          cursor: 'text', padding: '6px 8px', borderRadius: '6px',
+          border: '1px dashed transparent',
+          transition: 'border-color 0.2s',
+          ...style
+        }}
+        onMouseEnter={e => e.currentTarget.style.borderColor = '#555'}
+        onMouseLeave={e => e.currentTarget.style.borderColor = 'transparent'}
+      >
+        {value}
+        <span style={{ marginLeft: '6px', fontSize: '10px', color: '#555', verticalAlign: 'middle' }}>✏️</span>
+      </div>
+    );
+  };
   // 【新增】：一键复制功能
   const handleCopy = (text) => {
     navigator.clipboard.writeText(text).then(() => {
@@ -856,7 +828,7 @@ function App() {
       peakSpeed: parseFloat(peak.toFixed(1))
     };
   };
-   const getDominantPain = () => {
+  const getDominantPain = () => {
     const counts = brushCounts.current;
     const maxVal = Math.max(...Object.values(counts));
     // 找出使用次数最多的画笔，如果都没用过，默认返回 'twist'
@@ -864,15 +836,26 @@ function App() {
   };
   const handleFinish = async () => {
     if (!p5Ref.current) return;
-    
-    // 1. 开启 Loading，防止用户重复点击
-    setIsLoading(true); 
+    setIsLoading(true);
 
-    // 2. 捕获当前画布截图
-    const url = document.querySelector("canvas").toDataURL("image/jpeg", 0.5);
+    // ✅ 升级：用 captureFullCanvas 获取含动态粒子的高清图谱，而非压缩的 canvas 截图
+    const hasFront = !isSideEmpty('front');
+    const hasBack = !isSideEmpty('back');
+
+    let url = null;
+    try {
+      if (hasFront || hasBack) {
+        const side = hasFront ? 'front' : 'back';
+        const fullCvs = captureFullCanvas(side);
+        url = fullCvs.toDataURL('image/jpeg', 0.85);
+      }
+    } catch (e) {
+      // fallback 到主 canvas
+      url = document.querySelector('canvas').toDataURL('image/jpeg', 0.5);
+    }
+    if (!url) url = document.querySelector('canvas').toDataURL('image/jpeg', 0.5);
     setImgUrl(url);
 
-    // 3. 获取主导痛觉及构建发送载荷
     const dominant = getDominantPain();
     const payload = {
       dominantPain: dominant,
@@ -886,11 +869,10 @@ function App() {
       tonePreference: tonePreference,
     };
 
-    // 4. 发起后端异步请求
     try {
-      console.log('📤 正在请求后端大模型 (15秒超时限制)...');
+      console.log('📤 正在请求后端大模型...');
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000)// 设置15秒超时
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
 
       const response = await fetch('http://localhost:8000/api/generate', {
         method: 'POST',
@@ -898,48 +880,50 @@ function App() {
         body: JSON.stringify(payload),
         signal: controller.signal
       });
-      
-      clearTimeout(timeoutId); // 请求回来了，清除定时器
+
+      clearTimeout(timeoutId);
 
       if (response.ok) {
-        const data = await response.json(); // 【核心】：只解析一次 JSON
+        const data = await response.json();
         if (data.status === 'success') {
           console.log('✅ 大模型转译成功：', data);
-          setLlmData(data); // 将返回的 {med, action} 存入 State
+          setLlmData(data);
         }
       }
     } catch (error) {
-      // 捕获：超时、断网、后端没开、或者报错
       if (error.name === 'AbortError') {
         console.warn('⚠️ 后端请求超时，已自动转入本地离线模式');
       } else {
         console.warn('⚠️ 后端连接失败，已转入本地离线模式', error);
       }
-      setLlmData(null); // 确保清空旧的 AI 数据，强制使用本地字典
+      setLlmData(null);
     } finally {
-      // 5. 无论成功还是失败，最后都要做的：保存历史、关闭 Loading、跳转页面
-      
-      // 构造历史记录对象
       const newRecord = {
         id: Date.now(),
         date: new Date().toLocaleDateString(),
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         img: url,
         type: dominant,
-        // 如果 AI 成功，日记存 AI 的，否则存本地的
-        content: generateContent(dominant, null, null) 
+        content: generateContent(dominant, null, null),
+        // ✅ 新增：持久化绘图元数据，供历史页展示痛觉特征
+        meta: {
+          brushCounts: { ...brushCounts.current },
+          colorPalette: activeColor,
+          bodyMode: bodyMode,
+          painScore: payload.painScore,
+          hasFront,
+          hasBack,
+        }
       };
 
-      // 更新历史状态并写入本地存储
       const newHistory = [newRecord, ...history].slice(0, 10);
       setHistory(newHistory);
       localStorage.setItem('painscape_history', JSON.stringify(newHistory));
 
-      // 重置交互数据，关闭加载动画，跳转到结果页
       particlePositions.current = [];
       speedHistory.current = [];
-      setIsLoading(false); 
-      setPage("result");
+      setIsLoading(false);
+      setPage('result');
     }
   };
   const updateRecordInfo = (recordId, field, value) => {
@@ -952,6 +936,28 @@ function App() {
     if (viewingDiary?.id === recordId) {
       setViewingDiary({ ...viewingDiary, [field]: value });
     }
+  };
+  // 【新增逻辑】：将历史记录按年月分组
+  const getGroupedHistory = () => {
+    return history.reduce((acc, item) => {
+      // 假设 item.date 是 "2026/5/7" 这种格式
+      const dateParts = item.date.split('/');
+      const monthKey = `${dateParts[0]}年${dateParts[1]}月`;
+      if (!acc[monthKey]) acc[monthKey] = [];
+      acc[monthKey].push(item);
+      return acc;
+    }, {});
+  };
+
+  const groupedHistory = getGroupedHistory();
+  // 存储哪些月份是折叠的 (默认全部展开)
+  const [collapsedMonths, setCollapsedMonths] = useState({});
+
+  const toggleMonth = (month) => {
+    setCollapsedMonths(prev => ({
+      ...prev,
+      [month]: !prev[month]
+    }));
   };
   return (
     <>
@@ -1133,85 +1139,105 @@ function App() {
               </div>
 
               <div style={{ background: 'rgba(28,28,28,0.9)', padding: '20px', borderRadius: '12px', width: '100%', maxWidth: '350px', border: '1px solid #444', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' }}>
+                {/* === 伴侣 tab === */}
                 {identity === 'partner' && (
                   <>
                     <h3 style={{ color: '#fff', margin: '0 0 15px 0' }}>通感说明书</h3>
                     <div style={{ background: 'rgba(211,47,47,0.1)', padding: '12px', borderRadius: '8px', borderLeft: '3px solid #d32f2f' }}>
-                      <p style={{ color: '#ffcdd2', fontSize: '13px', margin: 0, lineHeight: '1.5' }}>她正在经历强烈的<strong>{content.pain}</strong>。{content.analogy}</p>
+                      <p style={{ color: '#ffcdd2', fontSize: '13px', margin: '0 0 6px 0', lineHeight: '1.5' }}>
+                        她正在经历强烈的<strong>{content.pain}</strong>。
+                      </p>
+                      {/* ✅ 可编辑：通感比喻 */}
+                      <EditableBlock fieldKey="analogy" defaultValue={content.analogy} color="#ffcdd2" />
                     </div>
                     <div style={{ marginTop: '20px' }}>
                       <strong style={{ color: '#fff', fontSize: '14px' }}>💡 请立刻执行以下操作：</strong>
-                      <p style={{ color: '#ccc', fontSize: '13px', lineHeight: '1.8', whiteSpace: 'pre-wrap', marginTop: '10px' }}>{content.action}</p>
+                      {/* ✅ 可编辑：伴侣实操指令 */}
+                      <EditableBlock fieldKey="action" defaultValue={content.action} color="#ccc" style={{ marginTop: '10px' }} />
                     </div>
-                    <button onClick={() => handleCopy(content.action)} style={{ marginTop: '15px', width: '100%', padding: '10px', background: 'transparent', border: '1px dashed #d32f2f', color: '#ffcdd2', borderRadius: '8px', cursor: 'pointer' }}>📋 复制实操指令</button>
+                    <button
+                      onClick={() => handleCopy(getEditedOrDefault('action', content.action))}
+                      style={{ marginTop: '15px', width: '100%', padding: '10px', background: 'transparent', border: '1px dashed #d32f2f', color: '#ffcdd2', borderRadius: '8px', cursor: 'pointer' }}
+                    >
+                      📋 复制实操指令
+                    </button>
                   </>
                 )}
+
+                {/* === 请假 tab === */}
                 {identity === 'work' && (
                   <>
                     <h3 style={{ color: '#ff9800', margin: '0 0 15px 0' }}>高情商请假模板</h3>
                     <p style={{ color: '#888', fontSize: '12px', marginBottom: '10px' }}>客观描述生理状况，不卑不亢，并留出交接空间。</p>
-                    <div style={{ background: 'rgba(255,152,0,0.05)', padding: '15px', borderRadius: '8px', border: '1px solid rgba(255,152,0,0.3)', color: '#ccc', fontSize: '13px', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>
-                      {content.workText}
+                    <div style={{ background: 'rgba(255,152,0,0.05)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(255,152,0,0.3)' }}>
+                      {/* ✅ 可编辑：请假模板 */}
+                      <EditableBlock fieldKey="workText" defaultValue={content.workText} color="#ccc" />
                     </div>
-                    <button onClick={() => handleCopy(content.workText)} style={{ marginTop: '15px', width: '100%', padding: '10px', background: 'transparent', border: '1px dashed #ff9800', color: '#ffcc80', borderRadius: '8px', cursor: 'pointer' }}>📋 复制请假模板</button>
+                    <button
+                      onClick={() => handleCopy(getEditedOrDefault('workText', content.workText))}
+                      style={{ marginTop: '15px', width: '100%', padding: '10px', background: 'transparent', border: '1px dashed #ff9800', color: '#ffcc80', borderRadius: '8px', cursor: 'pointer' }}
+                    >
+                      📋 复制请假模板
+                    </button>
                   </>
                 )}
+
+                {/* === 医生 tab === */}
                 {identity === 'doctor' && (
                   <>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #333', paddingBottom: '10px', marginBottom: '15px' }}>
                       <h3 style={{ color: '#2196f3', margin: 0 }}>医疗辅助报告</h3>
                       <span style={{ color: '#666', fontSize: '10px', background: '#111', padding: '2px 8px', borderRadius: '10px' }}>算法生成 · 仅供参考</span>
                     </div>
-
-                   {/* 1. 临床主诉 (核心高亮) */}
-                    <div style={{marginBottom:'15px'}}>
-                      <h4 style={{color:'#90caf9', margin:'0 0 5px 0', fontSize:'13px'}}>🩺 临床诊断建议</h4>
-                      <p style={{color:'#fff', fontSize:'14px', lineHeight:'1.6', margin:0}}>
-                        {content.med_complaint} {/* 这里会直接显示你截图中那段长长的文字 */}
-                      </p>
-                    </div>
-
-                    {/* 如果有 profile 信息才显示这一块，否则隐藏 */}
-                    {content.med_profile !== "AI 基于您的绘画特征生成的深度主诉" && (
-                      <div style={{marginBottom:'15px'}}>
-                        <h4 style={{color:'#90caf9', margin:'0 0 5px 0', fontSize:'13px'}}>📊 疼痛画像</h4>
-                        <p style={{color:'#ccc', fontSize:'12px', lineHeight:'1.5', margin:0}}>
-                          {content.med_profile}
-                        </p>
-                      </div>
-                    )}
-
-                    {/* 2. 疼痛画像 (客观描述) */}
                     <div style={{ marginBottom: '15px' }}>
-                      <h4 style={{ color: '#90caf9', margin: '0 0 5px 0', fontSize: '13px' }}>📊 疼痛画像分析</h4>
-                      <p style={{ color: '#ccc', fontSize: '13px', lineHeight: '1.6', margin: 0 }}>
-                        {content.med_profile}
-                      </p>
+                      <h4 style={{ color: '#90caf9', margin: '0 0 5px 0', fontSize: '13px' }}>🩺 临床诊断建议</h4>
+                      {/* ✅ 可编辑：医疗主诉 */}
+                      <EditableBlock fieldKey="med_complaint" defaultValue={content.med_complaint} color="#fff" />
                     </div>
-
-                    {/* 3. 图谱提示 */}
-                    <div style={{ marginBottom: '20px', padding: '10px', background: 'rgba(33,150,243,0.08)', borderLeft: '3px solid #2196f3', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    {/* 【新增】：针对性检查提醒框 */}
+                    {getExamReminders(content.med).map(exam => (
+                      <div key={exam} style={{ marginTop: '15px', padding: '12px', background: 'rgba(33, 150, 243, 0.1)', border: '1px solid rgba(33,150,243,0.3)', borderRadius: '10px' }}>
+                        <p style={{ color: '#90caf9', fontSize: '13px', fontWeight: 'bold', margin: '0 0 5px 0' }}>💡 患者检查须知：{exam}</p>
+                        <p style={{ color: '#aaa', fontSize: '12px', margin: 0 }}><strong>准备：</strong>{EXAM_DATABASE[exam].prep}</p>
+                      </div>
+                    ))}
+                    <div style={{ marginBottom: '15px', padding: '10px', background: 'rgba(33,150,243,0.08)', borderLeft: '3px solid #2196f3', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '10px' }}>
                       <img src={imgUrl} style={{ width: '30px', height: '30px', borderRadius: '4px', objectFit: 'cover' }} alt="thumb" />
                       <p style={{ color: '#90caf9', fontSize: '12px', margin: 0 }}>本次多维痛觉图谱已附在报告后方，可向接诊医生展示。</p>
                     </div>
-
-                    {/* 4. 诊疗参考清单 (病史联动) */}
                     <div style={{ padding: '15px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid #333' }}>
                       <h4 style={{ color: '#e0e0e0', fontSize: '13px', margin: '0 0 10px 0' }}>📋 供您与医生讨论参考：</h4>
-                      <div style={{ color: '#aaa', fontSize: '12px', lineHeight: '1.8', whiteSpace: 'pre-wrap' }}>
-                        {content.med_reference}
-                      </div>
+                      {/* ✅ 可编辑：诊疗参考清单 */}
+                      <EditableBlock fieldKey="med_reference" defaultValue={content.med_reference} color="#aaa" />
                     </div>
+                    <button
+                      onClick={() => handleCopy(
+                        `主诉：${getEditedOrDefault('med_complaint', content.med_complaint)}\n\n参考清单：\n${getEditedOrDefault('med_reference', content.med_reference)}`
+                      )}
+                      style={{ marginTop: '15px', width: '100%', padding: '10px', background: 'transparent', border: '1px dashed #2196f3', color: '#90caf9', borderRadius: '8px', cursor: 'pointer' }}
+                    >
+                      📋 复制完整报告
+                    </button>
                   </>
                 )}
+
+                {/* === 自愈 tab === */}
                 {identity === 'self' && (
                   <>
                     <h3 style={{ color: '#9c27b0', margin: '0 0 15px 0' }}>自愈与社群互助</h3>
-                    <p style={{ color: '#ccc', fontSize: '13px', lineHeight: '1.5', marginBottom: '15px' }}>亲爱的，你画出了你的风暴。痛不是你的错，允许自己今天做一个废物，好好休息吧。</p>
-                    <div style={{ background: 'rgba(156,39,176,0.1)', padding: '15px', borderRadius: '8px', borderLeft: '3px solid #9c27b0' }}>
-                      <p style={{ color: '#e1bee7', fontSize: '13px', lineHeight: '1.6', margin: 0, whiteSpace: 'pre-wrap' }}>{content.selfCare}</p>
+                    <p style={{ color: '#ccc', fontSize: '13px', lineHeight: '1.5', marginBottom: '15px' }}>
+                      亲爱的，你画出了你的风暴。痛不是你的错，允许自己今天做一个废物，好好休息吧。
+                    </p>
+                    <div style={{ background: 'rgba(156,39,176,0.1)', padding: '12px', borderRadius: '8px', borderLeft: '3px solid #9c27b0' }}>
+                      {/* ✅ 可编辑：自愈建议 */}
+                      <EditableBlock fieldKey="selfCare" defaultValue={content.selfCare} color="#e1bee7" />
                     </div>
-                    <button onClick={() => handleCopy(content.selfCare)} style={{ marginTop: '15px', width: '100%', padding: '10px', background: 'transparent', border: '1px dashed #9c27b0', color: '#e1bee7', borderRadius: '8px', cursor: 'pointer' }}>📋 复制建议保存</button>
+                    <button
+                      onClick={() => handleCopy(getEditedOrDefault('selfCare', content.selfCare))}
+                      style={{ marginTop: '15px', width: '100%', padding: '10px', background: 'transparent', border: '1px dashed #9c27b0', color: '#e1bee7', borderRadius: '8px', cursor: 'pointer' }}
+                    >
+                      📋 复制建议保存
+                    </button>
                   </>
                 )}
               </div>
@@ -1224,317 +1250,115 @@ function App() {
             </div>
           );
         })()}
-
         {/* === Community 广场页面 === */}
         {page === "community" && (
-          <div style={{ pointerEvents: 'auto', background: '#0a0a0a', width: '100vw', minHeight: '100vh', overflowY: 'auto', padding: '20px', boxSizing: 'border-box' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', position: 'sticky', top: 0, background: '#0a0a0a', paddingBottom: '10px', zIndex: 5 }}>
-              <h2 style={{ color: '#fff', margin: 0 }}>探索共鸣广场</h2>
-              <button style={{ background: 'transparent', border: '1px solid #444', color: '#888', padding: '8px 16px', borderRadius: '20px', cursor: 'pointer' }} onClick={() => setPage('onboarding')}>关闭 ✕</button>
+          <div style={{ pointerEvents: 'auto', background: '#0a0a0a', width: '100vw', height: '100vh', overflowY: 'auto', padding: '15px', boxSizing: 'border-box' }}>
+            {/* 头部固定 */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', position: 'sticky', top: 0, background: '#0a0a0a', zIndex: 10, paddingBottom: '10px' }}>
+              <h2 style={{ color: '#fff', margin: 0, fontSize: '1.2rem' }}>🌍 共鸣广场</h2>
+              <button className="retry-btn" style={{ margin: 0, padding: '6px 15px', width: 'auto' }} onClick={() => setPage('onboarding')}>返回</button>
             </div>
 
-            <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '10px', marginBottom: '15px' }}>
-              <button style={{ background: communityFilter === 'all' ? '#d32f2f' : '#222', color: '#fff', border: 'none', padding: '6px 15px', borderRadius: '15px', whiteSpace: 'nowrap', cursor: 'pointer' }} onClick={() => setCommunityFilter('all')}>🌍 全部</button>
-              {communityGroups.map(g => (
-                <button key={g.id} style={{ background: communityFilter === g.id ? '#d32f2f' : '#222', color: '#fff', border: 'none', padding: '6px 15px', borderRadius: '15px', whiteSpace: 'nowrap', cursor: 'pointer' }} onClick={() => setCommunityFilter(g.id)}>{g.name}</button>
+            {/* 群组筛选栏 */}
+            <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '15px', marginBottom: '10px' }}>
+              {['all', 'family', 'friend'].map(f => (
+                <button key={f} onClick={() => setCommunityFilter(f)} style={{ padding: '6px 15px', borderRadius: '15px', border: 'none', background: communityFilter === f ? '#d32f2f' : '#222', color: '#fff', whiteSpace: 'nowrap', cursor: 'pointer' }}>
+                  {f === 'all' ? '全部' : f === 'family' ? '🏠 家庭' : '👥 好友'}
+                </button>
               ))}
-              <button style={{ background: 'transparent', color: '#4caf50', border: '1px dashed #4caf50', padding: '6px 15px', borderRadius: '15px', whiteSpace: 'nowrap', cursor: 'pointer' }} onClick={handleCreateGroup}>+ 建群</button>
-              <button style={{ background: 'transparent', color: '#2196f3', border: '1px dashed #2196f3', padding: '6px 15px', borderRadius: '15px', whiteSpace: 'nowrap', cursor: 'pointer' }} onClick={handleJoinGroup}>+ 加入</button>
+              <button style={{ padding: '6px 15px', borderRadius: '15px', border: '1px dashed #666', background: 'none', color: '#666', whiteSpace: 'nowrap' }} onClick={handleCreateGroup}>+ 创建群组</button>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            {/* 帖子网格：限制图片高度，美化排版 */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', paddingBottom: '80px' }}>
               {posts.filter(p => communityFilter === 'all' || p.group === communityFilter).map((post) => (
-                <div key={post.id} onClick={() => setViewingPost(post)} style={{ background: '#1c1c1c', borderRadius: '12px', padding: '10px', border: '1px solid #333', cursor: 'pointer' }}>
-                  <img src={post.img} style={{ width: '100%', height: '120px', objectFit: 'cover', borderRadius: '8px', background: '#000' }} alt="post" />
-                  <p style={{ color: '#ddd', fontSize: '12px', margin: '8px 0', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{post.text}</p>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ color: '#d32f2f', fontSize: '11px' }}>{post.tags}</span>
-                    <span style={{ color: '#888', fontSize: '12px' }}>❤️ {post.likes}</span>
+                <div key={post.id}
+                  style={{ background: '#1c1c1c', borderRadius: '12px', overflow: 'hidden', border: '1px solid #333', display: 'flex', flexDirection: 'column' }}>
+                  {/* 点击图片看详情 */}
+                  <img src={post.img} onClick={() => setViewingPost(post)}
+                    style={{ width: '100%', height: '110px', objectFit: 'cover', cursor: 'pointer', background: '#000' }} />
+
+                  <div style={{ padding: '10px', flex: 1 }}>
+                    <p style={{ color: '#fff', fontSize: '12px', margin: '0 0 8px 0', fontWeight: 'bold', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{post.text}</p>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto' }}>
+                      <span style={{ color: '#d32f2f', fontSize: '10px', background: 'rgba(211,47,47,0.1)', padding: '2px 6px', borderRadius: '4px' }}>{post.tags}</span>
+                      <button style={{ background: 'none', border: 'none', color: '#888', fontSize: '12px', cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); alert("共鸣已发送"); }}>❤️ {post.likes}</button>
+                    </div>
                   </div>
                 </div>
               ))}
             </div>
           </div>
         )}
+        {/* --- History (疼痛日记：增强版分类折叠) --- */}
+        {page === "history" && (
+          <div style={{
+            pointerEvents: 'auto',
+            background: '#0a0a0a',
+            width: '100vw',
+            height: '100vh',
+            overflowY: 'auto', // 核心修复：允许纵向滚动
+            padding: '20px',
+            boxSizing: 'border-box',
+            WebkitOverflowScrolling: 'touch' // 优化 iOS 滚动手感
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', position: 'sticky', top: 0, background: '#0a0a0a', zIndex: 10, paddingBottom: '10px' }}>
+              <h2 style={{ color: '#fff', margin: 0 }}>📋 我的疼痛档案</h2>
+              <button className="retry-btn" style={{ margin: 0, padding: '6px 15px', width: 'auto' }} onClick={() => setPage('onboarding')}>返回</button>
+            </div>
 
-        {/* === History 历史页面（按月归类版）=== */}
-        {page === "history" && (() => {
-          // 按月分组逻辑
-          const groupedHistory = history.reduce((acc, item) => {
-            const dateParts = item.date.split('/');
-            const year = dateParts[0];
-            const month = dateParts[1];
-            const monthKey = `${year}年${month}月`;
-
-            if (!acc[monthKey]) acc[monthKey] = [];
-            acc[monthKey].push(item);
-            return acc;
-          }, {});
-
-          return (
-            <div style={{
-              pointerEvents: 'auto',
-              background: '#0a0a0a',
-              width: '100vw',
-              minHeight: '100vh',
-              overflowY: 'auto',
-              padding: '20px',
-              boxSizing: 'border-box',
-              WebkitOverflowScrolling: 'touch'
-            }}>
-              {/* 头部 */}
-              <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                marginBottom: '20px',
-                position: 'sticky',
-                top: 0,
-                background: '#0a0a0a',
-                paddingBottom: '10px',
-                zIndex: 5
-              }}>
-                <h2 style={{ color: '#fff', margin: 0 }}>📋 我的疼痛档案</h2>
-                <button
-                  style={{
-                    background: 'transparent',
-                    border: '1px solid #444',
-                    color: '#888',
-                    padding: '8px 16px',
-                    borderRadius: '20px',
-                    cursor: 'pointer'
-                  }}
-                  onClick={() => setPage('onboarding')}
-                >
-                  关闭 ✕
-                </button>
-              </div>
-
-              {history.length === 0 ? (
-                <div style={{ textAlign: 'center', color: '#666', marginTop: '100px' }}>
-                  <p style={{ fontSize: '48px', marginBottom: '20px' }}>📭</p>
-                  <p>暂无记录，去画下你的第一张痛觉图吧。</p>
-                  <button
+            {history.length === 0 ? (
+              <div style={{ textAlign: 'center', color: '#666', marginTop: '100px' }}>还没有记录，去画下第一张痛感图吧。</div>
+            ) : (
+              Object.entries(groupedHistory).map(([month, records]) => (
+                <div key={month} style={{ marginBottom: '20px' }}>
+                  {/* 月份标题头 - 点击切换折叠 */}
+                  <div
+                    onClick={() => toggleMonth(month)}
                     style={{
-                      marginTop: '30px',
-                      padding: '12px 30px',
-                      background: '#d32f2f',
-                      color: '#fff',
-                      border: 'none',
-                      borderRadius: '25px',
-                      fontWeight: 'bold',
-                      cursor: 'pointer'
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                      padding: '12px 15px', background: '#1a1a1a', borderRadius: '10px',
+                      borderLeft: '4px solid #d32f2f', cursor: 'pointer', marginBottom: '10px'
                     }}
-                    onClick={() => setPage('onboarding')}
                   >
-                    🎨 开始绘制
-                  </button>
-                </div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-                  {Object.entries(groupedHistory).sort((a, b) => b[0].localeCompare(a[0])).map(([month, records]) => {
-                    // 计算这个月的统计信息
-                    const recordCount = records.length;
+                    <span style={{ color: '#fff', fontWeight: 'bold' }}>{month}</span>
+                    <span style={{ color: '#666', fontSize: '12px' }}>
+                      {records.length} 条记录 {collapsedMonths[month] ? '▼' : '▲'}
+                    </span>
+                  </div>
 
-                    // 统计主要疼痛类型
-                    const typeCount = {};
-                    records.forEach(r => {
-                      typeCount[r.type] = (typeCount[r.type] || 0) + 1;
-                    });
-                    const dominantType = Object.entries(typeCount).sort((a, b) => b[1] - a[1])[0]?.[0] || 'twist';
-
-                    // 统计常用缓解方式
-                    const reliefCount = {};
-                    records.filter(r => r.reliefMethod).forEach(r => {
-                      reliefCount[r.reliefMethod] = (reliefCount[r.reliefMethod] || 0) + 1;
-                    });
-                    const topRelief = Object.entries(reliefCount).sort((a, b) => b[1] - a[1])[0]?.[0];
-
-                    return (
-                      <div key={month}>
-                        {/* 月份标题 */}
-                        <h3 style={{
-                          color: '#d32f2f',
-                          fontSize: '16px',
-                          marginBottom: '12px',
-                          borderBottom: '1px solid #333',
-                          paddingBottom: '8px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between'
-                        }}>
-                          <span>{month}</span>
-                          <span style={{
-                            color: '#666',
-                            fontSize: '12px',
-                            fontWeight: 'normal'
-                          }}>
-                            {recordCount} 条记录
-                          </span>
-                        </h3>
-
-                        {/* 月度统计卡片 */}
-                        <div style={{
-                          background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
-                          borderRadius: '12px',
-                          padding: '15px',
-                          marginBottom: '15px',
-                          border: '1px solid #333'
-                        }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-around', textAlign: 'center' }}>
-                            <div>
-                              <div style={{ color: '#888', fontSize: '11px', marginBottom: '4px' }}>主要痛感</div>
-                              <div style={{ color: '#d32f2f', fontSize: '16px' }}>
-                                {BRUSHES[dominantType]?.icon} {BRUSHES[dominantType]?.label.split(' ')[1]}
-                              </div>
-                            </div>
-                            {topRelief && (
-                              <div>
-                                <div style={{ color: '#888', fontSize: '11px', marginBottom: '4px' }}>常用缓解方式</div>
-                                <div style={{ color: '#4caf50', fontSize: '14px', maxWidth: '140px' }}>
-                                  {topRelief.length > 12 ? topRelief.slice(0, 12) + '...' : topRelief}
-                                </div>
-                              </div>
-                            )}
-                            <div>
-                              <div style={{ color: '#888', fontSize: '11px', marginBottom: '4px' }}>记录天数</div>
-                              <div style={{ color: '#fff', fontSize: '16px' }}>
-                                {new Set(records.map(r => r.date)).size} 天
-                              </div>
+                  {/* 记录列表内容 - 受折叠状态控制 */}
+                  {!collapsedMonths[month] && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      {records.map(h => (
+                        <div
+                          key={h.id}
+                          onClick={() => setViewingDiary(h)}
+                          style={{
+                            display: 'flex', alignItems: 'center', background: '#1c1c1c',
+                            padding: '12px', borderRadius: '12px', border: '1px solid #333',
+                            transition: 'transform 0.1s'
+                          }}
+                        >
+                          <img src={h.img} style={{ width: '55px', height: '55px', borderRadius: '8px', background: '#000', objectFit: 'cover' }} />
+                          <div style={{ marginLeft: '15px', flex: 1 }}>
+                            <div style={{ color: '#fff', fontSize: '14px', fontWeight: 'bold' }}>{h.date}</div>
+                            <div style={{ fontSize: '12px', color: '#888', marginTop: '4px' }}>
+                              {BRUSHES[h.type]?.label}
                             </div>
                           </div>
+                          <span style={{ color: '#444' }}>›</span>
                         </div>
-
-                        {/* 记录列表 */}
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                          {records.sort((a, b) => b.id - a.id).map((record) => (
-                            <div
-                              key={record.id}
-                              onClick={() => setViewingDiary(record)}
-                              style={{
-                                display: 'flex',
-                                alignItems: 'flex-start',
-                                background: '#1c1c1c',
-                                padding: '14px',
-                                borderRadius: '12px',
-                                border: '1px solid #333',
-                                cursor: 'pointer',
-                                transition: 'all 0.2s'
-                              }}
-                              onMouseEnter={(e) => e.currentTarget.style.background = '#252525'}
-                              onMouseLeave={(e) => e.currentTarget.style.background = '#1c1c1c'}
-                            >
-                              {/* 缩略图 */}
-                              <img
-                                src={record.img}
-                                style={{
-                                  width: '55px',
-                                  height: '55px',
-                                  borderRadius: '8px',
-                                  objectFit: 'cover',
-                                  background: '#000',
-                                  flexShrink: 0
-                                }}
-                                alt="record"
-                              />
-
-                              {/* 信息区域 */}
-                              <div style={{ marginLeft: '14px', flex: 1 }}>
-                                <div style={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'space-between',
-                                  marginBottom: '6px'
-                                }}>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                                    <span style={{ color: '#fff', fontWeight: 'bold', fontSize: '14px' }}>
-                                      {record.date}
-                                    </span>
-                                    <span style={{ color: '#666', fontSize: '12px' }}>
-                                      {record.time}
-                                    </span>
-                                  </div>
-                                </div>
-
-                                {/* 疼痛类型标签 */}
-                                <div style={{ marginBottom: '8px' }}>
-                                  <span style={{
-                                    color: '#d32f2f',
-                                    fontSize: '12px',
-                                    background: 'rgba(211, 47, 47, 0.12)',
-                                    padding: '3px 10px',
-                                    borderRadius: '12px',
-                                    display: 'inline-block'
-                                  }}>
-                                    {record.icon || BRUSHES[record.type]?.icon} {record.painName || BRUSHES[record.type]?.label.split(' ')[1]}
-                                  </span>
-                                </div>
-
-                                {/* 摘要信息 - 核心建议 */}
-                                {record.content?.selfCare && (
-                                  <p style={{
-                                    color: '#aaa',
-                                    fontSize: '12px',
-                                    margin: '6px 0 0 0',
-                                    display: '-webkit-box',
-                                    WebkitLineClamp: 2,
-                                    WebkitBoxOrient: 'vertical',
-                                    overflow: 'hidden',
-                                    lineHeight: '1.5'
-                                  }}>
-                                    💡 {record.content.selfCare.replace('💡 缓解建议：', '').slice(0, 50)}
-                                    {record.content.selfCare.length > 50 ? '...' : ''}
-                                  </p>
-                                )}
-
-                                {/* 用户补充信息标签 */}
-                                {(record.duration || record.reliefMethod) && (
-                                  <div style={{
-                                    display: 'flex',
-                                    gap: '8px',
-                                    marginTop: '8px',
-                                    flexWrap: 'wrap'
-                                  }}>
-                                    {record.duration && (
-                                      <span style={{
-                                        color: '#888',
-                                        fontSize: '11px',
-                                        background: 'rgba(255, 255, 255, 0.05)',
-                                        padding: '2px 8px',
-                                        borderRadius: '10px'
-                                      }}>
-                                        ⏱️ {record.duration}
-                                      </span>
-                                    )}
-                                    {record.reliefMethod && (
-                                      <span style={{
-                                        color: '#4caf50',
-                                        fontSize: '11px',
-                                        background: 'rgba(76, 175, 80, 0.1)',
-                                        padding: '2px 8px',
-                                        borderRadius: '10px'
-                                      }}>
-                                        🌿 {record.reliefMethod.length > 15 ? record.reliefMethod.slice(0, 15) + '...' : record.reliefMethod}
-                                      </span>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-
-                              {/* 箭头 */}
-                              <span style={{ color: '#666', fontSize: '18px', flexShrink: 0, marginLeft: '8px' }}>›</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })}
+                      ))}
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          );
-        })()}
-
+              ))
+            )}
+            {/* 留白底部，防止被遮挡 */}
+            <div style={{ height: '100px' }}></div>
+          </div>
+        )}
         {/* 查看日记详情弹窗（增强版）*/}
         {viewingDiary && (
           <div
@@ -1565,15 +1389,71 @@ function App() {
               }}
               onClick={(e) => e.stopPropagation()}
             >
+              {/* 原有的图谱图片 */}
               <img
                 src={viewingDiary.img}
-                style={{
-                  width: '100%',
-                  borderRadius: '12px',
-                  border: '1px solid #444'
-                }}
+                style={{ width: '100%', borderRadius: '12px', border: '1px solid #444' }}
                 alt="diary"
               />
+
+              {/* ✅ 新增：痛觉元数据徽章行 */}
+              {viewingDiary.meta && (
+                <div style={{
+                  display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '12px'
+                }}>
+                  {/* 颜色色块 */}
+                  {viewingDiary.meta.colorPalette && (
+                    <span style={{
+                      display: 'inline-flex', alignItems: 'center', gap: '5px',
+                      background: 'rgba(255,255,255,0.07)', borderRadius: '12px',
+                      padding: '3px 10px', fontSize: '11px', color: '#ccc'
+                    }}>
+                      <span style={{
+                        width: '10px', height: '10px', borderRadius: '50%',
+                        background: `rgb(${(PALETTES[viewingDiary.meta.colorPalette]?.color || [200, 50, 50]).join(',')})`,
+                        display: 'inline-block'
+                      }} />
+                      {viewingDiary.meta.colorPalette === 'crimson' ? '深红·急性' :
+                        viewingDiary.meta.colorPalette === 'dark' ? '暗灰·钝痛' :
+                          viewingDiary.meta.colorPalette === 'purple' ? '紫·放射' : '冰蓝·发冷'}
+                    </span>
+                  )}
+                  {/* 涂抹强度 */}
+                  {viewingDiary.meta.painScore > 0 && (
+                    <span style={{
+                      background: 'rgba(211,47,47,0.15)', borderRadius: '12px',
+                      padding: '3px 10px', fontSize: '11px', color: '#ffcdd2'
+                    }}>
+                      涂抹 {viewingDiary.meta.painScore} 次
+                    </span>
+                  )}
+                  {/* 部位 */}
+                  {viewingDiary.meta.bodyMode && viewingDiary.meta.bodyMode !== 'none' && (
+                    <span style={{
+                      background: 'rgba(76,175,80,0.12)', borderRadius: '12px',
+                      padding: '3px 10px', fontSize: '11px', color: '#a5d6a7'
+                    }}>
+                      {viewingDiary.meta.bodyMode === 'front' ? '腹部正面' :
+                        viewingDiary.meta.bodyMode === 'back' ? '腰骶背面' : '正背双侧'}
+                    </span>
+                  )}
+                  {/* 主笔触 */}
+                  {viewingDiary.meta.brushCounts && (() => {
+                    const counts = viewingDiary.meta.brushCounts;
+                    const max = Math.max(...Object.values(counts));
+                    if (max === 0) return null;
+                    const top = Object.keys(counts).find(k => counts[k] === max);
+                    return (
+                      <span style={{
+                        background: 'rgba(255,152,0,0.12)', borderRadius: '12px',
+                        padding: '3px 10px', fontSize: '11px', color: '#ffe082'
+                      }}>
+                        主导 {BRUSHES[top]?.icon} {BRUSHES[top]?.label.split(' ')[1]}
+                      </span>
+                    );
+                  })()}
+                </div>
+              )}
 
               <h3 style={{ color: '#fff', marginTop: '20px', marginBottom: '10px' }}>
                 {viewingDiary.date} {viewingDiary.time}
@@ -1708,41 +1588,48 @@ function App() {
                 </div>
               </div>
 
-              {/* 操作按钮 */}
-              <div style={{
-                display: 'flex',
-                gap: '15px',
-                marginTop: '20px',
-                marginBottom: '30px'
-              }}>
+              {/* 加入身份选择按钮组 */}
+              <div style={{ background: 'rgba(255,255,255,0.05)', padding: '15px', borderRadius: '12px', marginTop: '15px', border: '1px solid #333' }}>
+                <p style={{ color: '#888', fontSize: '12px', marginBottom: '12px', textAlign: 'center' }}>选择分享语境：</p>
+                <div style={{ display: 'flex', gap: '5px' }}>
+                  {['partner', 'work', 'doctor', 'self'].map(tab => (
+                    <button
+                      key={tab}
+                      onClick={(e) => { e.stopPropagation(); setDiaryShareIdentity(tab); }}
+                      style={{
+                        flex: 1, padding: '8px 0', fontSize: '11px', borderRadius: '8px', border: 'none', cursor: 'pointer',
+                        background: diaryShareIdentity === tab ? '#d32f2f' : '#222',
+                        color: diaryShareIdentity === tab ? '#fff' : '#888'
+                      }}
+                    >
+                      {{ partner: '伴侣', work: '请假', doctor: '医生', self: '自愈' }[tab]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 操作按钮区 */}
+              <div style={{ display: 'flex', gap: '15px', marginTop: '20px', marginBottom: '30px' }}>
                 <button
-                  style={{
-                    flex: 1,
-                    padding: '14px',
-                    borderRadius: '25px',
-                    background: '#4caf50',
-                    color: '#fff',
-                    border: 'none',
-                    fontWeight: 'bold',
-                    cursor: 'pointer'
-                  }}
-                  onClick={() => {
-                    prepareSharePreview(viewingDiary.content);
-                    setViewingDiary(null);
+                  style={{ flex: 2, padding: '14px', borderRadius: '25px', background: '#4caf50', color: '#fff', border: 'none', fontWeight: 'bold', cursor: 'pointer' }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    // 【关键逻辑】：将当前选中的 identity 和日记图片 传给分享预览
+                    setShareContent({
+                      ...viewingDiary.content,
+                      identity: diaryShareIdentity,
+                      historyImg: viewingDiary.img,
+                      pain: viewingDiary.painName
+                    });
+                    setShowSharePreview(true);
+                    setViewingDiary(null); // 关闭日记详情，开启预览
                   }}
                 >
+
                   📤 分享此记录
                 </button>
                 <button
-                  style={{
-                    flex: 1,
-                    padding: '14px',
-                    borderRadius: '25px',
-                    background: 'rgba(255,255,255,0.1)',
-                    border: '1px solid #555',
-                    color: '#fff',
-                    cursor: 'pointer'
-                  }}
+                  style={{ flex: 1, padding: '14px', borderRadius: '25px', background: 'rgba(255,255,255,0.1)', border: '1px solid #555', color: '#fff', cursor: 'pointer' }}
                   onClick={() => setViewingDiary(null)}
                 >
                   关闭
@@ -1752,18 +1639,42 @@ function App() {
           </div>
         )}
 
+        {/* 帖子详情弹窗 (Modal) */}
         {viewingPost && (
-          <div style={{ position: 'fixed', zIndex: 500, top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.95)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '20px', boxSizing: 'border-box' }} onClick={() => setViewingPost(null)}>
-            <img src={viewingPost.img} style={{ width: '100%', maxWidth: '350px', borderRadius: '12px', border: '1px solid #444' }} alt="post" />
-            <p style={{ color: '#fff', fontSize: '16px', margin: '20px 0', textAlign: 'left', width: '100%', maxWidth: '350px', lineHeight: '1.6' }}>{viewingPost.text}</p>
-            <div style={{ display: 'flex', gap: '15px', width: '100%', maxWidth: '350px' }}>
-              <button style={{ flex: 1, padding: '14px', borderRadius: '25px', background: '#d32f2f', color: '#fff', border: 'none', fontWeight: 'bold', cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); alert('已发送温暖的抱抱！'); }}>❤️ 抱抱</button>
-              <button style={{ flex: 1, padding: '14px', borderRadius: '25px', background: '#2196f3', color: '#fff', border: 'none', fontWeight: 'bold', cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); alert('已发送休息提醒！'); }}>🍵 多喝热水</button>
+          <div style={{ position: 'fixed', zIndex: 1000, top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.98)', display: 'flex', flexDirection: 'column', padding: '20px', boxSizing: 'border-box', overflowY: 'auto' }} onClick={() => setViewingPost(null)}>
+            <div style={{ maxWidth: '400px', margin: '0 auto', width: '100%' }} onClick={e => e.stopPropagation()}>
+              {/* 顶部操作 */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                <span style={{ color: '#d32f2f', fontWeight: 'bold' }}>PainScape 具身证据</span>
+                <button onClick={() => setViewingPost(null)} style={{ background: 'none', border: 'none', color: '#fff', fontSize: '24px' }}>✕</button>
+              </div>
+
+              {/* 大图 */}
+              <img src={viewingPost.img} style={{ width: '100%', borderRadius: '15px', border: '1px solid #333', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' }} />
+
+              {/* 描述与分析 */}
+              <div style={{ marginTop: '20px' }}>
+                <p style={{ color: '#fff', fontSize: '18px', fontWeight: 'bold', lineHeight: '1.4' }}>“{viewingPost.text}”</p>
+
+                <div style={{ background: '#111', padding: '15px', borderRadius: '12px', marginTop: '15px', borderLeft: '4px solid #d32f2f' }}>
+                  <h4 style={{ color: '#d32f2f', margin: '0 0 8px 0', fontSize: '13px' }}>🤖 AI 痛觉分析：</h4>
+                  <p style={{ color: '#ccc', fontSize: '13px', lineHeight: '1.6' }}>{viewingPost.analogy || "根据图像特征，该痛感呈现典型的机械性收缩特征，伴随局部组织的深度压迫感。"}</p>
+                </div>
+
+                <div style={{ background: 'rgba(76, 175, 80, 0.05)', padding: '15px', borderRadius: '12px', marginTop: '15px', borderLeft: '4px solid #4caf50' }}>
+                  <h4 style={{ color: '#4caf50', margin: '0 0 8px 0', fontSize: '13px' }}>🌿 她的自愈经验：</h4>
+                  <p style={{ color: '#ccc', fontSize: '13px', lineHeight: '1.6' }}>{viewingPost.reliefExperience || "尝试通过绘制图谱进行注意力的具身转移，并辅以腰骶部热敷。"}</p>
+                </div>
+              </div>
+
+              {/* 底部互动 */}
+              <div style={{ display: 'flex', gap: '12px', marginTop: '30px', paddingBottom: '40px' }}>
+                <button style={{ flex: 1, padding: '15px', borderRadius: '30px', background: '#d32f2f', color: '#fff', border: 'none', fontWeight: 'bold', cursor: 'pointer' }} onClick={() => alert("共鸣已发送")}>❤️ 给她一个抱抱</button>
+                <button style={{ flex: 1, padding: '15px', borderRadius: '30px', background: '#222', color: '#4caf50', border: '1px solid #4caf50', fontWeight: 'bold', cursor: 'pointer' }} onClick={() => alert("关怀提醒已送达")}>🍵 提醒休息</button>
+              </div>
             </div>
-            <button style={{ marginTop: '30px', padding: '12px 40px', borderRadius: '25px', background: 'rgba(255,255,255,0.1)', border: '1px solid #555', color: '#fff', cursor: 'pointer' }} onClick={() => setViewingPost(null)}>关闭</button>
           </div>
         )}
-
         {showPostModal && (
           <div style={{ position: 'fixed', zIndex: 500, top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.85)', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px', boxSizing: 'border-box' }}>
             <div style={{ background: '#1c1c1c', padding: '20px', borderRadius: '16px', width: '100%', maxWidth: '320px', border: '1px solid #444' }}>
@@ -1777,7 +1688,6 @@ function App() {
             </div>
           </div>
         )}
-        {/* 分享预览弹窗 */}
         {/* 分享预览弹窗 */}
         {showSharePreview && shareContent && (
           <div style={{
@@ -1809,110 +1719,21 @@ function App() {
                 📤 分享预览
               </h3>
 
-              {/* 预览说明 */}
-              {(() => {
-                // 添加安全检查
-                if (!pgFrontRef.current || !pgBackRef.current) {
-                  return <p style={{ color: '#888', fontSize: '13px', textAlign: 'center', marginBottom: '15px' }}>正在加载画布...</p>;
-                }
+              {/* --- 修改预览说明逻辑 --- */}
+              <p style={{ color: '#888', fontSize: '13px', textAlign: 'center', marginBottom: '15px' }}>
+                {shareContent.historyImg ? '疼痛档案回顾' : (
+                  (!pgFrontRef.current) ? '加载中...' :
+                    (isSideEmpty('front') && isSideEmpty('back') ? '暂无绘画内容' : '实时绘画预览')
+                )}
+              </p>
 
-                const hasFront = !isSideEmpty('front');
-                const hasBack = !isSideEmpty('back');
-
-                console.log('预览检测 - hasFront:', hasFront, 'hasBack:', hasBack);
-
-                if (hasFront && hasBack) {
-                  return (
-                    <p style={{ color: '#888', fontSize: '13px', textAlign: 'center', marginBottom: '15px' }}>
-                      正反面并排展示，完整呈现你的疼痛图谱
-                    </p>
-                  );
-                } else if (hasFront) {
-                  return (
-                    <p style={{ color: '#888', fontSize: '13px', textAlign: 'center', marginBottom: '15px' }}>
-                      正面视图 · 单面展示
-                    </p>
-                  );
-                } else if (hasBack) {
-                  return (
-                    <p style={{ color: '#888', fontSize: '13px', textAlign: 'center', marginBottom: '15px' }}>
-                      背面视图 · 单面展示
-                    </p>
-                  );
-                } else {
-                  return (
-                    <p style={{ color: '#888', fontSize: '13px', textAlign: 'center', marginBottom: '15px' }}>
-                      暂无绘画内容
-                    </p>
-                  );
-                }
-              })()}
-
-              {/* 预览缩略图区域 */}
-              <div style={{
-                background: '#0a0a0a',
-                borderRadius: '12px',
-                padding: '15px',
-                marginBottom: '20px',
-                display: 'flex',
-                justifyContent: 'center'
-              }}>
-                {(() => {
-                  // 安全检查
-                  if (!pgFrontRef.current || !pgBackRef.current) {
-                    return <p style={{ color: '#666' }}>画布加载中...</p>;
-                  }
-
-                  try {
-                    const hasFront = !isSideEmpty('front');
-                    const hasBack = !isSideEmpty('back');
-
-                    if (hasFront && hasBack) {
-                      const frontCanvas = captureFullCanvas('front');
-                      const backCanvas = captureFullCanvas('back');
-                      return (
-                        <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
-                          <div style={{ textAlign: 'center' }}>
-                            <img
-                              src={frontCanvas.toDataURL()}
-                              style={{ width: '180px', height: 'auto', borderRadius: '8px', border: '1px solid #444' }}
-                              alt="正面"
-                            />
-                            <p style={{ color: '#fff', fontSize: '12px', marginTop: '5px' }}>正面</p>
-                          </div>
-                          <div style={{ textAlign: 'center' }}>
-                            <img
-                              src={backCanvas.toDataURL()}
-                              style={{ width: '180px', height: 'auto', borderRadius: '8px', border: '1px solid #444' }}
-                              alt="背面"
-                            />
-                            <p style={{ color: '#fff', fontSize: '12px', marginTop: '5px' }}>背面</p>
-                          </div>
-                        </div>
-                      );
-                    } else if (hasFront || hasBack) {
-                      const activeSide = hasFront ? 'front' : 'back';
-                      const activeCanvas = captureFullCanvas(activeSide);
-                      return (
-                        <div style={{ textAlign: 'center' }}>
-                          <img
-                            src={activeCanvas.toDataURL()}
-                            style={{ width: '100%', maxWidth: '300px', borderRadius: '8px', border: '1px solid #444' }}
-                            alt="预览"
-                          />
-                          <p style={{ color: '#fff', fontSize: '12px', marginTop: '5px' }}>
-                            {hasFront ? '正面' : '背面'}
-                          </p>
-                        </div>
-                      );
-                    } else {
-                      return <p style={{ color: '#666' }}>暂无绘画内容</p>;
-                    }
-                  } catch (error) {
-                    console.error('预览生成失败:', error);
-                    return <p style={{ color: '#d32f2f' }}>预览加载失败，请重试</p>;
-                  }
-                })()}
+              {/* --- 修改缩略图显示逻辑 --- */}
+              <div style={{ background: '#0a0a0a', borderRadius: '12px', padding: '15px', marginBottom: '20px', display: 'flex', justifyContent: 'center' }}>
+                <img
+                  src={shareContent.historyImg || imgUrl}  // 核心修改：优先使用历史图片
+                  style={{ width: '100%', maxWidth: '300px', borderRadius: '8px', border: '1px solid #444' }}
+                  alt="预览"
+                />
               </div>
 
               {/* 文字预览 - 根据身份显示 */}
@@ -1922,33 +1743,34 @@ function App() {
                     case 'partner':
                       return {
                         title: '通感说明书',
-                        content: shareContent.analogy?.slice(0, 60) + '...'
+                        content: shareContent.analogy?.slice(0, 80) + '...'
                       };
                     case 'work':
                       return {
                         title: '不可见痛苦声明',
-                        content: `因严重${shareContent.pain}申请居家休息`
+                        content: shareContent.workText?.slice(0, 80) + '...'
                       };
                     case 'doctor':
                       return {
                         title: '医疗辅助报告',
-                        content: shareContent.med?.slice(0, 60) + '...'
+                        // 【关键修改】：这里要对应 med_complaint
+                        content: (shareContent.med_complaint || "已记录具身痛觉图谱")?.slice(0, 80) + '...'
                       };
                     case 'self':
                       return {
                         title: '自愈建议',
-                        content: shareContent.selfCare?.slice(0, 60) + '...'
+                        // 【关键修改】：这里要对应 selfCare
+                        content: shareContent.selfCare?.slice(0, 80) + '...'
                       };
                     default:
                       return {
-                        title: '不可见痛苦声明',
-                        content: `我正在经历强烈的 ${shareContent.pain}`
+                        title: '状态声明',
+                        content: `正在经历 ${shareContent.pain}`
                       };
                   }
                 };
 
                 const previewText = getPreviewText();
-
                 return (
                   <div style={{
                     background: 'rgba(0,0,0,0.3)',
