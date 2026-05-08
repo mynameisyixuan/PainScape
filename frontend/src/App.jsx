@@ -545,7 +545,7 @@ function App() {
     } catch (e) {
       console.error("生成分享卡片失败:", e);
       alert("生成分享卡片失败，可能是图片加载超时。请尝试直接截图分享。");
-    }finally {
+    } finally {
       setIsLoading(false); // 【关键修复】：确保分享结束后 Loading 消失
     }
   };
@@ -663,7 +663,7 @@ function App() {
   const generateContent = (overrideType) => {
     const activeLlm = currentLlmData || llmData;
     const hasLlm = activeLlm?.status === 'success';
-    
+
     const dominant = overrideType || getDominantPain();
     const painNameMap = { twist: "严重绞痛", pierce: "荆棘刺痛", heavy: "坠胀重压", wave: "弥漫胀痛", scrape: "撕裂刮痛" };
     const painName = painNameMap[dominant];
@@ -734,7 +734,7 @@ function App() {
       analogy: hasLlm ? llmData.analogy : TEXTS[dominant].analogy,
       med_complaint: finalMedComplaint,
       med_reference: finalMedReference,
-      med_profile: `PainScape 痛觉成像显示强烈的 ${painName} 特征。`, 
+      med_profile: `PainScape 痛觉成像显示强烈的 ${painName} 特征。`,
       selfCare: finalSelfCare,
       workText: hasLlm ? llmData.work : workTemplate,
       action: actionParts.join("\n") // 这里统一使用本地生成的 Checklist，因为大模型生成的 action 通常不够干货
@@ -843,7 +843,12 @@ function App() {
   const handleFinish = async () => {
     if (!p5Ref.current) return;
     setIsLoading(true); // 开始加载
+    const canvas = document.querySelector("canvas");
+    const url = canvas.toDataURL("image/jpeg", 0.5);
+    setImgUrl(url);
+    const dominant = getDominantPain();
 
+    let aiResult = null;
     try {
       // 1. 获取图片
       const canvas = document.querySelector("canvas");
@@ -871,11 +876,11 @@ function App() {
         const response = await fetch('http://localhost:8000/api/generate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-           body: JSON.stringify({ 
-             dominantPain: dominant, 
-             userPref: userPrefs.join(','),
-             medicalBackground, 
-             painScore: Object.values(brushCounts.current).reduce((a,b)=>a+b,0) 
+          body: JSON.stringify({
+            dominantPain: dominant,
+            userPref: userPrefs.join(','),
+            medicalBackground,
+            painScore: Object.values(brushCounts.current).reduce((a, b) => a + b, 0)
           }),
           signal: controller.signal
         });
@@ -890,9 +895,7 @@ function App() {
       }
 
       // 【核心修复】：生成 content 时，把刚刚拿到的 aiResult 传进去
-      // 这样存入历史记录的数据就是完整的，不会有 undefined
       const finalContent = generateContent(dominant, aiResult);
-
       const newRecord = {
         id: Date.now(),
         date: new Date().toLocaleDateString(),
@@ -911,7 +914,7 @@ function App() {
     } catch (e) {
       console.error(e);
     } finally {
-      // 4. 无论如何，关闭 Loading 并跳转
+      // 关闭 Loading 并跳转
       setIsLoading(false);
       setPage("result");
       // 重置绘图数据
@@ -1354,341 +1357,341 @@ function App() {
         )}
         {/* 查看日记详情弹窗（增强版）*/}
         {viewingDiary && (
-  <div
-    style={{
-      position: 'fixed',
-      zIndex: 500,
-      top: 0,
-      left: 0,
-      width: '100vw',
-      height: '100vh',
-      background: 'rgba(0,0,0,0.95)',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: '20px',
-      boxSizing: 'border-box',
-      overflow: 'hidden' // 完全隐藏滚动条
-    }}
-    onClick={() => setViewingDiary(null)}
-  >
-    <div
-      style={{
-        width: '100%',
-        maxWidth: '400px',
-        maxHeight: '90vh',
-        overflowY: 'auto', // 保留滚动功能
-        // 隐藏滚动条（Webkit浏览器）
-        scrollbarWidth: 'none', // Firefox
-        msOverflowStyle: 'none', // IE和Edge
-        '&::-webkit-scrollbar': {
-          display: 'none' // Chrome, Safari, Opera
-        }
-      }}
-      onClick={(e) => e.stopPropagation()}
-    >
-      {/* 原有的图谱图片 */}
-      <img
-        src={viewingDiary.img}
-        style={{ width: '100%', borderRadius: '12px', border: '1px solid #444' }}
-        alt="diary"
-      />
-
-      {/* ✅ 新增：痛觉元数据徽章行 */}
-      {viewingDiary.meta && (
-        <div style={{
-          display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '12px'
-        }}>
-          {/* 颜色色块 */}
-          {viewingDiary.meta.colorPalette && (
-            <span style={{
-              display: 'inline-flex', alignItems: 'center', gap: '5px',
-              background: 'rgba(255,255,255,0.07)', borderRadius: '12px',
-              padding: '3px 10px', fontSize: '11px', color: '#ccc'
-            }}>
-              <span style={{
-                width: '10px', height: '10px', borderRadius: '50%',
-                background: `rgb(${(PALETTES[viewingDiary.meta.colorPalette]?.color || [200, 50, 50]).join(',')})`,
-                display: 'inline-block'
-              }} />
-              {viewingDiary.meta.colorPalette === 'crimson' ? '深红·急性' :
-                viewingDiary.meta.colorPalette === 'dark' ? '暗灰·钝痛' :
-                  viewingDiary.meta.colorPalette === 'purple' ? '紫·放射' : '冰蓝·发冷'}
-            </span>
-          )}
-          {/* 涂抹强度 */}
-          {viewingDiary.meta.painScore > 0 && (
-            <span style={{
-              background: 'rgba(211,47,47,0.15)', borderRadius: '12px',
-              padding: '3px 10px', fontSize: '11px', color: '#ffcdd2'
-            }}>
-              涂抹 {viewingDiary.meta.painScore} 次
-            </span>
-          )}
-          {/* 部位 */}
-          {viewingDiary.meta.bodyMode && viewingDiary.meta.bodyMode !== 'none' && (
-            <span style={{
-              background: 'rgba(76,175,80,0.12)', borderRadius: '12px',
-              padding: '3px 10px', fontSize: '11px', color: '#a5d6a7'
-            }}>
-              {viewingDiary.meta.bodyMode === 'front' ? '腹部正面' :
-                viewingDiary.meta.bodyMode === 'back' ? '腰骶背面' : '正背双侧'}
-            </span>
-          )}
-          {/* 主笔触 */}
-          {viewingDiary.meta.brushCounts && (() => {
-            const counts = viewingDiary.meta.brushCounts;
-            const max = Math.max(...Object.values(counts));
-            if (max === 0) return null;
-            const top = Object.keys(counts).find(k => counts[k] === max);
-            return (
-              <span style={{
-                background: 'rgba(255,152,0,0.12)', borderRadius: '12px',
-                padding: '3px 10px', fontSize: '11px', color: '#ffe082'
-              }}>
-                主导 {BRUSHES[top]?.icon} {BRUSHES[top]?.label.split(' ')[1]}
-              </span>
-            );
-          })()}
-        </div>
-      )}
-
-      <h3 style={{ color: '#fff', marginTop: '20px', marginBottom: '10px' }}>
-        {viewingDiary.date} {viewingDiary.time}
-        <span style={{
-          marginLeft: '12px',
-          color: '#d32f2f',
-          fontSize: '16px',
-          background: 'rgba(211, 47, 47, 0.15)',
-          padding: '4px 12px',
-          borderRadius: '12px'
-        }}>
-          {viewingDiary.icon} {viewingDiary.painName}
-        </span>
-      </h3>
-
-      {/* 痛觉通感描述 */}
-      <div style={{
-        background: 'rgba(28,28,28,0.9)',
-        padding: '18px',
-        borderRadius: '12px',
-        marginTop: '10px',
-        border: '1px solid #444'
-      }}>
-        <p style={{ color: '#ccc', fontSize: '14px', lineHeight: '1.6', margin: '0 0 12px 0' }}>
-          {viewingDiary.content?.analogy}
-        </p>
-        <p style={{ color: '#4caf50', fontSize: '13px', lineHeight: '1.6', margin: 0 }}>
-          {viewingDiary.content?.selfCare}
-        </p>
-      </div>
-      {/* 用户补充信息 - 自由文本，无数字 */}
-      <div style={{
-        background: 'rgba(28,28,28,0.9)',
-        padding: '18px',
-        borderRadius: '12px',
-        marginTop: '15px',
-        border: '1px solid #444'
-      }}>
-        <h4 style={{ color: '#fff', margin: '0 0 15px 0', fontSize: '14px' }}>
-          📝 记录你的感受
-        </h4>
-        <p style={{ color: '#888', fontSize: '11px', marginBottom: '15px', fontStyle: 'italic' }}>
-          「语言在痛苦面前总是匮乏的，但每一种描述都是真实的。」
-        </p>
-
-        {/* 持续时间 - 自由文本输入 */}
-        <div style={{ marginBottom: '15px' }}>
-          <label style={{ color: '#888', fontSize: '12px', display: 'block', marginBottom: '8px' }}>
-            ⏱️ 这种感觉持续了...
-          </label>
-          <input
-            type="text"
-            placeholder="例如：整个下午 / 断断续续几个小时 / 到晚上才缓解"
-            defaultValue={viewingDiary.duration || ''}
-            onBlur={(e) => {
-              const val = e.target.value;
-              if (val) updateRecordInfo(viewingDiary.id, 'duration', val);
-            }}
+          <div
             style={{
-              width: '100%',
-              padding: '10px',
-              background: '#111',
-              color: '#fff',
-              border: '1px solid #444',
-              borderRadius: '8px',
-              boxSizing: 'border-box'
-            }}
-          />
-        </div>
-
-        {/* 缓解方式 - 自由选择或输入 */}
-        <div style={{ marginBottom: '15px' }}>
-          <label style={{ color: '#888', fontSize: '12px', display: 'block', marginBottom: '8px' }}>
-            🌿 什么让你感觉好一些？
-          </label>
-          <input
-            type="text"
-            list="relief-options"
-            placeholder="例如：蜷缩起来 / 热敷 / 安静独处..."
-            defaultValue={viewingDiary.reliefMethod || ''}
-            onBlur={(e) => {
-              const val = e.target.value;
-              if (val) updateRecordInfo(viewingDiary.id, 'reliefMethod', val);
-            }}
-            style={{
-              width: '100%',
-              padding: '10px',
-              background: '#111',
-              color: '#fff',
-              border: '1px solid #444',
-              borderRadius: '8px',
-              boxSizing: 'border-box'
-            }}
-          />
-          <datalist id="relief-options">
-            <option value="蜷缩侧卧，抱紧膝盖" />
-            <option value="热敷小腹或后腰" />
-            <option value="安静独处，不被打扰" />
-            <option value="有人陪伴，握着我的手" />
-            <option value="听白噪音或轻音乐" />
-            <option value="喝热水或热饮" />
-            <option value="垫高臀部平躺" />
-            <option value="轻轻按摩腹部" />
-          </datalist>
-        </div>
-
-        {/* 自由备注 */}
-        <div>
-          <label style={{ color: '#888', fontSize: '12px', display: 'block', marginBottom: '8px' }}>
-            📓 想记录的其他感受
-          </label>
-          <textarea
-            placeholder="任何你想说的话...疼痛是真实存在的，不需要被证明。"
-            defaultValue={viewingDiary.notes || ''}
-            onBlur={(e) => {
-              const val = e.target.value;
-              if (val) updateRecordInfo(viewingDiary.id, 'notes', val);
-            }}
-            style={{
-              width: '100%',
-              height: '80px',
-              padding: '10px',
-              background: '#111',
-              color: '#fff',
-              border: '1px solid #444',
-              borderRadius: '8px',
+              position: 'fixed',
+              zIndex: 500,
+              top: 0,
+              left: 0,
+              width: '100vw',
+              height: '100vh',
+              background: 'rgba(0,0,0,0.95)',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '20px',
               boxSizing: 'border-box',
-              resize: 'vertical'
+              overflow: 'hidden' // 完全隐藏滚动条
             }}
-          />
-        </div>
-      </div>
+            onClick={() => setViewingDiary(null)}
+          >
+            <div
+              style={{
+                width: '100%',
+                maxWidth: '400px',
+                maxHeight: '90vh',
+                overflowY: 'auto', // 保留滚动功能
+                // 隐藏滚动条（Webkit浏览器）
+                scrollbarWidth: 'none', // Firefox
+                msOverflowStyle: 'none', // IE和Edge
+                '&::-webkit-scrollbar': {
+                  display: 'none' // Chrome, Safari, Opera
+                }
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* 原有的图谱图片 */}
+              <img
+                src={viewingDiary.img}
+                style={{ width: '100%', borderRadius: '12px', border: '1px solid #444' }}
+                alt="diary"
+              />
 
-      {/* 操作按钮区 - 优化后的布局 */}
-      <div style={{ 
-        background: 'rgba(255,255,255,0.05)', 
-        padding: '20px', 
-        borderRadius: '12px', 
-        marginTop: '20px', 
-        border: '1px solid #333',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '15px'
-      }}>
-        {/* 分享语境选择器 */}
-        <div style={{ textAlign: 'center' }}>
-          <p style={{ color: '#888', fontSize: '12px', marginBottom: '12px' }}>选择分享语境：</p>
-          <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
-            {['partner', 'work', 'doctor', 'self'].map(tab => (
-              <button
-                key={tab}
-                onClick={(e) => { e.stopPropagation(); setDiaryShareIdentity(tab); }}
-                style={{
-                  flex: 1, padding: '10px 0', fontSize: '12px', borderRadius: '8px', border: 'none', cursor: 'pointer',
-                  background: diaryShareIdentity === tab ? '#d32f2f' : '#222',
-                  color: diaryShareIdentity === tab ? '#fff' : '#888',
-                  minWidth: '60px'
-                }}
-              >
-                {{ partner: '伴侣', work: '请假', doctor: '医生', self: '自愈' }[tab]}
-              </button>
-            ))}
+              {/* ✅ 新增：痛觉元数据徽章行 */}
+              {viewingDiary.meta && (
+                <div style={{
+                  display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '12px'
+                }}>
+                  {/* 颜色色块 */}
+                  {viewingDiary.meta.colorPalette && (
+                    <span style={{
+                      display: 'inline-flex', alignItems: 'center', gap: '5px',
+                      background: 'rgba(255,255,255,0.07)', borderRadius: '12px',
+                      padding: '3px 10px', fontSize: '11px', color: '#ccc'
+                    }}>
+                      <span style={{
+                        width: '10px', height: '10px', borderRadius: '50%',
+                        background: `rgb(${(PALETTES[viewingDiary.meta.colorPalette]?.color || [200, 50, 50]).join(',')})`,
+                        display: 'inline-block'
+                      }} />
+                      {viewingDiary.meta.colorPalette === 'crimson' ? '深红·急性' :
+                        viewingDiary.meta.colorPalette === 'dark' ? '暗灰·钝痛' :
+                          viewingDiary.meta.colorPalette === 'purple' ? '紫·放射' : '冰蓝·发冷'}
+                    </span>
+                  )}
+                  {/* 涂抹强度 */}
+                  {viewingDiary.meta.painScore > 0 && (
+                    <span style={{
+                      background: 'rgba(211,47,47,0.15)', borderRadius: '12px',
+                      padding: '3px 10px', fontSize: '11px', color: '#ffcdd2'
+                    }}>
+                      涂抹 {viewingDiary.meta.painScore} 次
+                    </span>
+                  )}
+                  {/* 部位 */}
+                  {viewingDiary.meta.bodyMode && viewingDiary.meta.bodyMode !== 'none' && (
+                    <span style={{
+                      background: 'rgba(76,175,80,0.12)', borderRadius: '12px',
+                      padding: '3px 10px', fontSize: '11px', color: '#a5d6a7'
+                    }}>
+                      {viewingDiary.meta.bodyMode === 'front' ? '腹部正面' :
+                        viewingDiary.meta.bodyMode === 'back' ? '腰骶背面' : '正背双侧'}
+                    </span>
+                  )}
+                  {/* 主笔触 */}
+                  {viewingDiary.meta.brushCounts && (() => {
+                    const counts = viewingDiary.meta.brushCounts;
+                    const max = Math.max(...Object.values(counts));
+                    if (max === 0) return null;
+                    const top = Object.keys(counts).find(k => counts[k] === max);
+                    return (
+                      <span style={{
+                        background: 'rgba(255,152,0,0.12)', borderRadius: '12px',
+                        padding: '3px 10px', fontSize: '11px', color: '#ffe082'
+                      }}>
+                        主导 {BRUSHES[top]?.icon} {BRUSHES[top]?.label.split(' ')[1]}
+                      </span>
+                    );
+                  })()}
+                </div>
+              )}
+
+              <h3 style={{ color: '#fff', marginTop: '20px', marginBottom: '10px' }}>
+                {viewingDiary.date} {viewingDiary.time}
+                <span style={{
+                  marginLeft: '12px',
+                  color: '#d32f2f',
+                  fontSize: '16px',
+                  background: 'rgba(211, 47, 47, 0.15)',
+                  padding: '4px 12px',
+                  borderRadius: '12px'
+                }}>
+                  {viewingDiary.icon} {viewingDiary.painName}
+                </span>
+              </h3>
+
+              {/* 痛觉通感描述 */}
+              <div style={{
+                background: 'rgba(28,28,28,0.9)',
+                padding: '18px',
+                borderRadius: '12px',
+                marginTop: '10px',
+                border: '1px solid #444'
+              }}>
+                <p style={{ color: '#ccc', fontSize: '14px', lineHeight: '1.6', margin: '0 0 12px 0' }}>
+                  {viewingDiary.content?.analogy}
+                </p>
+                <p style={{ color: '#4caf50', fontSize: '13px', lineHeight: '1.6', margin: 0 }}>
+                  {viewingDiary.content?.selfCare}
+                </p>
+              </div>
+              {/* 用户补充信息 - 自由文本，无数字 */}
+              <div style={{
+                background: 'rgba(28,28,28,0.9)',
+                padding: '18px',
+                borderRadius: '12px',
+                marginTop: '15px',
+                border: '1px solid #444'
+              }}>
+                <h4 style={{ color: '#fff', margin: '0 0 15px 0', fontSize: '14px' }}>
+                  📝 记录你的感受
+                </h4>
+                <p style={{ color: '#888', fontSize: '11px', marginBottom: '15px', fontStyle: 'italic' }}>
+                  「语言在痛苦面前总是匮乏的，但每一种描述都是真实的。」
+                </p>
+
+                {/* 持续时间 - 自由文本输入 */}
+                <div style={{ marginBottom: '15px' }}>
+                  <label style={{ color: '#888', fontSize: '12px', display: 'block', marginBottom: '8px' }}>
+                    ⏱️ 这种感觉持续了...
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="例如：整个下午 / 断断续续几个小时 / 到晚上才缓解"
+                    defaultValue={viewingDiary.duration || ''}
+                    onBlur={(e) => {
+                      const val = e.target.value;
+                      if (val) updateRecordInfo(viewingDiary.id, 'duration', val);
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '10px',
+                      background: '#111',
+                      color: '#fff',
+                      border: '1px solid #444',
+                      borderRadius: '8px',
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                </div>
+
+                {/* 缓解方式 - 自由选择或输入 */}
+                <div style={{ marginBottom: '15px' }}>
+                  <label style={{ color: '#888', fontSize: '12px', display: 'block', marginBottom: '8px' }}>
+                    🌿 什么让你感觉好一些？
+                  </label>
+                  <input
+                    type="text"
+                    list="relief-options"
+                    placeholder="例如：蜷缩起来 / 热敷 / 安静独处..."
+                    defaultValue={viewingDiary.reliefMethod || ''}
+                    onBlur={(e) => {
+                      const val = e.target.value;
+                      if (val) updateRecordInfo(viewingDiary.id, 'reliefMethod', val);
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '10px',
+                      background: '#111',
+                      color: '#fff',
+                      border: '1px solid #444',
+                      borderRadius: '8px',
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                  <datalist id="relief-options">
+                    <option value="蜷缩侧卧，抱紧膝盖" />
+                    <option value="热敷小腹或后腰" />
+                    <option value="安静独处，不被打扰" />
+                    <option value="有人陪伴，握着我的手" />
+                    <option value="听白噪音或轻音乐" />
+                    <option value="喝热水或热饮" />
+                    <option value="垫高臀部平躺" />
+                    <option value="轻轻按摩腹部" />
+                  </datalist>
+                </div>
+
+                {/* 自由备注 */}
+                <div>
+                  <label style={{ color: '#888', fontSize: '12px', display: 'block', marginBottom: '8px' }}>
+                    📓 想记录的其他感受
+                  </label>
+                  <textarea
+                    placeholder="任何你想说的话...疼痛是真实存在的，不需要被证明。"
+                    defaultValue={viewingDiary.notes || ''}
+                    onBlur={(e) => {
+                      const val = e.target.value;
+                      if (val) updateRecordInfo(viewingDiary.id, 'notes', val);
+                    }}
+                    style={{
+                      width: '100%',
+                      height: '80px',
+                      padding: '10px',
+                      background: '#111',
+                      color: '#fff',
+                      border: '1px solid #444',
+                      borderRadius: '8px',
+                      boxSizing: 'border-box',
+                      resize: 'vertical'
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* 操作按钮区 - 优化后的布局 */}
+              <div style={{
+                background: 'rgba(255,255,255,0.05)',
+                padding: '20px',
+                borderRadius: '12px',
+                marginTop: '20px',
+                border: '1px solid #333',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '15px'
+              }}>
+                {/* 分享语境选择器 */}
+                <div style={{ textAlign: 'center' }}>
+                  <p style={{ color: '#888', fontSize: '12px', marginBottom: '12px' }}>选择分享语境：</p>
+                  <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                    {['partner', 'work', 'doctor', 'self'].map(tab => (
+                      <button
+                        key={tab}
+                        onClick={(e) => { e.stopPropagation(); setDiaryShareIdentity(tab); }}
+                        style={{
+                          flex: 1, padding: '10px 0', fontSize: '12px', borderRadius: '8px', border: 'none', cursor: 'pointer',
+                          background: diaryShareIdentity === tab ? '#d32f2f' : '#222',
+                          color: diaryShareIdentity === tab ? '#fff' : '#888',
+                          minWidth: '60px'
+                        }}
+                      >
+                        {{ partner: '伴侣', work: '请假', doctor: '医生', self: '自愈' }[tab]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 底部操作按钮 */}
+                <div style={{ display: 'flex', gap: '12px' }}>
+                  <button
+                    style={{
+                      flex: 1,
+                      padding: '14px',
+                      borderRadius: '25px',
+                      background: '#4caf50',
+                      color: '#fff',
+                      border: 'none',
+                      fontWeight: 'bold',
+                      fontSize: '14px',
+                      cursor: 'pointer'
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShareContent({
+                        ...viewingDiary.content,
+                        identity: diaryShareIdentity,
+                        historyImg: viewingDiary.img,
+                        pain: viewingDiary.painName
+                      });
+                      setShowSharePreview(true);
+                      setViewingDiary(null);
+                    }}
+                  >
+                    📤 分享
+                  </button>
+
+                  <button
+                    style={{
+                      flex: 1,
+                      padding: '14px',
+                      borderRadius: '25px',
+                      background: 'rgba(167, 119, 224, 0.99)',
+                      color: '#fff',
+                      border: 'none',
+                      fontWeight: 'bold',
+                      fontSize: '14px',
+                      cursor: 'pointer'
+                    }}
+                    onClick={() => {
+                      setImgUrl(viewingDiary.img);
+                      setShowPostModal(true);
+                      setViewingDiary(null);
+                    }}
+                  >
+                    🌐 发布
+                  </button>
+                </div>
+
+                <button
+                  style={{
+                    width: '100%',
+                    padding: '14px',
+                    borderRadius: '25px',
+                    background: 'rgba(255,255,255,0.1)',
+                    color: '#fff',
+                    border: 'none',
+                    fontWeight: 'bold',
+                    fontSize: '14px',
+                    cursor: 'pointer'
+                  }}
+                  onClick={() => setViewingDiary(null)}
+                >
+                  关闭
+                </button>
+              </div>
+            </div>
           </div>
-        </div>
-
-        {/* 底部操作按钮 */}
-        <div style={{ display: 'flex', gap: '12px' }}>
-          <button
-            style={{
-              flex: 1,
-              padding: '14px',
-              borderRadius: '25px',
-              background: '#4caf50',
-              color: '#fff',
-              border: 'none',
-              fontWeight: 'bold',
-              fontSize: '14px',
-              cursor: 'pointer'
-            }}
-            onClick={(e) => {
-              e.stopPropagation();
-              setShareContent({
-                ...viewingDiary.content,
-                identity: diaryShareIdentity,
-                historyImg: viewingDiary.img,
-                pain: viewingDiary.painName
-              });
-              setShowSharePreview(true);
-              setViewingDiary(null);
-            }}
-          >
-            📤 分享
-          </button>
-
-          <button 
-            style={{
-              flex: 1,
-              padding: '14px',
-              borderRadius: '25px',
-              background: 'rgba(167, 119, 224, 0.99)',
-              color: '#fff',
-              border: 'none',
-              fontWeight: 'bold',
-              fontSize: '14px',
-              cursor: 'pointer'
-            }} 
-            onClick={() => { 
-              setImgUrl(viewingDiary.img); 
-              setShowPostModal(true); 
-              setViewingDiary(null); 
-            }}
-          >
-            🌐 发布
-          </button>
-        </div>
-
-        <button
-          style={{
-            width: '100%',
-            padding: '14px',
-            borderRadius: '25px',
-            background: 'rgba(255,255,255,0.1)',
-            color: '#fff',
-            border: 'none',
-            fontWeight: 'bold',
-            fontSize: '14px',
-            cursor: 'pointer'
-          }}
-          onClick={() => setViewingDiary(null)}
-        >
-          关闭
-        </button>
-      </div>
-    </div>
-  </div>
-)}
+        )}
 
 
         {/* 帖子详情弹窗 (Modal) */}
