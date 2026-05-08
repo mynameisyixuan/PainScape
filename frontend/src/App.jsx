@@ -661,14 +661,13 @@ function App() {
 
   // === 2.generateContent ===
   const generateContent = (overrideType) => {
-    // 0. 基础判定
-    const hasLlm = llmData?.status === 'success';
+    const activeLlm = currentLlmData || llmData;
+    const hasLlm = activeLlm?.status === 'success';
+    
     const dominant = overrideType || getDominantPain();
-    const painNameMap = { twist: "严重绞痛", pierce: "神经性刺痛", heavy: "严重坠胀痛", wave: "弥漫性胀痛", scrape: "撕裂样锐痛" };
+    const painNameMap = { twist: "严重绞痛", pierce: "荆棘刺痛", heavy: "坠胀重压", wave: "弥漫胀痛", scrape: "撕裂刮痛" };
     const painName = painNameMap[dominant];
-    const safePainkiller = (!medicalBackground.allergies || medicalBackground.allergies === 'none') ? "布洛芬" : "对乙酰氨基酚";
-
-    // 1. TEXTS 字典 (保持不变)
+    // TEXTS 字典
     const TEXTS = {
       twist: { analogy: "想象把一条湿毛巾用力拧干...", med: "下腹部持续性绞痛，建议排查子宫痉挛。", selfCare: "✨ 尝试【婴儿蜷缩式】侧卧..." },
       pierce: { analogy: "想象不打麻药进行根管治疗...", med: "锐痛（Sharp Pain），建议排查神经性疼痛。", selfCare: "✨ 刺痛发作易引发冷汗..." },
@@ -676,26 +675,24 @@ function App() {
       wave: { analogy: "像肚子里有个气球在不断充气...", med: "弥漫性胀痛，建议排查水肿或肠胀气。", selfCare: "✨ 穿着极度宽松的衣物..." },
       scrape: { analogy: "像一颗未成熟的果实被强行剥皮...", med: "强烈的撕裂样锐痛，建议排查组织粘连。", selfCare: "✨ 这是最耗费体力的痛感..." }
     };
+    // 医疗主诉逻辑
+    let finalMedComplaint = hasLlm ? activeLlm.med : (TEXTS[dominant]?.med || "主诉：持续性痛经。");
 
-    // 2. 医疗主诉 (优先大模型)
-    let finalMedComplaint = hasLlm ? llmData.med : TEXTS[dominant].med;
-
-    // 3. 智能匹配检查须知 (增加“继发性”触发超声)
+    // 匹配检查须知
     let examPreps = [];
     const EXAM_KEYWORDS = {
-      "盆腔超声": ["盆腔超声", "腹部超声", "B超", "超声检查", "继发性", "子宫内膜异位", "腺肌症"],
+      "盆腔超声": ["盆腔超声", "腹部超声", "B超", "继发性", "子宫内膜异位"],
       "经阴道超声": ["经阴道超声", "阴超"],
-      "激素六项": ["激素六项", "性激素", "内分泌"],
+      "激素六项": ["激素六项", "性激素"],
       "腹腔镜": ["腹腔镜", "微创手术"]
     };
-
-    Object.keys(EXAM_KEYWORDS).forEach(standardName => {
-      if (EXAM_KEYWORDS[standardName].some(alias => finalMedComplaint.includes(alias))) {
-        examPreps.push(`📝【${standardName}须知】: ${EXAM_DATABASE[standardName].prep}`);
+    Object.keys(EXAM_KEYWORDS).forEach(std => {
+      if (EXAM_KEYWORDS[std].some(a => finalMedComplaint.includes(a))) {
+        examPreps.push(`📝【${std}须知】: ${EXAM_DATABASE[std]?.prep}`);
       }
     });
 
-    // 4. 病史辅助信息
+    // 病史辅助信息
     let auxiliaryInfo = [];
     const diagMap = { 'endometriosis': '子宫内膜异位症', 'adenomyosis': '子宫腺肌症', 'pcos': '多囊卵巢综合征' };
     if (medicalBackground.diagnosed && medicalBackground.diagnosed !== 'none') {
@@ -737,12 +734,13 @@ function App() {
       analogy: hasLlm ? llmData.analogy : TEXTS[dominant].analogy,
       med_complaint: finalMedComplaint,
       med_reference: finalMedReference,
+      med_profile: `PainScape 痛觉成像显示强烈的 ${painName} 特征。`, 
       selfCare: finalSelfCare,
       workText: hasLlm ? llmData.work : workTemplate,
       action: actionParts.join("\n") // 这里统一使用本地生成的 Checklist，因为大模型生成的 action 通常不够干货
     };
   };
-  // ✅ 可编辑内容辅助函数
+  // 可编辑内容辅助函数
   const getEditedOrDefault = (key, defaultVal) =>
     editedContents[key] !== undefined ? editedContents[key] : defaultVal;
 
@@ -873,45 +871,45 @@ function App() {
         const response = await fetch('http://localhost:8000/api/generate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
+           body: JSON.stringify({ 
+             dominantPain: dominant, 
+             userPref: userPrefs.join(','),
+             medicalBackground, 
+             painScore: Object.values(brushCounts.current).reduce((a,b)=>a+b,0) 
+          }),
           signal: controller.signal
         });
         clearTimeout(timeoutId);
-
         if (response.ok) {
-          const data = await response.json();
-          setLlmData(data);
-        } else {
-          setLlmData(null); // 状态码不对也走本地模式
+          aiResult = await response.json();
+          setLlmData(aiResult); // 给 Result 页面用
         }
       } catch (err) {
         console.warn("后端不可用，转入本地模式", err);
         setLlmData(null);
       }
 
-      // 3. 记录历史 (使用全局 PAIN_NAME_MAP，修复未定义报错)
+      // 【核心修复】：生成 content 时，把刚刚拿到的 aiResult 传进去
+      // 这样存入历史记录的数据就是完整的，不会有 undefined
+      const finalContent = generateContent(dominant, aiResult);
+
       const newRecord = {
         id: Date.now(),
         date: new Date().toLocaleDateString(),
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         img: url,
         type: dominant,
-        painName: PAIN_NAME_MAP[dominant], // 使用全局变量
-        content: generateContent(dominant),
-        meta: {
-          brushCounts: { ...brushCounts.current },
-          colorPalette: activeColor,
-          bodyMode: bodyMode,
-          painScore: payload.painScore,
-        }
+        painName: PAIN_NAME_MAP[dominant],
+        content: finalContent, // 存入带有 med_profile 的完整对象
+        meta: { brushCounts: { ...brushCounts.current }, bodyMode }
       };
 
       const newHistory = [newRecord, ...history].slice(0, 10);
       setHistory(newHistory);
       localStorage.setItem('painscape_history', JSON.stringify(newHistory));
 
-    } catch (criticalError) {
-      console.error("生成过程发生严重错误:", criticalError);
+    } catch (e) {
+      console.error(e);
     } finally {
       // 4. 无论如何，关闭 Loading 并跳转
       setIsLoading(false);
