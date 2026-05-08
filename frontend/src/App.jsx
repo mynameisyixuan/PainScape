@@ -20,7 +20,13 @@ const BRUSHES = {
   scrape: { label: "🔪 刮/撕", icon: "🔪" },
   eraser: { label: "🧽 橡皮", icon: "🧽" }
 };
-
+const PAIN_NAME_MAP = {
+  twist: "绞痛",
+  pierce: "刺痛",
+  heavy: "坠痛",
+  wave: "胀痛",
+  scrape: "撕裂痛"
+};
 const PALETTES = {
   crimson: { color: [220, 20, 60], label: "🩸" },
   dark: { color: [180, 180, 180], label: "🌑" },
@@ -539,6 +545,8 @@ function App() {
     } catch (e) {
       console.error("生成分享卡片失败:", e);
       alert("生成分享卡片失败，可能是图片加载超时。请尝试直接截图分享。");
+    }finally {
+      setIsLoading(false); // 【关键修复】：确保分享结束后 Loading 消失
     }
   };
   // ── 辅助函数 ──
@@ -836,93 +844,65 @@ function App() {
   };
   const handleFinish = async () => {
     if (!p5Ref.current) return;
-    setIsLoading(true);
-
-    // 用 captureFullCanvas 获取含动态粒子的高清图谱，而非压缩的 canvas 截图
-    const hasFront = !isSideEmpty('front');
-    const hasBack = !isSideEmpty('back');
-
-    let url = null;
-    try {
-      if (hasFront || hasBack) {
-        const side = hasFront ? 'front' : 'back';
-        const fullCvs = captureFullCanvas(side);
-        url = fullCvs.toDataURL('image/jpeg', 0.85);
-      }
-    } catch (e) {
-      // fallback 到主 canvas
-      url = document.querySelector('canvas').toDataURL('image/jpeg', 0.5);
-    }
-    if (!url) url = document.querySelector('canvas').toDataURL('image/jpeg', 0.5);
-    setImgUrl(url);
-
-    const dominant = getDominantPain();
-    const content = generateContent(dominant);
-    const newRecord = {
-      id: Date.now(),
-      date: new Date().toLocaleDateString(), // 如 "2024/5/11"
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      img: url,
-      type: dominant,
-      content: content, // 【重要】：把 AI 生成的建议也存进这条日记
-      painName: painName[dominant],
-      icon: BRUSHES[dominant].icon
-    };
-    const payload = {
-      dominantPain: dominant,
-      userPref: userPrefs.join(','),
-      painScore: Object.values(brushCounts.current).reduce((sum, v) => sum + v, 0),
-      spatialMap: calculateSpatialMap(),
-      intensityProfile: calculateIntensity(),
-      colorPalette: activeColor,
-      bodyMode: bodyMode,
-      medicalBackground: medicalBackground,
-      tonePreference: tonePreference,
-    };
+    setIsLoading(true); // 开始加载
 
     try {
-      console.log('📤 正在请求后端大模型...');
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000);
+      // 1. 获取图片
+      const canvas = document.querySelector("canvas");
+      const url = canvas.toDataURL("image/jpeg", 0.5);
+      setImgUrl(url);
 
-      const response = await fetch('https://painscape-api.onrender.com/api/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
+      const dominant = getDominantPain();
+      const payload = {
+        dominantPain: dominant,
+        userPref: userPrefs.join(','),
+        painScore: Object.values(brushCounts.current).reduce((sum, v) => sum + v, 0),
+        spatialMap: calculateSpatialMap(),
+        intensityProfile: calculateIntensity(),
+        colorPalette: activeColor,
+        bodyMode: bodyMode,
+        medicalBackground: medicalBackground,
+        tonePreference: tonePreference,
+      };
 
-      clearTimeout(timeoutId);
+      // 2. 异步请求后端 (带 10 秒超时，不要设置 30 秒太久了)
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10秒超时
 
-      if (response.ok) {
-        const data = await response.json();
-        if (data.status === 'success') {
-          console.log('✅ 大模型转译成功：', data);
+        const response = await fetch('http://localhost:8000/api/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+
+        if (response.ok) {
+          const data = await response.json();
           setLlmData(data);
+        } else {
+          setLlmData(null); // 状态码不对也走本地模式
         }
+      } catch (err) {
+        console.warn("后端不可用，转入本地模式", err);
+        setLlmData(null);
       }
-    } catch (error) {
-      if (error.name === 'AbortError') {
-        console.warn('⚠️ 后端请求超时，已自动转入本地离线模式');
-      } else {
-        console.warn('⚠️ 后端连接失败，已转入本地离线模式', error);
-      }
-      setLlmData(null);
-    } finally {
+
+      // 3. 记录历史 (使用全局 PAIN_NAME_MAP，修复未定义报错)
       const newRecord = {
         id: Date.now(),
         date: new Date().toLocaleDateString(),
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         img: url,
         type: dominant,
-        content: generateContent(dominant, null, null),
-        // ✅ 新增：持久化绘图元数据，供历史页展示痛觉特征
+        painName: PAIN_NAME_MAP[dominant], // 使用全局变量
+        content: generateContent(dominant),
         meta: {
           brushCounts: { ...brushCounts.current },
           colorPalette: activeColor,
           bodyMode: bodyMode,
           painScore: payload.painScore,
-          hasFront,
-          hasBack,
         }
       };
 
@@ -930,10 +910,15 @@ function App() {
       setHistory(newHistory);
       localStorage.setItem('painscape_history', JSON.stringify(newHistory));
 
+    } catch (criticalError) {
+      console.error("生成过程发生严重错误:", criticalError);
+    } finally {
+      // 4. 无论如何，关闭 Loading 并跳转
+      setIsLoading(false);
+      setPage("result");
+      // 重置绘图数据
       particlePositions.current = [];
       speedHistory.current = [];
-      setIsLoading(false); // 【关键】：无论成功失败，都必须关掉 Loading
-      setPage("result");   // 强制跳转，防止黑屏
     }
   };
   const updateRecordInfo = (recordId, field, value) => {
