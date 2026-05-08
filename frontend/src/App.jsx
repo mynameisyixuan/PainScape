@@ -888,8 +888,7 @@ function App() {
       const response = await fetch('https://painscape-api.onrender.com/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-        signal: controller.signal
+        body: JSON.stringify(payload)
       });
 
       clearTimeout(timeoutId);
