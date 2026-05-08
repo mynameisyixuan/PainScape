@@ -900,8 +900,8 @@ function App() {
         tonePreference: tonePreference,
       };
 
-      // API 地址改用环境变量，部署时配置
-      const API_BASE = process.env.REACT_APP_API_URL || process.env.VITE_API_URL || 'http://localhost:8000';
+      // API 地址
+      const API_BASE = 'https://painscape-api.onrender.com';
 
       try {
         const controller = new AbortController();
