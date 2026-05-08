@@ -660,25 +660,51 @@ function App() {
   };
 
   // === 2.generateContent ===
-  const generateContent = (overrideType) => {
-    const activeLlm = currentLlmData || llmData;
+  // === 修复后的 generateContent ===
+  const generateContent = (overrideType, externalLlm = null) => {
+    // currentLlmData 不存在，改为优先使用传入的 externalLlm，其次用 state 中的 llmData
+    const activeLlm = externalLlm || llmData;
     const hasLlm = activeLlm?.status === 'success';
-
     const dominant = overrideType || getDominantPain();
-    const painNameMap = { twist: "严重绞痛", pierce: "荆棘刺痛", heavy: "坠胀重压", wave: "弥漫胀痛", scrape: "撕裂刮痛" };
-    const painName = painNameMap[dominant];
-    // TEXTS 字典
-    const TEXTS = {
-      twist: { analogy: "想象把一条湿毛巾用力拧干...", med: "下腹部持续性绞痛，建议排查子宫痉挛。", selfCare: "✨ 尝试【婴儿蜷缩式】侧卧..." },
-      pierce: { analogy: "想象不打麻药进行根管治疗...", med: "锐痛（Sharp Pain），建议排查神经性疼痛。", selfCare: "✨ 刺痛发作易引发冷汗..." },
-      heavy: { analogy: "像在腹部绑了5公斤沙袋...", med: "下腹部严重坠胀感，建议排查盆腔充血。", selfCare: "✨ 尝试【臀部垫高平躺】..." },
-      wave: { analogy: "像肚子里有个气球在不断充气...", med: "弥漫性胀痛，建议排查水肿或肠胀气。", selfCare: "✨ 穿着极度宽松的衣物..." },
-      scrape: { analogy: "像一颗未成熟的果实被强行剥皮...", med: "强烈的撕裂样锐痛，建议排查组织粘连。", selfCare: "✨ 这是最耗费体力的痛感..." }
+    const painNameMap = {
+      twist: "严重绞痛",
+      pierce: "荆棘刺痛",
+      heavy: "坠胀重压",
+      wave: "弥漫胀痛",
+      scrape: "撕裂刮痛"
     };
-    // 医疗主诉逻辑
+    const painName = painNameMap[dominant];
+
+    const TEXTS = {
+      twist: {
+        analogy: "想象把一条湿毛巾用力拧干...",
+        med: "下腹部持续性绞痛，建议排查子宫痉挛。",
+        selfCare: "✨ 尝试【婴儿蜷缩式】侧卧..."
+      },
+      pierce: {
+        analogy: "想象不打麻药进行根管治疗...",
+        med: "锐痛（Sharp Pain），建议排查神经性疼痛。",
+        selfCare: "✨ 刺痛发作易引发冷汗..."
+      },
+      heavy: {
+        analogy: "像在腹部绑了5公斤沙袋...",
+        med: "下腹部严重坠胀感，建议排查盆腔充血。",
+        selfCare: "✨ 尝试【臀部垫高平躺】..."
+      },
+      wave: {
+        analogy: "像肚子里有个气球在不断充气...",
+        med: "弥漫性胀痛，建议排查水肿或肠胀气。",
+        selfCare: "✨ 穿着极度宽松的衣物..."
+      },
+      scrape: {
+        analogy: "像一颗未成熟的果实被强行剥皮...",
+        med: "强烈的撕裂样锐痛，建议排查组织粘连。",
+        selfCare: "✨ 这是最耗费体力的痛感..."
+      }
+    };
+
     let finalMedComplaint = hasLlm ? activeLlm.med : (TEXTS[dominant]?.med || "主诉：持续性痛经。");
 
-    // 匹配检查须知
     let examPreps = [];
     const EXAM_KEYWORDS = {
       "盆腔超声": ["盆腔超声", "腹部超声", "B超", "继发性", "子宫内膜异位"],
@@ -692,9 +718,12 @@ function App() {
       }
     });
 
-    // 病史辅助信息
     let auxiliaryInfo = [];
-    const diagMap = { 'endometriosis': '子宫内膜异位症', 'adenomyosis': '子宫腺肌症', 'pcos': '多囊卵巢综合征' };
+    const diagMap = {
+      'endometriosis': '子宫内膜异位症',
+      'adenomyosis': '子宫腺肌症',
+      'pcos': '多囊卵巢综合征'
+    };
     if (medicalBackground.diagnosed && medicalBackground.diagnosed !== 'none') {
       auxiliaryInfo.push(`• 既往诊断：患者曾确诊 [${diagMap[medicalBackground.diagnosed] || medicalBackground.diagnosed}]。`);
     }
@@ -702,15 +731,22 @@ function App() {
       auxiliaryInfo.push(`• 药物过敏：对 [${medicalBackground.allergies}] 过敏。`);
     }
 
-    // 5. 整合参考清单 (med_reference)
     let finalMedReference = auxiliaryInfo.join('\n');
     if (examPreps.length > 0) {
       finalMedReference += (finalMedReference ? '\n' : '') + examPreps.join('\n');
     } else if (!finalMedReference) {
       finalMedReference = "• 建议向医生详细描述本次记录的痛觉质地与发作时间。";
     }
+    // 根据过敏史智能推荐止痛药
+    let safePainkiller = "布洛芬";
+    if (medicalBackground.allergies === 'ibuprofen') {
+      safePainkiller = "对乙酰氨基酚（泰诺）";
+    } else if (medicalBackground.allergies === 'nsaids') {
+      safePainkiller = "对乙酰氨基酚（请遵医嘱）";
+    } else if (medicalBackground.allergies === 'aspirin') {
+      safePainkiller = "布洛芬（避免阿司匹林）";
+    }
 
-    // 6. 伴侣指令 (action)
     let actionParts = [];
     if (userPrefs.includes('alone')) {
       actionParts.push(`☑️ 帮她倒杯温水，备好${safePainkiller}。`);
@@ -720,26 +756,26 @@ function App() {
       if (userPrefs.includes('comfort')) actionParts.push("☑️ 坐在旁边握着她的手，不用说话，给予安全感。");
     }
 
-    // 7. 职场请假模板
     const workTemplate = `领导/HR 您好：本人今日突发严重原发性痛经（${painName}），伴随体力透支与冷汗。目前状态已无法维持正常专注度，特申请今日居家休息。紧急事务已交接。感谢批准。`;
 
-    // 8. 语气偏好处理自愈
-    let finalSelfCare = hasLlm ? llmData.selfCare : TEXTS[dominant].selfCare;
+    let finalSelfCare = hasLlm ? activeLlm.selfCare : TEXTS[dominant].selfCare;
     if (tonePreference === 'gentle' && !hasLlm) {
       finalSelfCare += "\n\n✨ 允许自己今天做一个废物，好好休息。";
     }
 
     return {
       pain: painName,
-      analogy: hasLlm ? llmData.analogy : TEXTS[dominant].analogy,
+      analogy: hasLlm ? activeLlm.analogy : TEXTS[dominant].analogy,
       med_complaint: finalMedComplaint,
       med_reference: finalMedReference,
       med_profile: `PainScape 痛觉成像显示强烈的 ${painName} 特征。`,
       selfCare: finalSelfCare,
-      workText: hasLlm ? llmData.work : workTemplate,
-      action: actionParts.join("\n") // 这里统一使用本地生成的 Checklist，因为大模型生成的 action 通常不够干货
+      workText: hasLlm ? activeLlm.work : workTemplate,
+      action: actionParts.join("\n"),
+      med: finalMedComplaint  // 补充：Result 页面医生 tab 引用了 content.med
     };
   };
+
   // 可编辑内容辅助函数
   const getEditedOrDefault = (key, defaultVal) =>
     editedContents[key] !== undefined ? editedContents[key] : defaultVal;
@@ -842,20 +878,16 @@ function App() {
   };
   const handleFinish = async () => {
     if (!p5Ref.current) return;
-    setIsLoading(true); // 开始加载
-    const canvas = document.querySelector("canvas");
-    const url = canvas.toDataURL("image/jpeg", 0.5);
-    setImgUrl(url);
-    const dominant = getDominantPain();
+    setIsLoading(true);
 
-    let aiResult = null;
     try {
-      // 1. 获取图片
+      // 去除 try 块内重复的 const canvas/url/dominant 声明
       const canvas = document.querySelector("canvas");
       const url = canvas.toDataURL("image/jpeg", 0.5);
       setImgUrl(url);
-
       const dominant = getDominantPain();
+      let aiResult = null;
+
       const payload = {
         dominantPain: dominant,
         userPref: userPrefs.join(','),
@@ -868,12 +900,13 @@ function App() {
         tonePreference: tonePreference,
       };
 
-      // 2. 异步请求后端 (带 10 秒超时，不要设置 30 秒太久了)
+      // API 地址改用环境变量，部署时配置
+      const API_BASE = process.env.REACT_APP_API_URL || process.env.VITE_API_URL || 'http://localhost:8000';
+
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10秒超时
-
-        const response = await fetch('http://localhost:8000/api/generate', {
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+        const response = await fetch(`${API_BASE}/api/generate`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -887,15 +920,16 @@ function App() {
         clearTimeout(timeoutId);
         if (response.ok) {
           aiResult = await response.json();
-          setLlmData(aiResult); // 给 Result 页面用
+          setLlmData(aiResult);
         }
       } catch (err) {
         console.warn("后端不可用，转入本地模式", err);
         setLlmData(null);
       }
 
-      // 【核心修复】：生成 content 时，把刚刚拿到的 aiResult 传进去
+      // 将 aiResult 正确传入 generateContent
       const finalContent = generateContent(dominant, aiResult);
+
       const newRecord = {
         id: Date.now(),
         date: new Date().toLocaleDateString(),
@@ -903,21 +937,23 @@ function App() {
         img: url,
         type: dominant,
         painName: PAIN_NAME_MAP[dominant],
-        content: finalContent, // 存入带有 med_profile 的完整对象
-        meta: { brushCounts: { ...brushCounts.current }, bodyMode }
+        content: finalContent,
+        meta: {
+          brushCounts: { ...brushCounts.current },
+          bodyMode,
+          colorPalette: activeColor,
+          painScore: Object.values(brushCounts.current).reduce((a, b) => a + b, 0)
+        }
       };
 
       const newHistory = [newRecord, ...history].slice(0, 10);
       setHistory(newHistory);
       localStorage.setItem('painscape_history', JSON.stringify(newHistory));
-
     } catch (e) {
-      console.error(e);
+      console.error("handleFinish 出错:", e);
     } finally {
-      // 关闭 Loading 并跳转
       setIsLoading(false);
       setPage("result");
-      // 重置绘图数据
       particlePositions.current = [];
       speedHistory.current = [];
     }
@@ -1120,131 +1156,142 @@ function App() {
 
         {/* === Result 结果页面 === */}
         {page === "result" && (() => {
-          const content = generateContent();
-          return (
-            <div style={{ pointerEvents: 'auto', position: 'absolute', top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 20, background: 'rgba(10,10,10,0.95)', backdropFilter: 'blur(8px)', padding: '20px', overflowY: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          try {
+            const content = generateContent();
+            return (
+              <div style={{ pointerEvents: 'auto', position: 'absolute', top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 20, background: 'rgba(10,10,10,0.95)', backdropFilter: 'blur(8px)', padding: '20px', overflowY: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
 
-              <img src={imgUrl} style={{ width: '60%', maxWidth: '250px', marginTop: '20px', borderRadius: '12px', border: '2px solid #444' }} alt="pain" />
+                <img src={imgUrl} style={{ width: '60%', maxWidth: '250px', marginTop: '20px', borderRadius: '12px', border: '2px solid #444' }} alt="pain" />
 
-              <div style={{ display: 'flex', gap: '10px', margin: '20px 0', width: '100%', maxWidth: '350px' }}>
-                {['partner', 'work', 'doctor', 'self'].map(tab => (
-                  <button key={tab} style={{ flex: 1, padding: '10px 0', background: identity === tab ? '#444' : 'rgba(30,30,30,0.8)', color: identity === tab ? '#fff' : '#888', border: '1px solid #444', borderRadius: '8px', fontSize: '13px', cursor: 'pointer' }} onClick={() => setIdentity(tab)}>
-                    {{ partner: '伴侣', work: '请假', doctor: '医生', self: '自愈' }[tab]}
-                  </button>
-                ))}
-              </div>
-
-              <div style={{ background: 'rgba(28,28,28,0.9)', padding: '20px', borderRadius: '12px', width: '100%', maxWidth: '350px', border: '1px solid #444', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' }}>
-                {/* === 伴侣 tab === */}
-                {identity === 'partner' && (
-                  <>
-                    <h3 style={{ color: '#fff', margin: '0 0 15px 0' }}>通感说明书</h3>
-                    <div style={{ background: 'rgba(211,47,47,0.1)', padding: '12px', borderRadius: '8px', borderLeft: '3px solid #d32f2f' }}>
-                      <p style={{ color: '#ffcdd2', fontSize: '13px', margin: '0 0 6px 0', lineHeight: '1.5' }}>
-                        她正在经历强烈的<strong>{content.pain}</strong>。
-                      </p>
-                      {/* ✅ 可编辑：通感比喻 */}
-                      <EditableBlock fieldKey="analogy" defaultValue={content.analogy} color="#ffcdd2" />
-                    </div>
-                    <div style={{ marginTop: '20px' }}>
-                      <strong style={{ color: '#fff', fontSize: '14px' }}>💡 请立刻执行以下操作：</strong>
-                      {/* ✅ 可编辑：伴侣实操指令 */}
-                      <EditableBlock fieldKey="action" defaultValue={content.action} color="#ccc" style={{ marginTop: '10px' }} />
-                    </div>
-                    <button
-                      onClick={() => handleCopy(getEditedOrDefault('action', content.action))}
-                      style={{ marginTop: '15px', width: '100%', padding: '10px', background: 'transparent', border: '1px dashed #d32f2f', color: '#ffcdd2', borderRadius: '8px', cursor: 'pointer' }}
-                    >
-                      📋 复制实操指令
+                <div style={{ display: 'flex', gap: '10px', margin: '20px 0', width: '100%', maxWidth: '350px' }}>
+                  {['partner', 'work', 'doctor', 'self'].map(tab => (
+                    <button key={tab} style={{ flex: 1, padding: '10px 0', background: identity === tab ? '#444' : 'rgba(30,30,30,0.8)', color: identity === tab ? '#fff' : '#888', border: '1px solid #444', borderRadius: '8px', fontSize: '13px', cursor: 'pointer' }} onClick={() => setIdentity(tab)}>
+                      {{ partner: '伴侣', work: '请假', doctor: '医生', self: '自愈' }[tab]}
                     </button>
-                  </>
-                )}
+                  ))}
+                </div>
 
-                {/* === 请假 tab === */}
-                {identity === 'work' && (
-                  <>
-                    <h3 style={{ color: '#ff9800', margin: '0 0 15px 0' }}>高情商请假模板</h3>
-                    <p style={{ color: '#888', fontSize: '12px', marginBottom: '10px' }}>客观描述生理状况，不卑不亢，并留出交接空间。</p>
-                    <div style={{ background: 'rgba(255,152,0,0.05)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(255,152,0,0.3)' }}>
-                      {/* ✅ 可编辑：请假模板 */}
-                      <EditableBlock fieldKey="workText" defaultValue={content.workText} color="#ccc" />
-                    </div>
-                    <button
-                      onClick={() => handleCopy(getEditedOrDefault('workText', content.workText))}
-                      style={{ marginTop: '15px', width: '100%', padding: '10px', background: 'transparent', border: '1px dashed #ff9800', color: '#ffcc80', borderRadius: '8px', cursor: 'pointer' }}
-                    >
-                      📋 复制请假模板
-                    </button>
-                  </>
-                )}
-
-                {/* === 医生 tab === */}
-                {identity === 'doctor' && (
-                  <>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #333', paddingBottom: '10px', marginBottom: '15px' }}>
-                      <h3 style={{ color: '#2196f3', margin: 0 }}>医疗辅助报告</h3>
-                      <span style={{ color: '#666', fontSize: '10px', background: '#111', padding: '2px 8px', borderRadius: '10px' }}>算法生成 · 仅供参考</span>
-                    </div>
-                    <div style={{ marginBottom: '15px' }}>
-                      <h4 style={{ color: '#90caf9', margin: '0 0 5px 0', fontSize: '13px' }}>🩺 临床诊断建议</h4>
-                      {/* ✅ 可编辑：医疗主诉 */}
-                      <EditableBlock fieldKey="med_complaint" defaultValue={content.med_complaint} color="#fff" />
-                    </div>
-                    {/* 【新增】：针对性检查提醒框 */}
-                    {getExamReminders(content.med).map(exam => (
-                      <div key={exam} style={{ marginTop: '15px', padding: '12px', background: 'rgba(33, 150, 243, 0.1)', border: '1px solid rgba(33,150,243,0.3)', borderRadius: '10px' }}>
-                        <p style={{ color: '#90caf9', fontSize: '13px', fontWeight: 'bold', margin: '0 0 5px 0' }}>💡 患者检查须知：{exam}</p>
-                        <p style={{ color: '#aaa', fontSize: '12px', margin: 0 }}><strong>准备：</strong>{EXAM_DATABASE[exam].prep}</p>
+                <div style={{ background: 'rgba(28,28,28,0.9)', padding: '20px', borderRadius: '12px', width: '100%', maxWidth: '350px', border: '1px solid #444', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' }}>
+                  {/* === 伴侣 tab === */}
+                  {identity === 'partner' && (
+                    <>
+                      <h3 style={{ color: '#fff', margin: '0 0 15px 0' }}>通感说明书</h3>
+                      <div style={{ background: 'rgba(211,47,47,0.1)', padding: '12px', borderRadius: '8px', borderLeft: '3px solid #d32f2f' }}>
+                        <p style={{ color: '#ffcdd2', fontSize: '13px', margin: '0 0 6px 0', lineHeight: '1.5' }}>
+                          她正在经历强烈的<strong>{content.pain}</strong>。
+                        </p>
+                        {/* ✅ 可编辑：通感比喻 */}
+                        <EditableBlock fieldKey="analogy" defaultValue={content.analogy} color="#ffcdd2" />
                       </div>
-                    ))}
-                    <div style={{ marginBottom: '15px', padding: '10px', background: 'rgba(33,150,243,0.08)', borderLeft: '3px solid #2196f3', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <img src={imgUrl} style={{ width: '30px', height: '30px', borderRadius: '4px', objectFit: 'cover' }} alt="thumb" />
-                      <p style={{ color: '#90caf9', fontSize: '12px', margin: 0 }}>本次多维痛觉图谱已附在报告后方，可向接诊医生展示。</p>
-                    </div>
-                    <div style={{ padding: '15px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid #333' }}>
-                      <h4 style={{ color: '#e0e0e0', fontSize: '13px', margin: '0 0 10px 0' }}>📋 供您与医生讨论参考：</h4>
-                      {/* ✅ 可编辑：诊疗参考清单 */}
-                      <EditableBlock fieldKey="med_reference" defaultValue={content.med_reference} color="#aaa" />
-                    </div>
-                    <button
-                      onClick={() => handleCopy(
-                        `主诉：${getEditedOrDefault('med_complaint', content.med_complaint)}\n\n参考清单：\n${getEditedOrDefault('med_reference', content.med_reference)}`
-                      )}
-                      style={{ marginTop: '15px', width: '100%', padding: '10px', background: 'transparent', border: '1px dashed #2196f3', color: '#90caf9', borderRadius: '8px', cursor: 'pointer' }}
-                    >
-                      📋 复制完整报告
-                    </button>
-                  </>
-                )}
+                      <div style={{ marginTop: '20px' }}>
+                        <strong style={{ color: '#fff', fontSize: '14px' }}>💡 请立刻执行以下操作：</strong>
+                        {/* ✅ 可编辑：伴侣实操指令 */}
+                        <EditableBlock fieldKey="action" defaultValue={content.action} color="#ccc" style={{ marginTop: '10px' }} />
+                      </div>
+                      <button
+                        onClick={() => handleCopy(getEditedOrDefault('action', content.action))}
+                        style={{ marginTop: '15px', width: '100%', padding: '10px', background: 'transparent', border: '1px dashed #d32f2f', color: '#ffcdd2', borderRadius: '8px', cursor: 'pointer' }}
+                      >
+                        📋 复制实操指令
+                      </button>
+                    </>
+                  )}
 
-                {/* === 自愈 tab === */}
-                {identity === 'self' && (
-                  <>
-                    <h3 style={{ color: '#9c27b0', margin: '0 0 15px 0' }}>自愈与社群互助</h3>
-                    <p style={{ color: '#ccc', fontSize: '13px', lineHeight: '1.5', marginBottom: '15px' }}>
-                      亲爱的，你画出了你的风暴。痛不是你的错，允许自己今天做一个废物，好好休息吧。
-                    </p>
-                    <div style={{ background: 'rgba(156,39,176,0.1)', padding: '12px', borderRadius: '8px', borderLeft: '3px solid #9c27b0' }}>
-                      {/* ✅ 可编辑：自愈建议 */}
-                      <EditableBlock fieldKey="selfCare" defaultValue={content.selfCare} color="#e1bee7" />
-                    </div>
-                    <button
-                      onClick={() => handleCopy(getEditedOrDefault('selfCare', content.selfCare))}
-                      style={{ marginTop: '15px', width: '100%', padding: '10px', background: 'transparent', border: '1px dashed #9c27b0', color: '#e1bee7', borderRadius: '8px', cursor: 'pointer' }}
-                    >
-                      📋 复制建议保存
-                    </button>
-                  </>
-                )}
-              </div>
+                  {/* === 请假 tab === */}
+                  {identity === 'work' && (
+                    <>
+                      <h3 style={{ color: '#ff9800', margin: '0 0 15px 0' }}>高情商请假模板</h3>
+                      <p style={{ color: '#888', fontSize: '12px', marginBottom: '10px' }}>客观描述生理状况，不卑不亢，并留出交接空间。</p>
+                      <div style={{ background: 'rgba(255,152,0,0.05)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(255,152,0,0.3)' }}>
+                        {/* ✅ 可编辑：请假模板 */}
+                        <EditableBlock fieldKey="workText" defaultValue={content.workText} color="#ccc" />
+                      </div>
+                      <button
+                        onClick={() => handleCopy(getEditedOrDefault('workText', content.workText))}
+                        style={{ marginTop: '15px', width: '100%', padding: '10px', background: 'transparent', border: '1px dashed #ff9800', color: '#ffcc80', borderRadius: '8px', cursor: 'pointer' }}
+                      >
+                        📋 复制请假模板
+                      </button>
+                    </>
+                  )}
 
-              <div style={{ display: 'flex', gap: '10px', width: '100%', maxWidth: '350px', marginTop: '30px', marginBottom: '40px' }}>
-                <button style={{ flex: 2, padding: '14px', borderRadius: '20px', background: '#4caf50', color: '#fff', border: 'none', fontWeight: 'bold', cursor: 'pointer' }} onClick={() => prepareSharePreview(content)}>一键分享卡片</button>
-                <button style={{ flex: 1.5, padding: '14px', borderRadius: '20px', background: '#2196f3', color: '#fff', border: 'none', fontWeight: 'bold', cursor: 'pointer' }} onClick={() => setShowPostModal(true)}>发布到广场</button>
-                <button style={{ flex: 1, padding: '14px', borderRadius: '20px', background: 'rgba(255,255,255,0.1)', border: '1px solid #555', color: '#fff', cursor: 'pointer' }} onClick={() => { setPage("onboarding"); }}>返回主页</button>
+                  {/* === 医生 tab === */}
+                  {identity === 'doctor' && (
+                    <>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #333', paddingBottom: '10px', marginBottom: '15px' }}>
+                        <h3 style={{ color: '#2196f3', margin: 0 }}>医疗辅助报告</h3>
+                        <span style={{ color: '#666', fontSize: '10px', background: '#111', padding: '2px 8px', borderRadius: '10px' }}>算法生成 · 仅供参考</span>
+                      </div>
+                      <div style={{ marginBottom: '15px' }}>
+                        <h4 style={{ color: '#90caf9', margin: '0 0 5px 0', fontSize: '13px' }}>🩺 临床诊断建议</h4>
+                        {/* ✅ 可编辑：医疗主诉 */}
+                        <EditableBlock fieldKey="med_complaint" defaultValue={content.med_complaint} color="#fff" />
+                      </div>
+                      {/* 【新增】：针对性检查提醒框 */}
+                      {getExamReminders(content.med).map(exam => (
+                        <div key={exam} style={{ marginTop: '15px', padding: '12px', background: 'rgba(33, 150, 243, 0.1)', border: '1px solid rgba(33,150,243,0.3)', borderRadius: '10px' }}>
+                          <p style={{ color: '#90caf9', fontSize: '13px', fontWeight: 'bold', margin: '0 0 5px 0' }}>💡 患者检查须知：{exam}</p>
+                          <p style={{ color: '#aaa', fontSize: '12px', margin: 0 }}><strong>准备：</strong>{EXAM_DATABASE[exam].prep}</p>
+                        </div>
+                      ))}
+                      <div style={{ marginBottom: '15px', padding: '10px', background: 'rgba(33,150,243,0.08)', borderLeft: '3px solid #2196f3', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <img src={imgUrl} style={{ width: '30px', height: '30px', borderRadius: '4px', objectFit: 'cover' }} alt="thumb" />
+                        <p style={{ color: '#90caf9', fontSize: '12px', margin: 0 }}>本次多维痛觉图谱已附在报告后方，可向接诊医生展示。</p>
+                      </div>
+                      <div style={{ padding: '15px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid #333' }}>
+                        <h4 style={{ color: '#e0e0e0', fontSize: '13px', margin: '0 0 10px 0' }}>📋 供您与医生讨论参考：</h4>
+                        {/* ✅ 可编辑：诊疗参考清单 */}
+                        <EditableBlock fieldKey="med_reference" defaultValue={content.med_reference} color="#aaa" />
+                      </div>
+                      <button
+                        onClick={() => handleCopy(
+                          `主诉：${getEditedOrDefault('med_complaint', content.med_complaint)}\n\n参考清单：\n${getEditedOrDefault('med_reference', content.med_reference)}`
+                        )}
+                        style={{ marginTop: '15px', width: '100%', padding: '10px', background: 'transparent', border: '1px dashed #2196f3', color: '#90caf9', borderRadius: '8px', cursor: 'pointer' }}
+                      >
+                        📋 复制完整报告
+                      </button>
+                    </>
+                  )}
+
+                  {/* === 自愈 tab === */}
+                  {identity === 'self' && (
+                    <>
+                      <h3 style={{ color: '#9c27b0', margin: '0 0 15px 0' }}>自愈与社群互助</h3>
+                      <p style={{ color: '#ccc', fontSize: '13px', lineHeight: '1.5', marginBottom: '15px' }}>
+                        亲爱的，你画出了你的风暴。痛不是你的错，允许自己今天做一个废物，好好休息吧。
+                      </p>
+                      <div style={{ background: 'rgba(156,39,176,0.1)', padding: '12px', borderRadius: '8px', borderLeft: '3px solid #9c27b0' }}>
+                        {/* ✅ 可编辑：自愈建议 */}
+                        <EditableBlock fieldKey="selfCare" defaultValue={content.selfCare} color="#e1bee7" />
+                      </div>
+                      <button
+                        onClick={() => handleCopy(getEditedOrDefault('selfCare', content.selfCare))}
+                        style={{ marginTop: '15px', width: '100%', padding: '10px', background: 'transparent', border: '1px dashed #9c27b0', color: '#e1bee7', borderRadius: '8px', cursor: 'pointer' }}
+                      >
+                        📋 复制建议保存
+                      </button>
+                    </>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', gap: '10px', width: '100%', maxWidth: '350px', marginTop: '30px', marginBottom: '40px' }}>
+                  <button style={{ flex: 2, padding: '14px', borderRadius: '20px', background: '#4caf50', color: '#fff', border: 'none', fontWeight: 'bold', cursor: 'pointer' }} onClick={() => prepareSharePreview(content)}>一键分享卡片</button>
+                  <button style={{ flex: 1.5, padding: '14px', borderRadius: '20px', background: '#2196f3', color: '#fff', border: 'none', fontWeight: 'bold', cursor: 'pointer' }} onClick={() => setShowPostModal(true)}>发布到广场</button>
+                  <button style={{ flex: 1, padding: '14px', borderRadius: '20px', background: 'rgba(255,255,255,0.1)', border: '1px solid #555', color: '#fff', cursor: 'pointer' }} onClick={() => { setPage("onboarding"); }}>返回主页</button>
+                </div>
               </div>
-            </div>
-          );
+            );
+          } catch (e) {
+            // 防如果 generateContent 崩溃，至少不黑屏
+            console.error("Result 渲染出错:", e);
+            return (
+              <div style={{ pointerEvents: 'auto', position: 'absolute', top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 20, background: '#0a0a0a', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
+                <p>报告生成遇到问题</p>
+                <button onClick={() => setPage("onboarding")} style={{ marginTop: '20px', padding: '12px 24px', background: '#d32f2f', color: '#fff', border: 'none', borderRadius: '20px', cursor: 'pointer' }}>返回首页</button>
+              </div>
+            );
+          }
         })()}
         {/* === Community 广场页面 === */}
         {page === "community" && (
