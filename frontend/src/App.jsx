@@ -905,7 +905,7 @@ function App() {
 
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000);
+        const timeoutId = setTimeout(() => controller.abort(), 90000);
         const response = await fetch(`${API_BASE}/api/generate`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1942,6 +1942,9 @@ function App() {
             <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
             <p style={{ color: '#fff', marginTop: '20px', letterSpacing: '2px' }}>AI 医疗助理转译中...</p>
             <p style={{ color: '#666', fontSize: '12px' }}>正在基于您的痛觉参数生成多语境报告</p>
+            <p style={{ color: '#666', fontSize: '12px' }}>
+              首次请求可能需要 30-60 秒唤醒服务器，请耐心等待
+            </p>
           </div>
         )}
       </div>
