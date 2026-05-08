@@ -933,8 +933,8 @@ function App() {
 
       particlePositions.current = [];
       speedHistory.current = [];
-      setIsLoading(false);
-      setPage('result');
+      setIsLoading(false); // 【关键】：无论成功失败，都必须关掉 Loading
+      setPage("result");   // 强制跳转，防止黑屏
     }
   };
   const updateRecordInfo = (recordId, field, value) => {
