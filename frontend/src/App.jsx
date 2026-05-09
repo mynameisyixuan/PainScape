@@ -51,6 +51,14 @@ const EXAM_DATABASE = {
     purpose: "子宫内膜异位症诊断的‘金标准’，可同时进行病灶剥离。"
   }
 };
+class ErrorBoundary extends React.Component {
+  state = { hasError: false };
+  static getDerivedStateFromError() { return { hasError: true }; }
+  render() {
+    if (this.state.hasError) return <h1 style={{color:'#fff', textAlign:'center'}}>页面出了点小问题，请刷新重试</h1>;
+    return this.props.children;
+  }
+}
 // === 粒子引擎 (重构重力悬停、动态呼吸) ===
 class PainParticle {
   constructor(p5, x, y, type, color, speed, heading, bodyMode) {
@@ -1529,23 +1537,40 @@ function App() {
 
             {/* 帖子网格：限制图片高度，美化排版 */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', paddingBottom: '80px' }}>
-              {posts.filter(p => communityFilter === 'all' || p.group === communityFilter).map((post) => (
+
+              {/* 使用 groupFilter 和 painFilter 进行双重交叉过滤 */}
+              {posts.filter(p => {
+                const matchGroup = groupFilter === 'all' || p.group === groupFilter;
+                const matchPain = painFilter === 'all' || (p.painTags || []).includes(painFilter);
+                return matchGroup && matchPain;
+              }).map((post) => (
                 <div key={post.id}
                   style={{ background: '#1c1c1c', borderRadius: '12px', overflow: 'hidden', border: '1px solid #333', display: 'flex', flexDirection: 'column' }}>
+
                   {/* 点击图片看详情 */}
                   <img src={post.img} onClick={() => setViewingPost(post)}
                     style={{ width: '100%', height: '110px', objectFit: 'cover', cursor: 'pointer', background: '#000' }} />
 
                   <div style={{ padding: '10px', flex: 1 }}>
-                    <p style={{ color: '#fff', fontSize: '12px', margin: '0 0 8px 0', fontWeight: 'bold', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{post.text}</p>
+                    <p style={{ color: '#fff', fontSize: '12px', margin: '0 0 8px 0', fontWeight: 'bold', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                      {post.text}
+                    </p>
+
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto' }}>
-                      <span style={{ color: '#d32f2f', fontSize: '10px', background: 'rgba(211,47,47,0.1)', padding: '2px 6px', borderRadius: '4px' }}>{post.tags}</span>
-                      <button style={{ background: 'none', border: 'none', color: '#888', fontSize: '12px', cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); alert("共鸣已发送"); }}>❤️ {post.likes}</button>
+                      {/* 将 post.tags 改为 post.painTags 的第一项，防止报错 */}
+                      <span style={{ color: '#d32f2f', fontSize: '10px', background: 'rgba(211,47,47,0.1)', padding: '2px 6px', borderRadius: '4px' }}>
+                        {post.painTags?.[0] || '未标记'}
+                      </span>
+
+                      <button style={{ background: 'none', border: 'none', color: '#888', fontSize: '12px', cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); alert("共鸣已发送"); }}>
+                        ❤️ {post.likes}
+                      </button>
                     </div>
                   </div>
                 </div>
               ))}
             </div>
+
           </div>
         )}
         {/* --- History (疼痛日记：增强版分类折叠) --- */}
