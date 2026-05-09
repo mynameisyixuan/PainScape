@@ -263,6 +263,11 @@ function App() {
   const [showExpInput, setShowExpInput] = useState(false);
   const [expText, setExpText] = useState("");
   const [expTags, setExpTags] = useState("");
+
+  const [refiningField, setRefiningField] = useState(null);
+  const [refineInput, setRefineInput] = useState('');
+  const [refineTargetField, setRefineTargetField] = useState('med_complaint'); // 【新增】：医生Tab优化目标，默认为主诉
+
   // 新增：保存经验的函数
   const handleSaveExperience = () => {
     if (!expText.trim()) return alert("请写下你的经验");
@@ -342,6 +347,8 @@ function App() {
     osc.start();
     osc.stop(audioCtx.current.currentTime + p.duration);
   };
+  const [refiningField, setRefiningField] = useState(null); // 正在优化的字段名
+  const [refineInput, setRefineInput] = useState('');       // 优化指令输入框
 
   // 新增 ref
   const particlePositions = useRef([]);
@@ -1143,6 +1150,40 @@ function App() {
       // API 地址
       const API_BASE = 'https://painscape-api.onrender.com';
 
+      const handleRefine = async (fieldKey) => {
+        if (!refineInput.trim() || refiningField) return; // 防抖：空输入或正在请求中
+
+        setRefiningField(fieldKey);
+
+        // 【关键修复】：获取用户当前真实看到的文本（优先取编辑过的，否则取默认值）
+        const currentText = getEditedOrDefault(fieldKey, generateContent()[fieldKey]);
+
+        try {
+          const res = await fetch(`${API_BASE}/api/refine`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              field: fieldKey,
+              currentText: currentText,
+              userFeedback: refineInput
+            })
+          });
+
+          const { refined } = await res.json();
+
+          if (refined) {
+            // 将 AI 优化后的结果写入编辑状态
+            setEditedContents(prev => ({ ...prev, [fieldKey]: refined }));
+            setRefineInput(''); // 清空输入框
+            showToast(`✨ ${fieldKey === 'analogy' ? '通感说明' : '内容'}已优化`);
+          }
+        } catch (err) {
+          console.error('优化失败:', err);
+          showToast('AI 优化失败，请稍后再试');
+        } finally {
+          setRefiningField(null);
+        }
+      };
       try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 90000);
@@ -1483,12 +1524,12 @@ function App() {
                         <p style={{ color: '#ffcdd2', fontSize: '13px', margin: '0 0 6px 0', lineHeight: '1.5' }}>
                           她正在经历强烈的<strong>{content.pain}</strong>。
                         </p>
-                        {/* ✅ 可编辑：通感比喻 */}
+                        {/*可编辑：通感比喻 */}
                         <EditableBlock fieldKey="analogy" defaultValue={content.analogy} color="#ffcdd2" />
                       </div>
                       <div style={{ marginTop: '20px' }}>
                         <strong style={{ color: '#fff', fontSize: '14px' }}>💡 请立刻执行以下操作：</strong>
-                        {/* ✅ 可编辑：伴侣实操指令 */}
+                        {/*可编辑：伴侣实操指令 */}
                         <EditableBlock fieldKey="action" defaultValue={content.action} color="#ccc" style={{ marginTop: '10px' }} />
                       </div>
                       <button
@@ -1497,6 +1538,32 @@ function App() {
                       >
                         📋 复制实操指令
                       </button>
+                      {/* ===== 【新增】：AI 继续优化区域 ===== */}
+                      <div style={{ marginTop: '25px', paddingTop: '15px', borderTop: '1px solid #333' }}>
+                        <p style={{ color: '#888', fontSize: '12px', margin: '0 0 10px 0' }}>🤖 对当前内容不满意？让 AI 帮你调调语气：</p>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <input
+                            placeholder="如：太正式了 / 想要更温柔 / 加一条热敷建议"
+                            value={refineInput}
+                            onChange={(e) => setRefineInput(e.target.value)}
+                            style={{ flex: 1, background: '#111', border: '1px solid #333', color: '#fff', borderRadius: '8px', padding: '10px', fontSize: '12px' }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleRefine('analogy'); // 伴侣Tab默认优化通感说明
+                            }}
+                          />
+                          <button
+                            onClick={() => handleRefine('analogy')}
+                            disabled={refiningField === 'analogy'}
+                            style={{
+                              background: refiningField === 'analogy' ? '#555' : '#d32f2f',
+                              color: '#fff', border: 'none', borderRadius: '8px', padding: '0 15px',
+                              cursor: refiningField === 'analogy' ? 'not-allowed' : 'pointer',
+                              fontSize: '12px', whiteSpace: 'nowrap'
+                            }}>
+                            {refiningField === 'analogy' ? '优化中...' : '优化'}
+                          </button>
+                        </div>
+                      </div>
                     </>
                   )}
 
@@ -1506,7 +1573,7 @@ function App() {
                       <h3 style={{ color: '#ff9800', margin: '0 0 15px 0' }}>高情商请假模板</h3>
                       <p style={{ color: '#888', fontSize: '12px', marginBottom: '10px' }}>客观描述生理状况，不卑不亢，并留出交接空间。</p>
                       <div style={{ background: 'rgba(255,152,0,0.05)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(255,152,0,0.3)' }}>
-                        {/* ✅ 可编辑：请假模板 */}
+                        {/* 可编辑：请假模板 */}
                         <EditableBlock fieldKey="workText" defaultValue={content.workText} color="#ccc" />
                       </div>
                       <button
@@ -1515,6 +1582,32 @@ function App() {
                       >
                         📋 复制请假模板
                       </button>
+                      {/* ===== 【新增】：AI 继续优化区域 ===== */}
+                      <div style={{ marginTop: '25px', paddingTop: '15px', borderTop: '1px solid #333' }}>
+                        <p style={{ color: '#888', fontSize: '12px', margin: '0 0 10px 0' }}>🤖 对当前内容不满意？让 AI 帮你调调语气：</p>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <input
+                            placeholder="如：太正式了 / 不够诚恳 "
+                            value={refineInput}
+                            onChange={(e) => setRefineInput(e.target.value)}
+                            style={{ flex: 1, background: '#111', border: '1px solid #333', color: '#fff', borderRadius: '8px', padding: '10px', fontSize: '12px' }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleRefine('work');
+                            }}
+                          />
+                          <button
+                            onClick={() => handleRefine('work')}
+                            disabled={refiningField === 'worky'}
+                            style={{
+                              background: refiningField === 'work' ? '#555' : '#d32f2f',
+                              color: '#fff', border: 'none', borderRadius: '8px', padding: '0 15px',
+                              cursor: refiningField === 'work' ? 'not-allowed' : 'pointer',
+                              fontSize: '12px', whiteSpace: 'nowrap'
+                            }}>
+                            {refiningField === 'work' ? '优化中...' : '优化'}
+                          </button>
+                        </div>
+                      </div>
                     </>
                   )}
 
@@ -1527,7 +1620,7 @@ function App() {
                       </div>
                       <div style={{ marginBottom: '15px' }}>
                         <h4 style={{ color: '#90caf9', margin: '0 0 5px 0', fontSize: '13px' }}>🩺 临床诊断建议</h4>
-                        {/* ✅ 可编辑：医疗主诉 */}
+                        {/* 可编辑：医疗主诉 */}
                         <EditableBlock fieldKey="med_complaint" defaultValue={content.med_complaint} color="#fff" />
                       </div>
                       {/* 【新增】：针对性检查提醒框 */}
@@ -1546,7 +1639,7 @@ function App() {
                       </div>
                       <div style={{ padding: '15px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid #333' }}>
                         <h4 style={{ color: '#e0e0e0', fontSize: '13px', margin: '0 0 10px 0' }}>📋 供您与医生讨论参考：</h4>
-                        {/* ✅ 可编辑：诊疗参考清单 */}
+                        {/* 可编辑：诊疗参考清单 */}
                         <EditableBlock fieldKey="med_reference" defaultValue={content.med_reference} color="#aaa" />
                       </div>
                       <button
@@ -1557,6 +1650,68 @@ function App() {
                       >
                         📋 复制完整报告
                       </button>
+                      {/* ===== 【新增】：医生报告 AI 持续优化区域 ===== */}
+                      <div style={{ marginTop: '25px', paddingTop: '15px', borderTop: '1px solid #333' }}>
+                        <p style={{ color: '#888', fontSize: '12px', margin: '0 0 10px 0' }}>🤖 让 AI 帮你调整医疗报告的表达方式：</p>
+
+                        {/* 目标字段切换器 */}
+                        <div style={{ display: 'flex', gap: '6px', marginBottom: '10px' }}>
+                          <button
+                            onClick={() => setRefineTargetField('med_complaint')}
+                            style={{
+                              flex: 1, padding: '6px', borderRadius: '6px', fontSize: '11px', cursor: 'pointer',
+                              background: refineTargetField === 'med_complaint' ? 'rgba(33, 150, 243, 0.2)' : '#1a1a1a',
+                              color: refineTargetField === 'med_complaint' ? '#90caf9' : '#666',
+                              border: `1px solid ${refineTargetField === 'med_complaint' ? '#2196f3' : '#333'}`
+                            }}
+                          >
+                            优化主诉
+                          </button>
+                          <button
+                            onClick={() => setRefineTargetField('med_reference')}
+                            style={{
+                              flex: 1, padding: '6px', borderRadius: '6px', fontSize: '11px', cursor: 'pointer',
+                              background: refineTargetField === 'med_reference' ? 'rgba(33, 150, 243, 0.2)' : '#1a1a1a',
+                              color: refineTargetField === 'med_reference' ? '#90caf9' : '#666',
+                              border: `1px solid ${refineTargetField === 'med_reference' ? '#2196f3' : '#333'}`
+                            }}
+                          >
+                            优化参考清单
+                          </button>
+                        </div>
+                        {/* 指令输入框 */}
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <input
+                            list="refine-options-doctor"
+                            placeholder={`告诉 AI 怎么修改${refineTargetField === 'med_complaint' ? '主诉' : '参考清单'}...`}
+                            value={refineInput}
+                            onChange={(e) => setRefineInput(e.target.value)}
+                            style={{ flex: 1, background: '#111', border: '1px solid #333', color: '#fff', borderRadius: '8px', padding: '10px', fontSize: '12px' }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleRefine(refineTargetField);
+                            }}
+                          />
+                          <button
+                            onClick={() => handleRefine(refineTargetField)}
+                            disabled={refiningField === refineTargetField}
+                            style={{
+                              background: refiningField === refineTargetField ? '#555' : '#2196f3',
+                              color: '#fff', border: 'none', borderRadius: '8px', padding: '0 15px',
+                              cursor: refiningField === refineTargetField ? 'not-allowed' : 'pointer',
+                              fontSize: '12px', whiteSpace: 'nowrap'
+                            }}
+                          >
+                            {refiningField === refineTargetField ? '优化中...' : '优化'}
+                          </button>
+                        </div>
+                        {/* 医疗场景专属快捷指令 */}
+                        <datalist id="refine-options-doctor">
+                          <option value="更严肃地描述疼痛严重程度" />
+                          <option value="加上关于月经周期的描述" />
+                          <option value="用更通俗的语言解释专业术语" />
+                          <option value="语气更客观，减少主观色彩" />
+                        </datalist>
+                      </div>
                     </>
                   )}
 
@@ -1568,7 +1723,7 @@ function App() {
                         亲爱的，你画出了你的风暴。痛不是你的错，允许自己今天做一个废物，好好休息吧。
                       </p>
                       <div style={{ background: 'rgba(156,39,176,0.1)', padding: '12px', borderRadius: '8px', borderLeft: '3px solid #9c27b0' }}>
-                        {/* ✅ 可编辑：自愈建议 */}
+                        {/*可编辑：自愈建议 */}
                         <EditableBlock fieldKey="selfCare" defaultValue={content.selfCare} color="#e1bee7" />
                       </div>
                       <button
@@ -1577,6 +1732,32 @@ function App() {
                       >
                         📋 复制建议保存
                       </button>
+                      {/* ===== 【新增】：AI 继续优化区域 ===== */}
+                      <div style={{ marginTop: '25px', paddingTop: '15px', borderTop: '1px solid #333' }}>
+                        <p style={{ color: '#888', fontSize: '12px', margin: '0 0 10px 0' }}>🤖 对当前内容不满意？让 AI 帮你调调语气：</p>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <input
+                            placeholder="如：太正式了 / 想要更温柔 / 加一条热敷建议"
+                            value={refineInput}
+                            onChange={(e) => setRefineInput(e.target.value)}
+                            style={{ flex: 1, background: '#111', border: '1px solid #333', color: '#fff', borderRadius: '8px', padding: '10px', fontSize: '12px' }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleRefine('selfcare');
+                            }}
+                          />
+                          <button
+                            onClick={() => handleRefine('selfcare')}
+                            disabled={refiningField === 'selfcare'}
+                            style={{
+                              background: refiningField === 'selfcare' ? '#555' : '#d32f2f',
+                              color: '#fff', border: 'none', borderRadius: '8px', padding: '0 15px',
+                              cursor: refiningField === 'selfcare' ? 'not-allowed' : 'pointer',
+                              fontSize: '12px', whiteSpace: 'nowrap'
+                            }}>
+                            {refiningField === 'selfcare' ? '优化中...' : '优化'}
+                          </button>
+                        </div>
+                      </div>
                     </>
                   )}
                 </div>
@@ -1995,6 +2176,8 @@ function App() {
                     type="text"
                     list="relief-options"
                     placeholder="例如：蜷缩起来 / 热敷 / 安静独处..."
+                    list="refine-options-partner"
+                    placeholder="告诉 AI 你想要什么样的修改..."
                     defaultValue={viewingDiary.reliefMethod || ''}
                     onBlur={(e) => {
                       const val = e.target.value;
@@ -2019,6 +2202,12 @@ function App() {
                     <option value="喝热水或热饮" />
                     <option value="垫高臀部平躺" />
                     <option value="轻轻按摩腹部" />
+                  </datalist>
+                  <datalist id="refine-options-partner">
+                    <option value="更温柔一些，像对小孩子说话" />
+                    <option value="更直接一点，给出具体动作指令" />
+                    <option value="加上关于热敷的建议" />
+                    <option value="语气再强烈一点，强调严重性" />
                   </datalist>
                 </div>
 
