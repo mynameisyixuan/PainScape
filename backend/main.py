@@ -128,7 +128,7 @@ async def generate_pain_report(data: PainData):
     is_quick = data.isQuickLog if hasattr(data, 'isQuickLog') else False
 
     if is_quick:
-        system_prompt += "\n特别注意：用户处于剧烈疼痛的快速记录模式，数据颗粒度较粗。请基于提供的疼痛类型和评分直接给出最核心、最急需的缓解建议，语气要更加安抚和直接，减少长篇大论的比喻。"
+        system_prompt += "\n特别注意：用户处于剧烈疼痛  的快速记录模式，数据颗粒度较粗。请基于提供的疼痛类型和评分直接给出最核心、最急需的缓解建议，语气要更加安抚和直接，减少长篇大论的比喻。"
     system_prompt = """你是一个专业的痛经疼痛管理顾问，擅长将具身化的疼痛感知数据转译为不同社会场景下的语言表达。
 
 你必须严格按照以下 JSON schema 输出，不得添加任何额外字段或解释性文字：
