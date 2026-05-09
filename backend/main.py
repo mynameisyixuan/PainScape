@@ -39,6 +39,7 @@ class PainData(BaseModel):
     bodyMode: Optional[str] = None
     medicalBackground: Optional[Dict[str, str]] = None
     tonePreference: Optional[str] = "gentle"
+    cycleDay: str = "未提供" # 新增
 
 
 PAIN_MAP = {
@@ -114,17 +115,25 @@ async def generate_pain_report(data: PainData):
     }
     tone_desc = tone_map.get(data.tonePreference or "gentle", "温柔体贴")
     
+     # 【新增】：解析周期天数，生成临床指导语境
+    cycle_context = ""
+    if data.cycleDay and data.cycleDay != "未提供":
+        if data.cycleDay in ["1", "2"]:
+            cycle_context = "患者处于月经第1-2天（急性期），此时前列腺素分泌达峰，疼痛最为剧烈。selfCare 必须侧重急性疼痛管理（如紧急止痛姿势、快速热敷法），analogy 需体现痛感的急性发作与猛烈程度。"
+        elif data.cycleDay == "3-5":
+            cycle_context = "患者处于月经第3-5天（缓解期），急性疼痛开始消退但伴随疲劳与坠胀。selfCare 必须侧重修复与营养补充（如补铁饮食、温和拉伸），建议关注是否有需要复查的持续隐痛。"
+        elif data.cycleDay == "ovulation":
+            cycle_context = "患者处于排卵期疼痛（非经期痛），这属于异常出血或排卵痛。med 必须提示其与子宫内膜异位症或盆腔粘连的潜在关联，建议排查，selfCare 需强调非经期痛的观察记录。"
+
     system_prompt = """你是一个专业的痛经疼痛管理顾问，擅长将具身化的疼痛感知数据转译为不同社会场景下的语言表达。
 
 你必须严格按照以下 JSON schema 输出，不得添加任何额外字段或解释性文字：
 
 {
-  # 修改 system_prompt 中的字段说明：
 "analogy": "（面向伴侣）用生动的通感比喻描述这种痛觉，帮助没有痛经经验的人感同身受，语气温柔真实，120-160字",
 "work": "（面向职场/HR）一段正式简洁的请假或居家申请说明，避免情绪化表达，突出生理客观性，80-120字",
  "med": "（面向医生）规范医疗语言的主诉描述，包含疼痛性质、部位、强度、伴随症状推测，60-100字",
-"selfCare": "（面向自身）5条具体可操作的当下自愈建议，分行列出，每条30字以内，涵盖姿势、热敷、饮食、呼吸、心理5个维度，避免建议过敏药物",
- 
+"selfCare": "（面向自身）5条具体可操作的当下自愈建议，分行列出，每条30字以内，涵盖姿势、热敷、饮食、呼吸、心理5个维度，避免建议过敏药物"
 }
 
 规则：
@@ -151,6 +160,9 @@ async def generate_pain_report(data: PainData):
 【既往病史】
 - 已确诊疾病：{diagnosed}
 - 药物过敏：{allergies}（selfCare 中严禁推荐此类药物）
+
+【月经周期】{f"本次为月经第 {data.cycleDay} 天" if data.cycleDay != "未提供" else "未提供"}
+{cycle_context}
 
 【语气偏好】{tone_desc}
 

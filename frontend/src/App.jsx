@@ -61,7 +61,7 @@ class ErrorBoundary extends React.Component {
 }
 // === 粒子引擎 (重构重力悬停、动态呼吸) ===
 class PainParticle {
-  constructor(p5, x, y, type, color, speed, heading, bodyMode) {
+  constructor(p5, x, y, type, color, speed, heading, bodyMode, pressure = 0.5) {
     this.p5 = p5;
     this.pos = p5.createVector(x, y);
     this.baseY = y; // 记录初始位置，用于重压的向下脉动
@@ -252,6 +252,7 @@ function App() {
     diagnosed: '',
     allergies: '',
   });
+  const [cycleDay, setCycleDay] = useState(''); // '1', '2', 'ovulation' 等，空字符串代表未选择
   const [tonePreference, setTonePreference] = useState('gentle');
   const [isLoading, setIsLoading] = useState(false);
   // 新增：内容可编辑
@@ -263,9 +264,6 @@ function App() {
   const [showExpInput, setShowExpInput] = useState(false);
   const [expText, setExpText] = useState("");
   const [expTags, setExpTags] = useState("");
-
-  const [refiningField, setRefiningField] = useState(null);
-  const [refineInput, setRefineInput] = useState('');
   const [refineTargetField, setRefineTargetField] = useState('med_complaint'); // 【新增】：医生Tab优化目标，默认为主诉
 
   // 新增：保存经验的函数
@@ -1121,6 +1119,32 @@ function App() {
     // 找出使用次数最多的画笔，如果都没用过，默认返回 'twist'
     return maxVal > 0 ? Object.keys(counts).reduce((a, b) => counts[a] > counts[b] ? a : b) : 'twist';
   };
+  const API_BASE = 'https://painscape-api.onrender.com';
+
+  const handleRefine = async (fieldKey) => {
+    if (!refineInput.trim() || refiningField) return;
+    setRefiningField(fieldKey);
+    const currentText = getEditedOrDefault(fieldKey, generateContent()[fieldKey]);
+    try {
+      const res = await fetch(`${API_BASE}/api/refine`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ field: fieldKey, currentText: currentText, userFeedback: refineInput })
+      });
+      const { refined } = await res.json();
+      if (refined) {
+        setEditedContents(prev => ({ ...prev, [fieldKey]: refined }));
+        setRefineInput('');
+        showToast(`✨ ${fieldKey === 'analogy' ? '通感说明' : '内容'}已优化`);
+      }
+    } catch (err) {
+      console.error('优化失败:', err);
+      showToast('AI 优化失败，请稍后再试');
+    } finally {
+      setRefiningField(null);
+    }
+  };
+
   const handleFinish = async () => {
     if (!p5Ref.current) return;
     setIsLoading(true);
@@ -1144,46 +1168,9 @@ function App() {
         bodyMode: bodyMode,
         medicalBackground: medicalBackground,
         tonePreference: tonePreference,
+        cycleDay: cycleDay || "未提供", // 【新增】：传入周期天数
       };
 
-
-      // API 地址
-      const API_BASE = 'https://painscape-api.onrender.com';
-
-      const handleRefine = async (fieldKey) => {
-        if (!refineInput.trim() || refiningField) return; // 防抖：空输入或正在请求中
-
-        setRefiningField(fieldKey);
-
-        // 【关键修复】：获取用户当前真实看到的文本（优先取编辑过的，否则取默认值）
-        const currentText = getEditedOrDefault(fieldKey, generateContent()[fieldKey]);
-
-        try {
-          const res = await fetch(`${API_BASE}/api/refine`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              field: fieldKey,
-              currentText: currentText,
-              userFeedback: refineInput
-            })
-          });
-
-          const { refined } = await res.json();
-
-          if (refined) {
-            // 将 AI 优化后的结果写入编辑状态
-            setEditedContents(prev => ({ ...prev, [fieldKey]: refined }));
-            setRefineInput(''); // 清空输入框
-            showToast(`✨ ${fieldKey === 'analogy' ? '通感说明' : '内容'}已优化`);
-          }
-        } catch (err) {
-          console.error('优化失败:', err);
-          showToast('AI 优化失败，请稍后再试');
-        } finally {
-          setRefiningField(null);
-        }
-      };
       try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 90000);
@@ -1399,6 +1386,34 @@ function App() {
                     <option value="nsaids">多种NSAIDs过敏</option>
                     <option value="unknown">未留意过</option>
                   </select>
+                  {/* 新增：月经周期天数 */}
+                  <div style={{ marginTop: '12px' }}>
+                    <label style={{ color: '#888', fontSize: '12px', display: 'block', marginBottom: '8px' }}>
+                      📅 今天是月经第几天？（可选，影响建议方向）
+                    </label>
+                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                      {[
+                        { label: '第1天', value: '1' },
+                        { label: '第2天', value: '2' },
+                        { label: '第3-5天', value: '3-5' },
+                        { label: '排卵期痛', value: 'ovulation' },
+                      ].map(item => (
+                        <button
+                          key={item.value}
+                          onClick={() => setCycleDay(cycleDay === item.value ? '' : item.value)}
+                          style={{
+                            padding: '6px 12px', borderRadius: '15px', fontSize: '11px', cursor: 'pointer',
+                            background: cycleDay === item.value ? '#d32f2f' : '#1e1e1e',
+                            color: cycleDay === item.value ? '#fff' : '#888',
+                            border: `1px solid ${cycleDay === item.value ? '#d32f2f' : '#444'}`
+                          }}
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
                   <div style={{ display: 'flex', gap: '8px' }}>
                     <button onClick={() => setTonePreference('gentle')} style={{ flex: 1, padding: '8px', borderRadius: '8px', fontSize: '12px', cursor: 'pointer', background: tonePreference === 'gentle' ? '#4caf50' : '#1e1e1e', color: tonePreference === 'gentle' ? '#fff' : '#888', border: tonePreference === 'gentle' ? '2px solid #4caf50' : '1px solid #444' }}>🌿 温和</button>
                     <button onClick={() => setTonePreference('direct')} style={{ flex: 1, padding: '8px', borderRadius: '8px', fontSize: '12px', cursor: 'pointer', background: tonePreference === 'direct' ? '#2196f3' : '#1e1e1e', color: tonePreference === 'direct' ? '#fff' : '#888', border: tonePreference === 'direct' ? '2px solid #2196f3' : '1px solid #444' }}>💬 直接</button>
