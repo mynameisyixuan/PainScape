@@ -124,7 +124,11 @@ async def generate_pain_report(data: PainData):
             cycle_context = "患者处于月经第3-5天（缓解期），急性疼痛开始消退但伴随疲劳与坠胀。selfCare 必须侧重修复与营养补充（如补铁饮食、温和拉伸），建议关注是否有需要复查的持续隐痛。"
         elif data.cycleDay == "ovulation":
             cycle_context = "患者处于排卵期疼痛（非经期痛），这属于异常出血或排卵痛。med 必须提示其与子宫内膜异位症或盆腔粘连的潜在关联，建议排查，selfCare 需强调非经期痛的观察记录。"
+    
+    is_quick = data.isQuickLog if hasattr(data, 'isQuickLog') else False
 
+    if is_quick:
+        system_prompt += "\n特别注意：用户处于剧烈疼痛的快速记录模式，数据颗粒度较粗。请基于提供的疼痛类型和评分直接给出最核心、最急需的缓解建议，语气要更加安抚和直接，减少长篇大论的比喻。"
     system_prompt = """你是一个专业的痛经疼痛管理顾问，擅长将具身化的疼痛感知数据转译为不同社会场景下的语言表达。
 
 你必须严格按照以下 JSON schema 输出，不得添加任何额外字段或解释性文字：
