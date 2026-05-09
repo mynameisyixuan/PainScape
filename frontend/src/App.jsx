@@ -70,17 +70,21 @@ class PainParticle {
     this.life = 255;
     this.seed = p5.random(1000);
     this.bodyMode = bodyMode; // 记录画在哪一面
-
+    // 压感系数 (0.2 ~ 1.0)
+    this.pressureScale = pressure;
     // 【修改】：坠痛现在是动态粒子，永远呼吸
     this.isDynamic = (type === 'wave' || type === 'twist' || type === 'heavy');
+    // 【新增】：记录绘画时的绝对时间与一天中的分钟数
+    const now = new Date();
+    this.drawnAt = now.getTime();
+    this.minuteOfDay = now.getHours() * 60 + now.getMinutes();
 
     if (type === 'pierce') {
-      // ⚡️ 【恢复】刺钻：极长主干 + 预生成倒刺
       let angle = heading + p5.random(-0.1, 0.1);
       this.vel = p5.createVector(p5.cos(angle), p5.sin(angle));
-      this.vel.mult(p5.random(6, 18));  // ← 缩短单步距离
+      // 【修改】：重按刺得更深，轻点刺得浅
+      this.vel.mult(p5.random(6, 18) * (0.5 + pressure));
       this.size = p5.random(2, 5);
-
       this.thorns = [];
       let numThorns = p5.floor(p5.random(2, 5));
       for (let i = 0; i < numThorns; i++) {
@@ -92,21 +96,24 @@ class PainParticle {
       }
     }
     else if (type === 'heavy') {
-      this.vel = p5.createVector(0, 0); // 速度为0，不掉落
-      this.size = p5.random(8, 15);
-    }
-    else if (type === 'twist') {
       this.vel = p5.createVector(0, 0);
-      this.size = p5.random(15, 30); this.angle = p5.random(p5.TWO_PI);
-    }
-    else if (type === 'wave') {
-      this.vel = p5.createVector(0, 0); this.size = p5.random(5, 15); this.maxSize = p5.random(30, 60);
-    }
-    else if (type === 'scrape') {
-      // 🔪 【恢复】刮撕：保持斜切，长线条
+      // 【修改】：重按水滴更大，轻按水滴小（坠痛程度）
+      this.size = p5.random(8, 15) * (0.5 + pressure);
+    } else if (type === 'twist') {
+      this.vel = p5.createVector(0, 0);
+      // 【修改】：重按绞拧范围更大
+      this.size = p5.random(15, 30) * (0.5 + pressure);
+      this.angle = p5.random(p5.TWO_PI);
+    } else if (type === 'wave') {
+      this.vel = p5.createVector(0, 0);
+      this.size = p5.random(5, 15);
+      // 【修改】：重按胀痛扩散上限更高
+      this.maxSize = p5.random(30, 60) * (0.5 + pressure);
+    } else if (type === 'scrape') {
       let angle = p5.PI / 4 + p5.random(-0.15, 0.15);
       this.vel = p5.createVector(p5.cos(angle), p5.sin(angle));
-      this.vel.mult(p5.random(15, 30));
+      // 【修改】：重按刮撕距离更长
+      this.vel.mult(p5.random(15, 30) * (0.5 + pressure));
       this.size = p5.random(2, 6);
     }
   }
@@ -135,12 +142,13 @@ class PainParticle {
 
   show(pg) {
     let p = pg || this.p5;
-
+    // 【修改】：利用压感动态调整发光模糊度，重按时光晕更强烈
     if (this.isDynamic) {
-      p.drawingContext.shadowBlur = 10;
-      p.drawingContext.shadowColor = `rgb(${this.color[0]}, ${this.color[1]}, ${this.color[2]})`;
-    } else { p.drawingContext.shadowBlur = 0; }
-
+      p.drawingContext.shadowBlur = 10 * this.pressureScale;
+      p.drawingContext.shadowColor = `rgb(${this.color[0]},${this.color[1]}, ${this.color[2]})`;
+    } else {
+      p.drawingContext.shadowBlur = 0;
+    }
     if (this.type === 'pierce') {
       // ⚡️ 【恢复】主刺干 + 荆棘倒刺
       let endX = this.pos.x + this.vel.x; let endY = this.pos.y + this.vel.y;
@@ -152,8 +160,7 @@ class PainParticle {
       p.vertex(this.pos.x - p.cos(perpAngle) * halfW, this.pos.y - p.sin(perpAngle) * halfW);
       p.vertex(endX, endY);
       p.endShape(p.CLOSE);
-
-      p.fill(this.color[0], 0, 0, 255);
+      p.fill(255, 255, 255, 150 + (105 * this.pressureScale)); // 轻点半透，重按全白
       this.thorns.forEach(thorn => {
         let rootX = this.pos.x + this.vel.x * thorn.distRatio;
         let rootY = this.pos.y + this.vel.y * thorn.distRatio;
@@ -169,6 +176,8 @@ class PainParticle {
     else if (this.type === 'heavy') {
       // 绘制沉重的、上尖下宽的动态水滴
       p.noStroke(); p.fill(this.color[0] * 0.5, this.color[1] * 0.5, this.color[2] * 0.5, 200);
+      // 【修改】：重按水滴更不透明，颜色更深沉
+      p.fill(this.color[0] * 0.5, this.color[1] * 0.5, this.color[2] * 0.5, 120 + (80 * this.pressureScale));
       p.beginShape();
       p.vertex(this.pos.x, this.pos.y - this.size * 0.8);
       p.bezierVertex(this.pos.x + this.size, this.pos.y, this.pos.x + this.size, this.pos.y + this.size * 1.5, this.pos.x, this.pos.y + this.size * 1.5);
@@ -176,10 +185,12 @@ class PainParticle {
       p.endShape(p.CLOSE);
     }
     else if (this.type === 'scrape') {
-      // 🔪 【恢复】狂暴刮撕：主线条 + 乱序纤维 + 三角血块
+      // 主线条 + 乱序纤维 + 三角血块
       let endX = this.pos.x + this.vel.x; let endY = this.pos.y + this.vel.y;
       p.stroke(this.color[0] * 0.5, 0, 0, 255); p.strokeWeight(this.size); p.line(this.pos.x, this.pos.y, endX, endY);
       p.stroke(this.color[0], this.color[1] * 0.3, this.color[2] * 0.3, 180); p.strokeWeight(1);
+      // 【修改】：重按刮痕更粗更红
+      p.strokeWeight(this.size * (0.5 + this.pressureScale));
       p.line(this.pos.x + p.random(-8, 8), this.pos.y + p.random(-8, 8), endX + p.random(-8, 8), endY + p.random(-8, 8));
       if (p.random(1) < 0.6) {
         p.noStroke(); p.fill(this.color[0], 0, 0, 220);
@@ -192,11 +203,16 @@ class PainParticle {
       p.noFill(); p.stroke(this.color[0], this.color[1], this.color[2], 100); p.strokeWeight(1.5);
       p.arc(0, 0, this.size * 2, this.size * 2, 0, p.PI * 1.5);
       p.stroke(this.color[0], this.color[1], this.color[2], 200); p.strokeWeight(1.5);
+      // 【修改】：绞拧中心点随压感变深红
+      p.fill(this.color[0] * 0.8, 0, 0, 150 + (70 * this.pressureScale));
       for (let i = 0; i < 5; i++) p.line(0, 0, this.size * p.cos(i * p.TWO_PI / 5), this.size * p.sin(i * p.TWO_PI / 5));
       p.noStroke(); p.fill(this.color[0] * 0.8, 0, 0, 220); p.ellipse(0, 0, this.size * 0.4); p.pop();
     }
     else if (this.type === 'wave') {
       p.noStroke(); p.fill(this.color[0], this.color[1], this.color[2], 10); p.ellipse(this.pos.x, this.pos.y, this.pulseSize, this.pulseSize);
+      // 【修改】：重按胀痛波纹更不透明
+      p.fill(this.color[0], this.color[1], this.color[2], 5 + (15 * this.pressureScale));
+      p.ellipse(this.pos.x, this.pos.y, this.pulseSize, this.pulseSize);
     }
     p.drawingContext.shadowBlur = 0;
   }
@@ -290,10 +306,47 @@ function App() {
       setTimeout(() => document.body.removeChild(toast), 300);
     }, 1500);
   };
+  // === 声音反馈系统 ===
+  const audioCtx = useRef(null);
+  const [isMuted, setIsMuted] = useState(false); // 默认开启声音
+
+  // 播放笔触音效的函数（直接使用你提供的优质代码，加入静音判断）
+  const playBrushSound = (type) => {
+    if (isMuted) return; // 如果静音，直接返回
+    if (!audioCtx.current) audioCtx.current = new (window.AudioContext || window.webkitAudioContext)();
+
+    // 确保音频上下文处于运行状态（浏览器安全策略要求用户交互后才能播放声音）
+    if (audioCtx.current.state === 'suspended') {
+      audioCtx.current.resume();
+    }
+
+    const osc = audioCtx.current.createOscillator();
+    const gain = audioCtx.current.createGain();
+    const params = {
+      twist: { freq: 80, wave: 'sawtooth', duration: 0.3 },
+      pierce: { freq: 800, wave: 'sine', duration: 0.05 },
+      heavy: { freq: 40, wave: 'sine', duration: 0.5 },
+      wave: { freq: 200, wave: 'sine', duration: 0.8 },
+      scrape: { freq: 300, wave: 'sawtooth', duration: 0.15 },
+      eraser: { freq: 500, wave: 'triangle', duration: 0.08 }, // 新增：橡皮擦的清脆音效
+    };
+    const p = params[type];
+    if (!p) return;
+
+    osc.type = p.wave;
+    osc.frequency.value = p.freq;
+    gain.gain.setValueAtTime(0.05, audioCtx.current.currentTime); // 极低音量
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.current.currentTime + p.duration);
+    osc.connect(gain);
+    gain.connect(audioCtx.current.destination);
+    osc.start();
+    osc.stop(audioCtx.current.currentTime + p.duration);
+  };
 
   // 新增 ref
   const particlePositions = useRef([]);
   const speedHistory = useRef([]);
+  const pressureHistory = useRef([]); // 【新增】：记录压感历史
   const [activeBrush, setActiveBrush] = useState(null);
   const [activeColor, setActiveColor] = useState("crimson");
   const [identity, setIdentity] = useState("partner");
@@ -490,20 +543,32 @@ function App() {
         brushCounts.current[activeBrush] += 1;
         let spawnRate = (activeBrush === 'wave' || activeBrush === 'twist' || activeBrush === 'heavy') ? 6 : 2;
         if (p5.frameCount % spawnRate === 0 || speed > 10) {
-          let pObj = new PainParticle(p5, realX, realY, activeBrush, PALETTES[activeColor].color, speed, heading, bodyMode);
-
+          // 【新增】：获取压感 (0.0 - 1.0)
+          let pressure = 0.5; // 默认中等力度（适配无压感的鼠标）
+          if (p5.touches.length > 0) {
+            // 触屏设备：使用 pointer force，如果没有则回退到 0.5
+            pressure = p5.touches[0].force ?? 0.5;
+          } else if (typeof p5.mouseX === 'number' && p5._curElement) {
+            // p5 内部挂载了 pointer 对象，可以读取原生压感 (Apple Pencil 等)
+            pressure = p5._curElement?.pointer?.pressure ?? 0.5;
+          }
+          pressure = Math.max(0.2, pressure);
+          // 将 pressure 传入构造函数
+          let pObj = new PainParticle(p5, realX, realY, activeBrush, PALETTES[activeColor].color, speed, heading, bodyMode, pressure);
           // === 新增：记录粒子位置和速度 ===
           particlePositions.current.push({ x: realX, y: realY, bodyMode });
           speedHistory.current.push(speed);
+          pressureHistory.current.push(pressure); // 【新增】：记录压感
           if (speedHistory.current.length > 200) speedHistory.current.shift();
-          // === 新增结束 ===
-
+          if (pressureHistory.current.length > 200) pressureHistory.current.shift();
           if (pObj.isDynamic) {
             dynamicParticles.current.push(pObj);
             if (dynamicParticles.current.length > 500) dynamicParticles.current.shift();
           }
           else { staticParticles.current.push(pObj); }
         }
+        // 【新增】：成功生成粒子时，播放对应笔触的音效
+        playBrushSound(activeBrush);
       }
     }
 
@@ -791,47 +856,34 @@ function App() {
   };
 
   // === 2.generateContent ===
-  // === 修复后的 generateContent ===
   const generateContent = (overrideType, externalLlm = null) => {
-    // currentLlmData 不存在，改为优先使用传入的 externalLlm，其次用 state 中的 llmData
     const activeLlm = externalLlm || llmData;
     const hasLlm = activeLlm?.status === 'success';
-    const dominant = overrideType || getDominantPain();
+    const dominant = overrideType || getDominantPain(); // 痛觉主导类型
+
+    // 【新增】：获取压感强度描述
+    const intensityProfile = calculateIntensity();
+    const pressureLevel = intensityProfile?.avgPressure || 0.5; // 0.2~1.0
+    let painAdjective = "持续性"; // 默认
+    if (pressureLevel > 0.8) painAdjective = "极其剧烈的";
+    else if (pressureLevel > 0.6) painAdjective = "强烈的";
+    else if (pressureLevel < 0.4) painAdjective = "隐隐约约的";
+
     const painNameMap = {
-      twist: "严重绞痛",
-      pierce: "荆棘刺痛",
-      heavy: "坠胀重压",
-      wave: "弥漫胀痛",
-      scrape: "撕裂刮痛"
+      twist: `${painAdjective}绞痛`,
+      pierce: `${painAdjective}刺痛`,
+      heavy: `${painAdjective}坠胀重压`,
+      wave: `${painAdjective}弥漫胀痛`,
+      scrape: `${painAdjective}撕裂刮痛`
     };
     const painName = painNameMap[dominant];
 
     const TEXTS = {
-      twist: {
-        analogy: "想象把一条湿毛巾用力拧干...",
-        med: "下腹部持续性绞痛，建议排查子宫痉挛。",
-        selfCare: "✨ 尝试【婴儿蜷缩式】侧卧..."
-      },
-      pierce: {
-        analogy: "想象不打麻药进行根管治疗...",
-        med: "锐痛（Sharp Pain），建议排查神经性疼痛。",
-        selfCare: "✨ 刺痛发作易引发冷汗..."
-      },
-      heavy: {
-        analogy: "像在腹部绑了5公斤沙袋...",
-        med: "下腹部严重坠胀感，建议排查盆腔充血。",
-        selfCare: "✨ 尝试【臀部垫高平躺】..."
-      },
-      wave: {
-        analogy: "像肚子里有个气球在不断充气...",
-        med: "弥漫性胀痛，建议排查水肿或肠胀气。",
-        selfCare: "✨ 穿着极度宽松的衣物..."
-      },
-      scrape: {
-        analogy: "像一颗未成熟的果实被强行剥皮...",
-        med: "强烈的撕裂样锐痛，建议排查组织粘连。",
-        selfCare: "✨ 这是最耗费体力的痛感..."
-      }
+      twist: { analogy: "想象把一条湿毛巾用力拧干...", med: "下腹部持续性绞痛，建议排查子宫痉挛。", selfCare: "✨ 尝试【婴儿蜷缩式】侧卧..." },
+      pierce: { analogy: "想象不打麻药进行根管治疗...", med: "锐痛，建议排查神经性疼痛。", selfCare: "✨ 刺痛发作易引发冷汗..." },
+      heavy: { analogy: "像在腹部绑了5公斤沙袋...", med: "下腹部严重坠胀感，建议排查盆腔充血。", selfCare: "✨ 尝试【臀部垫高平躺】..." },
+      wave: { analogy: "像肚子里有个气球在不断充气...", med: "弥漫性胀痛，建议排查水肿或肠胀气。", selfCare: "✨ 穿着极度宽松的衣物..." },
+      scrape: { analogy: "像一颗未成熟的果实被强行剥皮...", med: "强烈的撕裂样锐痛，建议排查组织粘连。", selfCare: "✨ 这是最耗费体力的痛感..." }
     };
 
     let finalMedComplaint = hasLlm ? activeLlm.med : (TEXTS[dominant]?.med || "主诉：持续性痛经。");
@@ -851,15 +903,9 @@ function App() {
 
     let auxiliaryInfo = [];
     const diagMap = {
-      'endometriosis': '子宫内膜异位症',
-      'adenomyosis': '子宫腺肌症',
-      'pcos': '多囊卵巢综合征',
-      'fibroids': '子宫肌瘤',
-      'pid': '盆腔炎性疾病（PID）',
-      'ovariancyst': '卵巢囊肿',
-      'cervicalstenosis': '宫颈管狭窄',
-      'unchecked': '未做过相关检查',
-      'none': '无确诊'
+      'endometriosis': '子宫内膜异位症', 'adenomyosis': '子宫腺肌症', 'pcos': '多囊卵巢综合征',
+      'fibroids': '子宫肌瘤', 'pid': '盆腔炎性疾病（PID）', 'ovariancyst': '卵巢囊肿',
+      'cervicalstenosis': '宫颈管狭窄', 'unchecked': '未做过相关检查', 'none': '无确诊'
     };
     const diagValue = medicalBackground.diagnosed;
     if (diagValue && diagValue !== '' && diagValue !== 'none' && diagValue !== 'unchecked') {
@@ -869,28 +915,39 @@ function App() {
     }
 
     const allergyValue = medicalBackground.allergies;
-    const allergyLabelMap = {
-      aspirin: '阿司匹林', ibuprofen: '布洛芬', nsaids: '多种NSAIDs'
-    };
+    const allergyLabelMap = { aspirin: '阿司匹林', ibuprofen: '布洛芬', nsaids: '多种NSAIDs' };
     if (allergyValue && allergyValue !== '' && allergyValue !== 'none' && allergyValue !== 'unknown') {
       auxiliaryInfo.push(`• 药物过敏：${allergyLabelMap[allergyValue] || allergyValue}过敏，请注意用药。`);
     }
 
+    // 1. 先定义 finalMedReference
     let finalMedReference = auxiliaryInfo.join('\n');
     if (examPreps.length > 0) {
       finalMedReference += (finalMedReference ? '\n' : '') + examPreps.join('\n');
     } else if (!finalMedReference) {
       finalMedReference = "• 建议向医生详细描述本次记录的痛觉质地与发作时间。";
     }
+
+    // 2. 然后再追加时间节律分析
+    const timeRhythm = calculateTimeRhythm();
+    if (timeRhythm) {
+      const periodMap = {
+        morning: { name: '上午/晨间', insight: '这与前列腺素/子宫收缩素在晨间分泌达峰的节律高度一致，常伴随起床后的下腹坠胀感。' },
+        afternoon: { name: '下午', insight: '午后疼痛加剧，可能与久坐导致的盆腔充血及体力消耗有关。' },
+        night: { name: '夜间/晚间', insight: '夜间痛觉敏感度生理性升高，且平卧时盆腔血流改变，易使坠痛感加剧。' }
+      };
+      // 修复：更改变量名避免覆盖 dominant
+      const dominantPeriodInfo = periodMap[timeRhythm.dominantPeriod];
+      if (dominantPeriodInfo) {
+        finalMedReference += `\n\n⏱️【时间节律分析】：您的图谱绘制行为显示，痛感主要集中于${dominantPeriodInfo.name}（占比 ${Math.round(timeRhythm[timeRhythm.dominantPeriod] * 100)}%）。${dominantPeriodInfo.insight}`;
+      }
+    }
+
     // 根据过敏史智能推荐止痛药
     let safePainkiller = "布洛芬";
-    if (medicalBackground.allergies === 'ibuprofen') {
-      safePainkiller = "对乙酰氨基酚（泰诺）";
-    } else if (medicalBackground.allergies === 'nsaids') {
-      safePainkiller = "对乙酰氨基酚（请遵医嘱）";
-    } else if (medicalBackground.allergies === 'aspirin') {
-      safePainkiller = "布洛芬（避免阿司匹林）";
-    }
+    if (medicalBackground.allergies === 'ibuprofen') safePainkiller = "对乙酰氨基酚（泰诺）";
+    else if (medicalBackground.allergies === 'nsaids') safePainkiller = "对乙酰氨基酚（请遵医嘱）";
+    else if (medicalBackground.allergies === 'aspirin') safePainkiller = "布洛芬（避免阿司匹林）";
 
     let actionParts = [];
     if (userPrefs.includes('alone')) {
@@ -917,9 +974,10 @@ function App() {
       selfCare: finalSelfCare,
       workText: hasLlm ? activeLlm.work : workTemplate,
       action: actionParts.join("\n"),
-      med: finalMedComplaint  // 补充：Result 页面医生 tab 引用了 content.med
+      med: finalMedComplaint
     };
   };
+
 
   // 可编辑内容辅助函数
   const getEditedOrDefault = (key, defaultVal) =>
@@ -974,7 +1032,7 @@ function App() {
       console.error('复制失败', err);
     });
   };
-  // === 1. 优化数据提取计算函数 ===
+  // === 优化数据提取计算函数 ===
   const calculateSpatialMap = () => {
     // 盲画模式不计算解剖位置
     if (bodyMode === 'none') return null;
@@ -1003,18 +1061,53 @@ function App() {
       upperBody: parseFloat((upper / total).toFixed(2))
     };
   };
+  // === 计算痛觉时间节律 ===
+  const calculateTimeRhythm = () => {
+    // 汇总所有粒子的时间数据（只需统计动态粒子即可代表总体分布）
+    const particles = dynamicParticles.current;
+    if (particles.length === 0) return null;
+
+    let morning = 0;     // 0:00 - 11:59 (0 - 719 分钟)
+    let afternoon = 0;   // 12:00 - 17:59 (720 - 1079 分钟)
+    let night = 0;       // 18:00 - 23:59 (>= 1080 分钟)
+
+    particles.forEach(p => {
+      if (p.minuteOfDay < 720) morning++;
+      else if (p.minuteOfDay < 1080) afternoon++;
+      else night++;
+    });
+
+    const total = morning + afternoon + night;
+    if (total === 0) return null;
+
+    return {
+      morning: parseFloat((morning / total).toFixed(2)),
+      afternoon: parseFloat((afternoon / total).toFixed(2)),
+      night: parseFloat((night / total).toFixed(2)),
+      // 额外传一个主诉时段给后端，方便它造句
+      dominantPeriod: morning >= afternoon && morning >= night ? 'morning'
+        : afternoon >= morning && afternoon >= night ? 'afternoon'
+          : 'night'
+    };
+  };
 
   const calculateIntensity = () => {
     const speeds = speedHistory.current;
-    if (speeds.length === 0) return null;
-
-    const avg = speeds.reduce((s, v) => s + v, 0) / speeds.length;
-    const peak = Math.max(...speeds);
+    const pressures = pressureHistory.current; // 获取压感数据 
+    if (speeds.length === 0 && pressures.length === 0) return null;
+    const avg = speeds.length > 0 ? speeds.reduce((s, v) => s + v, 0) / speeds.length : 0;
+    const peak = speeds.length > 0 ? Math.max(...speeds) : 0;
+    // 计算平均压感
+    const avgPressure = pressures.length > 0
+      ? pressures.reduce((s, v) => s + v, 0) / pressures.length
+      : 0.5; // 默认0.5中等压力
     return {
       avgSpeed: parseFloat(avg.toFixed(1)),
-      peakSpeed: parseFloat(peak.toFixed(1))
+      peakSpeed: parseFloat(peak.toFixed(1)),
+      avgPressure: parseFloat(avgPressure.toFixed(2)) // 传出平均压感 (0.2 - 1.0)
     };
   };
+
   const getDominantPain = () => {
     const counts = brushCounts.current;
     const maxVal = Math.max(...Object.values(counts));
@@ -1039,11 +1132,13 @@ function App() {
         painScore: Object.values(brushCounts.current).reduce((sum, v) => sum + v, 0),
         spatialMap: calculateSpatialMap(),
         intensityProfile: calculateIntensity(),
+        timeRhythm: calculateTimeRhythm(),
         colorPalette: activeColor,
         bodyMode: bodyMode,
         medicalBackground: medicalBackground,
         tonePreference: tonePreference,
       };
+
 
       // API 地址
       const API_BASE = 'https://painscape-api.onrender.com';
@@ -1054,14 +1149,10 @@ function App() {
         const response = await fetch(`${API_BASE}/api/generate`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            dominantPain: dominant,
-            userPref: userPrefs.join(','),
-            medicalBackground,
-            painScore: Object.values(brushCounts.current).reduce((a, b) => a + b, 0)
-          }),
+          body: JSON.stringify(payload),
           signal: controller.signal
         });
+
         clearTimeout(timeoutId);
         if (response.ok) {
           aiResult = await response.json();
@@ -1087,7 +1178,9 @@ function App() {
           brushCounts: { ...brushCounts.current },
           bodyMode,
           colorPalette: activeColor,
-          painScore: Object.values(brushCounts.current).reduce((a, b) => a + b, 0)
+          painScore: Object.values(brushCounts.current).reduce((a, b) => a + b, 0),
+          dominantPeriod: calculateTimeRhythm()?.dominantPeriod || 'morning' // 【新增】保存主时段
+
         }
       };
 
@@ -1101,7 +1194,9 @@ function App() {
       setPage("result");
       particlePositions.current = [];
       speedHistory.current = [];
+      pressureHistory.current = []; // 【新增】：重置压感历史
     }
+
   };
   const updateRecordInfo = (recordId, field, value) => {
     const updatedHistory = history.map(r =>
@@ -1308,6 +1403,20 @@ function App() {
                   ←
                 </button>
                 <span style={{ color: '#fff', fontWeight: 'bold', fontSize: '20px' }}>PainScape</span>
+                {/* 【新增】：声音开关按钮 */}
+                <button
+                  onClick={(e) => { e.stopPropagation(); setIsMuted(!isMuted); }}
+                  style={{
+                    background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(10px)',
+                    border: `1px solid ${isMuted ? '#666' : '#4caf50'}`,
+                    borderRadius: '50%', width: '36px', height: '36px',
+                    fontSize: '16px', cursor: 'pointer', display: 'flex',
+                    alignItems: 'center', justifyContent: 'center',
+                    color: isMuted ? '#666' : '#4caf50'
+                  }}
+                >
+                  {isMuted ? '🔇' : '🔊'}
+                </button>
                 <button style={{ background: '#d32f2f', color: '#fff', border: 'none', padding: '6px 18px', borderRadius: '20px', cursor: 'pointer', fontWeight: 'bold' }} onClick={handleFinish}>生成</button>
               </div>
 
@@ -1800,6 +1909,12 @@ function App() {
                     );
                   })()}
                 </div>
+              )}
+              {/* 绘制时段徽章 */}
+              {viewingDiary.meta?.dominantPeriod && (
+                <span style={{ background: 'rgba(156, 39, 176, 0.12)', borderRadius: '12px', padding: '3px 10px', fontSize: '11px', color: '#ce93d8' }}>
+                  ⏱️ {viewingDiary.meta.dominantPeriod === 'morning' ? '晨间痛' : viewingDiary.meta.dominantPeriod === 'afternoon' ? '午后痛' : '夜间痛'}
+                </span>
               )}
 
               <h3 style={{ color: '#fff', marginTop: '20px', marginBottom: '10px' }}>
