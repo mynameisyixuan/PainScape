@@ -247,28 +247,48 @@ function App() {
   const [showExpInput, setShowExpInput] = useState(false);
   const [expText, setExpText] = useState("");
   const [expTags, setExpTags] = useState("");
-
   // 新增：保存经验的函数
   const handleSaveExperience = () => {
     if (!expText.trim()) return alert("请写下你的经验");
-
     const tagsArray = expTags ? expTags.split(/[,，]/).filter(t => t.trim()) : [];
-
     setPosts(prev => prev.map(p =>
       p.id === viewingPost.id
         ? { ...p, userExperience: expText, experienceTags: tagsArray }
         : p
     ));
-
     setViewingPost(vp => ({
       ...vp,
       userExperience: expText,
       experienceTags: tagsArray
     }));
-
     setShowExpInput(false);
     setExpText("");
     setExpTags("");
+  };
+  // 轻量级提示
+  const showToast = (msg) => {
+    const toast = document.createElement('div');
+    toast.innerText = msg;
+    Object.assign(toast.style, {
+      position: 'fixed',
+      bottom: '80px',
+      left: '50%',
+      transform: 'translateX(-50%)',
+      background: 'rgba(20,20,20,0.9)',
+      color: '#fff',
+      padding: '10px 24px',
+      borderRadius: '20px',
+      fontSize: '14px',
+      zIndex: '9999',
+      backdropFilter: 'blur(5px)',
+      border: '1px solid #333',
+      transition: 'opacity 0.3s'
+    });
+    document.body.appendChild(toast);
+    setTimeout(() => {
+      toast.style.opacity = '0';
+      setTimeout(() => document.body.removeChild(toast), 300);
+    }, 1500);
   };
 
   // 新增 ref
@@ -1118,6 +1138,15 @@ function App() {
   };
   return (
     <>
+      {/* 心跳动画注入 */}
+      <style>{`
+      @keyframes pulse {
+        0% { transform: scale(1); }
+        25% { transform: scale(1.15); }
+        50% { transform: scale(0.95); }
+        100% { transform: scale(1); }
+      }
+    `}</style>
       <div style={{ position: 'fixed', top: 0, left: 0, zIndex: 1 }}>
         <Sketch setup={setup} draw={draw} preload={preload} mouseWheel={mouseWheel} mouseReleased={mouseReleased} touchEnded={mouseReleased} />
       </div>
@@ -2101,21 +2130,69 @@ function App() {
               </div>
 
 
-              {/* 底部互动 */}
-              <button style={{ background: 'none', border: 'none', color: viewingPost.hasUserHugged ? '#d32f2f' : '#888', fontSize: '12px', cursor: 'pointer' }} onClick={(e) => {
-                e.stopPropagation();
-                setPosts(prev => prev.map(p => p.id === viewingPost.id ? { ...p, hugs: p.hugs + (p.hasUserHugged ? -1 : 1), hasUserHugged: !p.hasUserHugged } : p));
-                setViewingPost(vp => ({ ...vp, hugs: vp.hugs + (vp.hasUserHugged ? -1 : 1), hasUserHugged: !vp.hasUserHugged }));
-              }} > 🤗 {viewingPost.hugs} </button>
+              {/* 底部互动按钮区 */}
+              <div style={{
+                marginTop: '25px',
+                paddingTop: '20px',
+                borderTop: '1px solid #222',
+                display: 'flex',
+                justifyContent: 'center'
+              }}>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const isHugged = viewingPost.hasUserHugged;
 
-              <button onClick={() => {
-                setPosts(prev => prev.map(p =>
-                  p.id === viewingPost.id ? { ...p, hugs: p.hugs + 1 } : p
-                ));
-                setViewingPost(vp => ({ ...vp, hugs: (vp.hugs || 0) + 1 }));
-                // 短暂显示"已送达"视觉反馈
-                alert("🤗 抱抱已送达");
-              }}>❤️ 给她一个抱抱</button>
+                    // 更新列表数据
+                    setPosts(prev => prev.map(p =>
+                      p.id === viewingPost.id
+                        ? { ...p, hugs: p.hugs + (isHugged ? -1 : 1), hasUserHugged: !isHugged }
+                        : p
+                    ));
+
+                    // 更新当前详情页数据
+                    setViewingPost(vp => ({
+                      ...vp,
+                      hugs: vp.hugs + (isHugged ? -1 : 1),
+                      hasUserHugged: !isHugged
+                    }));
+
+                    // 触发轻量提示
+                    showToast(isHugged ? "收回抱抱" : "🤗 抱抱已送达");
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    background: viewingPost.hasUserHugged
+                      ? 'rgba(211, 47, 47, 0.15)'
+                      : 'rgba(255, 255, 255, 0.05)',
+                    border: `1px solid ${viewingPost.hasUserHugged ? '#d32f2f' : '#333'}`,
+                    borderRadius: '25px',
+                    padding: '12px 30px',
+                    color: viewingPost.hasUserHugged ? '#ff5252' : '#888',
+                    fontSize: '16px',
+                    fontWeight: 'bold',
+                    cursor: 'pointer',
+                    transition: 'all 0.3s ease',
+                    boxShadow: viewingPost.hasUserHugged ? '0 0 15px rgba(211, 47, 47, 0.3)' : 'none',
+                    animation: viewingPost.hasUserHugged ? 'pulse 0.5s ease-in-out' : 'none'
+                  }}
+                >
+                  <span style={{ fontSize: '20px' }}>
+                    {viewingPost.hasUserHugged ? '❤️' : '🤍'}
+                  </span>
+                  <span>{viewingPost.hasUserHugged ? '已拥抱' : '给她抱抱'}</span>
+                  <span style={{
+                    fontSize: '13px',
+                    color: viewingPost.hasUserHugged ? '#ef9a9a' : '#666',
+                    fontWeight: 'normal'
+                  }}>
+                    {viewingPost.hugs}
+                  </span>
+                </button>
+              </div>
+
             </div>
           </div>
         )}
