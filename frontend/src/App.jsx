@@ -248,9 +248,11 @@ function App() {
   const [quickPainType, setQuickPainType] = useState('twist');
   const [quickPainScore, setQuickPainScore] = useState(7);
 
+
   // 新增状态变量
   const [showGuide, setShowGuide] = useState(false);
   const [showMedicalOpt, setShowMedicalOpt] = useState(false);
+  const [showContent, setShowContent] = useState('preference'); // 'preference' 或 'medical'
   const [medicalBackground, setMedicalBackground] = useState({
     diagnosed: '',
     allergies: '',
@@ -1552,7 +1554,6 @@ function App() {
         {/* === Onboarding 页面 === */}
         {page === "onboarding" && (
           <div style={{ pointerEvents: 'auto', background: '#0a0a0a', width: '100%', minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '20px', boxSizing: 'border-box' }}>
-
             {/* 快速指南问号按钮 */}
             <div style={{ position: 'absolute', top: '15px', right: '15px', zIndex: 10 }}>
               <button onClick={() => setShowGuide(!showGuide)}
@@ -1609,27 +1610,62 @@ function App() {
             <h1 style={{ color: '#fff', marginBottom: '5px', fontSize: '2rem' }}>PainScape</h1>
             <p style={{ color: '#aaa', marginBottom: '20px' }}>让说不出的痛，换一种方式抵达</p>
 
-            <div style={{ width: '100%', maxWidth: '320px', textAlign: 'left' }}>
-              <label style={{ color: '#fff', marginBottom: '10px', display: 'block', fontSize: '0.9rem', fontWeight: 'bold' }}>当痛经发作时，你最需要伴侣/家人怎么做？</label>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {['alone', 'care', 'comfort'].map((p, i) => (
-                  <button key={p} onClick={() => togglePref(p)} style={{ padding: '12px', borderRadius: '10px', textAlign: 'left', background: '#1e1e1e', border: userPrefs.includes(p) ? '2px solid #d32f2f' : '1px solid #444', color: '#fff', cursor: 'pointer' }}>
-                    <div style={{ fontSize: '13px', fontWeight: 'bold' }}>{['🛑 别管我，让我一个人待着', '🥣 我没力气，需要实际照顾', '🫂 我很脆弱，需要情绪陪伴'][i]}</div>
-                  </button>
-                ))}
+            {/* 陪伴偏好内容 */}
+            {showContent === 'preference' && (
+              <div style={{ width: '100%', maxWidth: '320px' }}>
+                <p style={{ color: '#fff', fontSize: '0.9rem', fontWeight: 'bold', marginBottom: '12px', textAlign: 'center' }}>当痛经发作时，你最需要什么？</p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {['alone', 'care', 'comfort'].map((p, i) => (
+                    <button key={p} onClick={() => togglePref(p)} style={{
+                      padding: '12px', borderRadius: '10px', textAlign: 'left',
+                      background: userPrefs.includes(p) ? '#d32f2f' : '#1e1e1e',
+                      border: userPrefs.includes(p) ? '2px solid #d32f2f' : '1px solid #444',
+                      color: '#fff', cursor: 'pointer',
+                      fontSize: '13px', fontWeight: userPrefs.includes(p) ? 'bold' : 'normal'
+                    }}>
+                      <div style={{ fontSize: '13px', fontWeight: 'bold' }}>
+                        {['🛑 别管我，让我一个人待着', '🥣 我没力气，需要实际照顾', '🫂 我很脆弱，需要情绪陪伴'][i]}
+                      </div>
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
+            {/* 切换按钮 */}
+            <button onClick={() => setShowContent(showContent === 'preference' ? 'medical' : 'preference')}
+              style={{
+                background: 'transparent', border: '1px solid #444', color: '#888',
+                padding: '8px 14px', borderRadius: '20px', fontSize: '12px',marginTop: '20px',
+                cursor: 'pointer', width: '100%', maxWidth: '320px', marginBottom: '10px',
+                display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '6px'
+              }}>
+              {showContent === 'preference' ? '填写健康信息（可选）' : '回到陪伴偏好'}
+              <span style={{ transition: 'transform 0.3s', transform: showContent === 'medical' ? 'rotate(180deg)' : 'rotate(0deg)' }}>↑</span>
+            </button>
+            {/* 健康信息内容 */}
+            {showContent === 'medical' && (
+              <div style={{ width: '100%', maxWidth: '320px' }}>
+                <p style={{ color: '#fff', fontSize: '0.9rem', fontWeight: 'bold', marginBottom: '12px', textAlign: 'center' }}>填写健康信息（可选）</p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {/* 月经周期选择 */}
+                  <div style={{ marginTop: '12px' }}>
+                    <label style={{ color: '#888', fontSize: '12px', display: 'block', marginBottom: '8px' }}>📅 今天是月经第几天？（可选）</label>
+                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                      {['第1天', '第2天', '第3-5天', '排卵期痛'].map(item => (
+                        <button key={item} onClick={() => setCycleDay(cycleDay === item ? '' : item)}
+                          style={{
+                            padding: '6px 12px', borderRadius: '15px', fontSize: '11px', cursor: 'pointer',
+                            background: cycleDay === item ? '#d32f2f' : '#1e1e1e', color: cycleDay === item ? '#fff' : '#888',
+                            border: `1px solid ${cycleDay === item ? '#d32f2f' : '#444'}`
+                          }}>
+                          {item}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
 
-            {/* 选填：健康信息 */}
-            <div style={{ width: '100%', maxWidth: '320px', marginTop: '15px' }}>
-              <button onClick={() => setShowMedicalOpt(!showMedicalOpt)}
-                style={{ background: 'transparent', border: '1px solid #444', color: '#888', padding: '8px 14px', borderRadius: '20px', fontSize: '12px', cursor: 'pointer', width: '100%' }}>
-                {showMedicalOpt ? '收起 ↑' : '填写健康信息（可选，用于生成更准确的医疗建议）'}
-              </button>
-              {showMedicalOpt && (
-                <div style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <select value={medicalBackground.diagnosed} onChange={(e) => setMedicalBackground({ ...medicalBackground, diagnosed: e.target.value })}
-                    style={{ width: '100%', padding: '8px', background: '#1e1e1e', color: '#fff', border: '1px solid #444', borderRadius: '8px', fontSize: '12px' }}>
+                  {/* 既往诊断与过敏史 */}
+                  <select value={medicalBackground.diagnosed} onChange={(e) => setMedicalBackground({ ...medicalBackground, diagnosed: e.target.value })} style={{ width: '100%', padding: '8px', background: '#1e1e1e', color: '#fff', border: '1px solid #444', borderRadius: '8px', fontSize: '12px' }}>
                     <option value="">既往诊断（可选）</option>
                     <option value="none">无确诊</option>
                     <option value="endometriosis">子宫内膜异位症</option>
@@ -1641,8 +1677,8 @@ function App() {
                     <option value="cervicalstenosis">宫颈管狭窄</option>
                     <option value="unchecked">未做过相关检查</option>
                   </select>
-                  <select value={medicalBackground.allergies} onChange={(e) => setMedicalBackground({ ...medicalBackground, allergies: e.target.value })}
-                    style={{ width: '100%', padding: '8px', background: '#1e1e1e', color: '#fff', border: '1px solid #444', borderRadius: '8px', fontSize: '12px' }}>
+
+                  <select value={medicalBackground.allergies} onChange={(e) => setMedicalBackground({ ...medicalBackground, allergies: e.target.value })} style={{ width: '100%', padding: '8px', background: '#1e1e1e', color: '#fff', border: '1px solid #444', borderRadius: '8px', fontSize: '12px' }}>
                     <option value="">药物过敏史（可选）</option>
                     <option value="none">无已知过敏</option>
                     <option value="aspirin">阿司匹林过敏</option>
@@ -1650,60 +1686,41 @@ function App() {
                     <option value="nsaids">多种NSAIDs过敏</option>
                     <option value="unknown">未留意过</option>
                   </select>
-                  {/* 新增：月经周期天数 */}
-                  <div style={{ marginTop: '12px' }}>
-                    <label style={{ color: '#888', fontSize: '12px', display: 'block', marginBottom: '8px' }}>
-                      📅 今天是月经第几天？（可选，影响建议方向）
-                    </label>
-                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                      {[
-                        { label: '第1天', value: '1' },
-                        { label: '第2天', value: '2' },
-                        { label: '第3-5天', value: '3-5' },
-                        { label: '排卵期痛', value: 'ovulation' },
-                      ].map(item => (
-                        <button
-                          key={item.value}
-                          onClick={() => setCycleDay(cycleDay === item.value ? '' : item.value)}
-                          style={{
-                            padding: '6px 12px', borderRadius: '15px', fontSize: '11px', cursor: 'pointer',
-                            background: cycleDay === item.value ? '#d32f2f' : '#1e1e1e',
-                            color: cycleDay === item.value ? '#fff' : '#888',
-                            border: `1px solid ${cycleDay === item.value ? '#d32f2f' : '#444'}`
-                          }}
-                        >
-                          {item.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
 
+                  {/* 语气偏好 */}
                   <div style={{ display: 'flex', gap: '8px' }}>
-                    <button onClick={() => setTonePreference('gentle')} style={{ flex: 1, padding: '8px', borderRadius: '8px', fontSize: '12px', cursor: 'pointer', background: tonePreference === 'gentle' ? '#4caf50' : '#1e1e1e', color: tonePreference === 'gentle' ? '#fff' : '#888', border: tonePreference === 'gentle' ? '2px solid #4caf50' : '1px solid #444' }}>🌿 温和</button>
-                    <button onClick={() => setTonePreference('direct')} style={{ flex: 1, padding: '8px', borderRadius: '8px', fontSize: '12px', cursor: 'pointer', background: tonePreference === 'direct' ? '#2196f3' : '#1e1e1e', color: tonePreference === 'direct' ? '#fff' : '#888', border: tonePreference === 'direct' ? '2px solid #2196f3' : '1px solid #444' }}>💬 直接</button>
+                    <button onClick={() => setTonePreference('gentle')} style={{
+                      flex: 1, padding: '8px', borderRadius: '8px', fontSize: '12px', cursor: 'pointer',
+                      background: tonePreference === 'gentle' ? '#4caf50' : '#1e1e1e', color: tonePreference === 'gentle' ? '#fff' : '#888',
+                      border: tonePreference === 'gentle' ? '2px solid #4caf50' : '1px solid #444'
+                    }}>🌿 温和</button>
+                    <button onClick={() => setTonePreference('direct')} style={{
+                      flex: '1', padding: '8px', borderRadius: '8px', fontSize: '12px', cursor: 'pointer',
+                      background: tonePreference === 'direct' ? '#2196f3' : '#1e1e1e', color: tonePreference === 'direct' ? '#fff' : '#888',
+                      border: tonePreference === 'direct' ? '2px solid #2196f3' : '1px solid #444'
+                    }}>💬 直接</button>
                   </div>
                   <p style={{ color: '#666', fontSize: '10px', margin: '0' }}>温和：安抚为主 / 直接：只说方法</p>
                 </div>
-              )}
-            </div>
-
-            <button style={{ marginTop: '20px', width: '200px', padding: '14px', background: '#d32f2f', color: '#fff', border: 'none', borderRadius: '25px', fontWeight: 'bold', cursor: 'pointer' }}
-              onClick={() => { pgFrontRef.current?.clear(); pgBackRef.current?.clear(); dynamicParticles.current = []; staticParticles.current = []; particlePositions.current = []; speedHistory.current = []; setPage("canvas"); }}>
+              </div>
+            )}
+            <button onClick={() => setPage("drawing")} style={{ marginTop: '30px', width: '320px', padding: '16px', background: '#d32f2f', color: '#fff', border: 'none', borderRadius: '25px', fontWeight: 'bold', cursor: 'pointer', fontSize: '16px', boxShadow: '0 4px 15px rgba(211, 47, 47, 0.3)' }}>
               开始绘制
             </button>
-            {/* 【新增】：快速记录入口 */}
-            <button
-              style={{ marginTop: '8px', width: '200px', padding: '10px', background: 'transparent', border: '1px solid #444', color: '#666', borderRadius: '25px', fontSize: '12px', cursor: 'pointer' }}
-              onClick={() => setPage('quickLog')}
-            >
+
+            {/* 次要入口 - 轻量化，置于底部，不干扰核心操作 */}
+            <div style={{ display: 'flex', gap: '15px', marginTop: '20px' }}>
+              <button onClick={() => setPage("community")} style={{ background: 'transparent', border: '1px solid #444', color: '#888', padding: '8px 15px', width: '150px', borderRadius: '20px', fontSize: '12px', cursor: 'pointer' }}>🌍 探索广场</button>
+              <button onClick={() => setPage("history")} style={{ background: 'transparent', border: '1px solid #444', color: '#888', padding: '8px 15px', width: '150px', borderRadius: '20px', fontSize: '12px', cursor: 'pointer' }}>📅 疼痛日记</button>
+            </div>
+
+            {/* 快速记录入口 - 紧急备用，视觉上弱于主按钮但强于底部入口 */}
+            <button onClick={() => setPage("quickLog")} style={{ marginTop: '15px', width: '320px', padding: '10px', background: 'transparent', border: '1px solid #444', color: '#666', borderRadius: '25px', fontSize: '12px', cursor: 'pointer' }}>
               ⚡ 来不及画，快速记录
             </button>
-            <div style={{ display: 'flex', gap: '15px', marginTop: '15px', marginBottom: '10px' }}>
-              <button style={{ background: 'transparent', border: '1px solid #444', color: '#888', padding: '8px 16px', borderRadius: '20px', cursor: 'pointer', fontSize: '12px' }} onClick={() => setPage("community")}>🌍 探索广场</button>
-              <button style={{ background: 'transparent', border: '1px solid #444', color: '#888', padding: '8px 16px', borderRadius: '20px', cursor: 'pointer', fontSize: '12px' }} onClick={() => setPage("history")}>📅 疼痛日记</button>
-            </div>
           </div>
         )}
+
 
         {/* === Canvas 绘画页面 === */}
         {page === "canvas" && (
