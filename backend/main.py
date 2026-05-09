@@ -21,7 +21,7 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -46,13 +46,13 @@ PAIN_MAP = {
     "pierce": "针刺/钻痛/放射痛",
     "heavy": "重压坠胀感",
     "wave": "弥漫性阵发性胀痛",
-    "scrape": "刀刮撕裂痛"
+    "scrape": "刀刮撕裂痛",
 }
 
 BODY_MODE_MAP = {
     "front": "腹部/盆腔前侧",
     "back": "腰骶部/后侧",
-    "both": "腹部与腰骶部双侧"
+    "both": "腹部与腰骶部双侧",
 }
 
 BRUSH_LABEL_MAP = {
@@ -60,7 +60,7 @@ BRUSH_LABEL_MAP = {
     "pierce": "荆/刺",
     "heavy": "坠/压",
     "wave": "胀/扩",
-    "scrape": "刮/撕"
+    "scrape": "刮/撕",
 }
 
 
@@ -73,9 +73,17 @@ async def generate_pain_report(data: PainData):
 
     pain_type = PAIN_MAP.get(data.dominantPain, "复合性痛经")
     body_location = BODY_MODE_MAP.get(data.bodyMode or "front", "腹部/盆腔")
-    diagnosed = mb.get("diagnosed", "无既往病史记录")
-    allergies = mb.get("allergies", "无已知过敏")
-
+    if mb.get("allergies") in ["unknown", "none", "", None]:
+        allergies = "无已知过敏记录"
+    else:
+        allergies = mb.get("allergies", "无已知过敏")
+    if mb.get("diagnosed") in ["unchecked", "", None]:
+        diagnosed = "未做过相关妇科检查"
+    elif mb.get("diagnosed") == "none":
+        diagnosed = "无既往病史记录"
+    else:
+        diagnosed = mb.get("diagnosed", "无既往病史记录")
+    
     # 组装笔触分布描述
     brush_desc_parts = []
     for k, v in brush_counts.items():
@@ -102,28 +110,30 @@ async def generate_pain_report(data: PainData):
     tone_map = {
         "gentle": "温柔体贴、注重情感支持",
         "professional": "简洁专业、以事实为主",
-        "assertive": "直接有力、边界清晰"
+        "assertive": "直接有力、边界清晰",
     }
     tone_desc = tone_map.get(data.tonePreference or "gentle", "温柔体贴")
-
+    
     system_prompt = """你是一个专业的痛经疼痛管理顾问，擅长将具身化的疼痛感知数据转译为不同社会场景下的语言表达。
 
 你必须严格按照以下 JSON schema 输出，不得添加任何额外字段或解释性文字：
 
 {
-  "analogy": "（面向伴侣）用生动的通感比喻描述这种痛觉，帮助没有痛经经验的人感同身受，语气温柔真实，60-80字",
-  "work": "（面向职场/HR）一段正式简洁的请假或居家申请说明，避免情绪化表达，突出生理客观性，40-60字",
-  "med": "（面向医生）规范医疗语言的主诉描述，包含疼痛性质、部位、强度、伴随症状推测，60-100字",
-  "selfCare": "（面向自身）3条具体可操作的当下自愈建议，分行列出，每条20字以内，避免建议过敏药物"
+  # 修改 system_prompt 中的字段说明：
+"analogy": "（面向伴侣）用生动的通感比喻描述这种痛觉，帮助没有痛经经验的人感同身受，语气温柔真实，120-160字",
+"work": "（面向职场/HR）一段正式简洁的请假或居家申请说明，避免情绪化表达，突出生理客观性，80-120字",
+ "med": "（面向医生）规范医疗语言的主诉描述，包含疼痛性质、部位、强度、伴随症状推测，60-100字",
+"selfCare": "（面向自身）5条具体可操作的当下自愈建议，分行列出，每条30字以内，涵盖姿势、热敷、饮食、呼吸、心理5个维度，避免建议过敏药物",
+ 
 }
 
 规则：
 1. selfCare 中严禁推荐患者过敏的药物（过敏信息会在数据中提供）
-2. analogy 必须包含至少一个具体的感官比喻
+2. analogy 必须包含至少一个具体的感官比喻，语言要丰富，要用到通用器官的痛感转译，让大多数人能够想象。参考示例：强烈的刺钻、神经性痛感可以描述为“想象一下不打麻药做根管治疗”，“用脚碾小腿骨”，“用脚踩住睾丸”等。
 3. med 必须使用"患者自述"开头
 4. 所有内容必须基于提供的疼痛数据，不得虚构症状
 5. 输出必须是合法 JSON，不含 markdown 代码块
-6. 如果建议患者进行检查，请务必在 'med' 字段中使用以下精确术语之一：盆腔超声、经阴道超声、激素六项、腹腔镜。"""
+6. 如果建议患者进行检查，请务必在 'med' 字段中使用以下精确术语之一：盆腔超声、经阴道超声、激素六项、腹腔镜。并简单给出对应检查的基础解释避免患者感到困惑"""
 
     user_prompt = f"""以下是患者的痛觉绘图数据，请据此生成四场景转译报告：
 
@@ -176,7 +186,7 @@ async def generate_pain_report(data: PainData):
             "analogy": "像有人把你的腹部拧成麻花，又用烙铁烫过——这不是夸张，这是真实发生的事。",
             "work": "因严重原发性痛经，本人今日无法正常出勤，预计需居家休息一天，特此说明。",
             "med": "患者自述下腹部痉挛性绞痛，程度较重，伴腰骶部坠胀，今日为月经周期第一天，症状影响日常功能。",
-            "selfCare": "• 热水袋敷于下腹部15-20分钟\n• 膝胸卧位缓解盆腔充血\n• 补充镁元素（如坚果）有助于缓解痉挛"
+            "selfCare": "• 热水袋敷于下腹部15-20分钟\n• 膝胸卧位缓解盆腔充血\n• 补充镁元素（如坚果）有助于缓解痉挛",
         }
 
 

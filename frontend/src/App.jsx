@@ -70,7 +70,7 @@ class PainParticle {
       // ⚡️ 【恢复】刺钻：极长主干 + 预生成倒刺
       let angle = heading + p5.random(-0.1, 0.1);
       this.vel = p5.createVector(p5.cos(angle), p5.sin(angle));
-      this.vel.mult(p5.random(25, 45));
+      this.vel.mult(p5.random(6, 18));  // ← 缩短单步距离
       this.size = p5.random(2, 5);
 
       this.thorns = [];
@@ -497,11 +497,23 @@ function App() {
       ctx.fillStyle = '#0a0a0a';
       ctx.fillRect(0, 0, cvs.width, cvs.height);
 
-      // 2. 绘制痛觉图谱
+      // 2. 绘制痛觉图谱（等比缩放，防止变形）
       const mainImg = new Image();
-      mainImg.src = shareContent.historyImg || imgUrl;
-      await new Promise(r => mainImg.onload = r);
-      ctx.drawImage(mainImg, 40, 40, 520, 520);
+      // 增加错误拒绝逻辑，防呆
+      await new Promise((resolve, reject) => {
+        mainImg.onload = resolve;
+        mainImg.onerror = reject;
+        mainImg.src = shareContent.historyImg || imgUrl;
+      });
+
+      // 计算等比缩放，放入 520x520 的区域（留白各 40px）
+      const maxDim = 520;
+      const ratio = Math.min(maxDim / mainImg.width, maxDim / mainImg.height);
+      const drawW = mainImg.width * ratio;
+      const drawH = mainImg.height * ratio;
+      const drawX = 40 + (maxDim - drawW) / 2;  // 水平居中
+      const drawY = 40 + (maxDim - drawH) / 2;  // 垂直居中
+      ctx.drawImage(mainImg, drawX, drawY, drawW, drawH);
 
       // 3. 绘制半透明装饰框
       ctx.fillStyle = '#1c1c1c';
@@ -516,7 +528,6 @@ function App() {
 
       ctx.fillStyle = '#eee';
       ctx.font = '16px "Microsoft YaHei", sans-serif';
-      // 调用之前定义的 wrapText，它会处理自动换行
       wrapText(ctx, fullText, 60, 680, 480, 30);
 
       // 5. 底部品牌标识
@@ -528,20 +539,36 @@ function App() {
       const blob = await (await fetch(finalUrl)).blob();
       const file = new File([blob], 'painscape_share.jpg', { type: 'image/jpeg' });
 
+      // 6. 分享或下载逻辑（修复用户取消分享导致的报错问题）
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({
-          title: '我的痛觉声明卡',
-          files: [file]
-        });
+        try {
+          await navigator.share({
+            title: '我的痛觉声明卡',
+            files: [file]
+          });
+          // 只有真正分享成功才关闭预览
+          setShowSharePreview(false);
+        } catch (e) {
+          if (e.name === 'AbortError') {
+            // 用户主动取消分享，静默处理，不提示失败也不关闭预览
+            return;
+          }
+          // 其他真正的错误（如网络中断等），降级到下载
+          const link = document.createElement('a');
+          link.href = finalUrl;
+          link.download = `PainScape_${Date.now()}.jpg`;
+          link.click();
+        }
       } else {
         // 如果环境不支持分享（如普通 PC 浏览器），则触发下载
         const link = document.createElement('a');
         link.href = finalUrl;
-        link.download = `PainScape_${new Date().getTime()}.jpg`;
+        link.download = `PainScape_${Date.now()}.jpg`;
         link.click();
-        alert("已为您保存精美分享卡片！");
+        alert("已为您保存分享卡片！");
+        setShowSharePreview(false);
       }
-      setShowSharePreview(false);
+
     } catch (e) {
       console.error("生成分享卡片失败:", e);
       alert("生成分享卡片失败，可能是图片加载超时。请尝试直接截图分享。");
@@ -549,6 +576,7 @@ function App() {
       setIsLoading(false); // 【关键修复】：确保分享结束后 Loading 消失
     }
   };
+
   // ── 辅助函数 ──
   const roundRect = (ctx, x, y, w, h, r) => {
     ctx.beginPath();
@@ -722,13 +750,27 @@ function App() {
     const diagMap = {
       'endometriosis': '子宫内膜异位症',
       'adenomyosis': '子宫腺肌症',
-      'pcos': '多囊卵巢综合征'
+      'pcos': '多囊卵巢综合征',
+      'fibroids': '子宫肌瘤',
+      'pid': '盆腔炎性疾病（PID）',
+      'ovariancyst': '卵巢囊肿',
+      'cervicalstenosis': '宫颈管狭窄',
+      'unchecked': '未做过相关检查',
+      'none': '无确诊'
     };
-    if (medicalBackground.diagnosed && medicalBackground.diagnosed !== 'none') {
-      auxiliaryInfo.push(`• 既往诊断：患者曾确诊 [${diagMap[medicalBackground.diagnosed] || medicalBackground.diagnosed}]。`);
+    const diagValue = medicalBackground.diagnosed;
+    if (diagValue && diagValue !== '' && diagValue !== 'none' && diagValue !== 'unchecked') {
+      auxiliaryInfo.push(`• 既往诊断：${diagMap[diagValue] || diagValue}。`);
+    } else if (diagValue === 'unchecked') {
+      auxiliaryInfo.push(`• 既往病史：患者自述未做过痛经相关妇科检查。`);
     }
-    if (medicalBackground.allergies && medicalBackground.allergies !== 'none') {
-      auxiliaryInfo.push(`• 药物过敏：对 [${medicalBackground.allergies}] 过敏。`);
+
+    const allergyValue = medicalBackground.allergies;
+    const allergyLabelMap = {
+      aspirin: '阿司匹林', ibuprofen: '布洛芬', nsaids: '多种NSAIDs'
+    };
+    if (allergyValue && allergyValue !== '' && allergyValue !== 'none' && allergyValue !== 'unknown') {
+      auxiliaryInfo.push(`• 药物过敏：${allergyLabelMap[allergyValue] || allergyValue}过敏，请注意用药。`);
     }
 
     let finalMedReference = auxiliaryInfo.join('\n');
@@ -1019,12 +1061,48 @@ function App() {
                 ?
               </button>
               {showGuide && (
-                <div style={{ position: 'absolute', top: '40px', right: '0', background: 'rgba(30,30,30,0.95)', border: '1px solid #444', borderRadius: '10px', padding: '12px', width: '220px', backdropFilter: 'blur(10px)' }}>
-                  <p style={{ color: '#fff', fontSize: '12px', margin: '0 0 6px 0' }}><strong>操作指南</strong></p>
-                  <p style={{ color: '#888', fontSize: '11px', margin: '3px 0' }}>• 滑动或点击：绘制痛觉质地</p>
-                  <p style={{ color: '#888', fontSize: '11px', margin: '3px 0' }}>• 长按 0.3 秒：拖拽移动画布</p>
-                  <p style={{ color: '#888', fontSize: '11px', margin: '3px 0' }}>• 滚轮/双指：放大缩小身体细节</p>
-                  <button onClick={() => setShowGuide(false)} style={{ marginTop: '6px', background: 'transparent', border: '1px solid #444', color: '#888', padding: '4px 10px', borderRadius: '10px', fontSize: '10px', cursor: 'pointer' }}>知道了</button>
+                <div style={{
+                  position: 'absolute', top: '40px', right: '0',
+                  background: 'rgba(30,30,30,0.97)', border: '1px solid #444',
+                  borderRadius: '12px', padding: '16px', width: '260px',
+                  backdropFilter: 'blur(10px)', zIndex: 200
+                }}>
+                  <p style={{ color: '#fff', fontSize: '13px', fontWeight: 'bold', margin: '0 0 10px 0' }}>
+                    使用指南
+                  </p>
+                  {[
+                    ['🎨 选择画笔', '每种画笔对应一种痛感质地，可混合使用'],
+                    ['🩸 选择颜色', '不同颜色代表疼痛的情绪与温度'],
+                    ['✏️ 开始绘制', '在身体图上点击或滑动，画出你的疼痛范围'],
+                    ['📐 调整视角', '长按 0.3 秒可拖拽移动；双指缩放细节'],
+                    ['↩️ 撤销/重做', '右侧按钮随时修改，清除重新开始'],
+                    ['⚡ 生成报告', '右上角"生成"，AI 将转译你的痛觉图谱'],
+                  ].map(([title, desc]) => (
+                    <div key={title} style={{ marginBottom: '8px' }}>
+                      <span style={{ color: '#fff', fontSize: '12px', fontWeight: 'bold' }}>{title}</span>
+                      <p style={{ color: '#888', fontSize: '11px', margin: '2px 0 0 0' }}>{desc}</p>
+                    </div>
+                  ))}
+
+                  {/* 反馈入口 */}
+                  <div style={{ borderTop: '1px solid #333', marginTop: '12px', paddingTop: '10px' }}>
+                    <button
+                      onClick={() => {
+                        setShowGuide(false);
+                        const fb = prompt("你的反馈将帮助我们改善产品（可留空提交匿名反馈）：");
+                        if (fb !== null) {
+                          localStorage.setItem('painscape_feedback_' + Date.now(), fb);
+                          alert("感谢你的反馈！每一条都会被认真阅读。");
+                        }
+                      }}
+                      style={{ width: '100%', padding: '8px', background: 'transparent', border: '1px solid #555', color: '#888', borderRadius: '8px', fontSize: '11px', cursor: 'pointer' }}
+                    >
+                      📮 提交使用反馈
+                    </button>
+                  </div>
+                  <button onClick={() => setShowGuide(false)} style={{ marginTop: '8px', width: '100%', background: 'transparent', border: '1px solid #444', color: '#666', padding: '5px', borderRadius: '8px', fontSize: '10px', cursor: 'pointer' }}>
+                    知道了
+                  </button>
                 </div>
               )}
             </div>
@@ -1057,7 +1135,11 @@ function App() {
                     <option value="none">无确诊</option>
                     <option value="endometriosis">子宫内膜异位症</option>
                     <option value="adenomyosis">子宫腺肌症</option>
+                    <option value="fibroids">子宫肌瘤</option>
                     <option value="pcos">多囊卵巢综合征</option>
+                    <option value="pid">盆腔炎性疾病（PID）</option>
+                    <option value="ovariancyst">卵巢囊肿</option>
+                    <option value="cervicalstenosis">宫颈管狭窄</option>
                     <option value="unchecked">未做过相关检查</option>
                   </select>
                   <select value={medicalBackground.allergies} onChange={(e) => setMedicalBackground({ ...medicalBackground, allergies: e.target.value })}
@@ -1130,7 +1212,7 @@ function App() {
               <button style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(10px)', border: '1px solid #444', borderRadius: '30px', width: '50px', height: '50px', fontSize: '24px', cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); handleClear(); }}>🗑️</button>
             </div>
 
-            <div style={{ pointerEvents: 'auto', position: 'absolute', bottom: '30px', left: '50%', transform: 'translateX(-50%)', width: '90%', maxWidth: '380px', background: 'rgba(20,20,20,0.9)', padding: '15px', borderRadius: '24px', backdropFilter: 'blur(10px)' }}>
+            <div style={{ pointerEvents: 'auto', position: 'absolute', bottom: '20px', paddingBottom: '8px', left: '50%', transform: 'translateX(-50%)', width: '90%', maxWidth: '380px', maxHeight: '38vh', overflowY: 'visible', background: 'rgba(20,20,20,0.9)', padding: '15px', borderRadius: '24px', backdropFilter: 'blur(10px)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
                 {Object.keys(BRUSHES).map(k => (
                   <button key={k} style={{ flex: 1, background: activeBrush === k ? '#444' : 'transparent', border: 'none', color: activeBrush === k ? '#fff' : '#888', padding: '8px 0', borderRadius: '10px', fontSize: '12px', display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer' }} onClick={() => setActiveBrush(activeBrush === k ? null : k)}>
@@ -1146,7 +1228,7 @@ function App() {
                     <div key={k} style={{ width: '30px', height: '30px', borderRadius: '50%', border: activeColor === k ? '2px solid #fff' : '2px solid #444', background: `rgb(${PALETTES[k].color.join(',')})`, cursor: 'pointer', transform: activeColor === k ? 'scale(1.2)' : 'none' }} onClick={() => setActiveColor(k)} />
                   ))}
                 </div>
-                <span style={{ color: '#666', fontSize: '10px', marginTop: '8px' }}>
+                <span style={{ color: '#888', fontSize: '11px', marginTop: '6px', textAlign: 'center', display: 'block' }}>
                   {activeColor === 'crimson' ? '深红：急性锐痛/充血' : activeColor === 'dark' ? '暗灰：沉重钝痛/抑郁' : activeColor === 'purple' ? '紫：神经性放射痛' : '冰蓝：发冷/发僵'}
                 </span>
               </div>
@@ -1229,12 +1311,15 @@ function App() {
                       </div>
                       {/* 【新增】：针对性检查提醒框 */}
                       {getExamReminders(content.med).map(exam => (
-                        <div key={exam} style={{ marginTop: '15px', padding: '12px', background: 'rgba(33, 150, 243, 0.1)', border: '1px solid rgba(33,150,243,0.3)', borderRadius: '10px' }}>
+                        <div key={exam} style={{ marginTop: '15px', padding: '12px', marginTop: '15px', marginBottom: '12px', background: 'rgba(33, 150, 243, 0.1)', border: '1px solid rgba(33,150,243,0.3)', borderRadius: '10px' }}>
                           <p style={{ color: '#90caf9', fontSize: '13px', fontWeight: 'bold', margin: '0 0 5px 0' }}>💡 患者检查须知：{exam}</p>
                           <p style={{ color: '#aaa', fontSize: '12px', margin: 0 }}><strong>准备：</strong>{EXAM_DATABASE[exam].prep}</p>
+                          <p style={{ color: '#888', fontSize: '11px', margin: 0 }}>
+                            <strong>目的：</strong>{EXAM_DATABASE[exam].purpose}  {/* 顺便把 purpose 也展示出来 */}
+                          </p>
                         </div>
                       ))}
-                      <div style={{ marginBottom: '15px', padding: '10px', background: 'rgba(33,150,243,0.08)', borderLeft: '3px solid #2196f3', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div style={{ marginTop: '8px', marginBottom: '12px', padding: '10px', background: 'rgba(33,150,243,0.08)', borderLeft: '3px solid #2196f3', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '10px' }}>
                         <img src={imgUrl} style={{ width: '30px', height: '30px', borderRadius: '4px', objectFit: 'cover' }} alt="thumb" />
                         <p style={{ color: '#90caf9', fontSize: '12px', margin: 0 }}>本次多维痛觉图谱已附在报告后方，可向接诊医生展示。</p>
                       </div>
