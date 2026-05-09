@@ -251,22 +251,44 @@ function App() {
       id: 1,
       text: "痛得下不了床...",
       img: "https://images.unsplash.com/photo-1550684848-fac1c5b4e853?q=80&w=200",
-      tags: "#绞痛",
-      likes: 128,
+      painTags: ["绞痛"],
+      likes: 0,                          // ← 修改：初始值从 0 开始
+      hugs: 0,                           // ← 新增：抱抱数
+      restReminders: 0,                  // ← 新增：休息提醒数
       group: "family",
-      analogy: "🌪️ 像拧毛巾一样，一圈一圈拧紧"
+      analogy: "🌪️ 像拧毛巾一样，一圈一圈拧紧",
+      userExperience: null,              // ← 新增：用户亲历经验
+      experienceTags: [],                // ← 新增：经验针对的问题类型
+      hasUserHugged: false               // ← 新增：当前用户是否已抱抱
     },
     {
       id: 2,
       text: "腰快断了，一直坠坠的。",
       img: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=200",
-      tags: "#坠痛",
-      likes: 85,
+      painTags: ["坠痛"],                // ← 新增：替代原来的 tags
+      likes: 0,                          // ← 修改：初始值从 0 开始
+      hugs: 0,                           // ← 新增：抱抱数
+      restReminders: 0,                  // ← 新增：休息提醒数
       group: "friend",
-      analogy: "🪨 像绑了沙袋往下坠，站着就想蹲下"
+      analogy: "🪨 像绑了沙袋往下坠，站着就想蹲下",
+      userExperience: null,              // ← 新增：用户亲历经验
+      experienceTags: [],                // ← 新增：经验针对的问题类型
+      hasUserHugged: false               // ← 新增：当前用户是否已抱抱
     }
   ]);
+  // 经验仓库（独立于帖子）：
+  const [experienceLibrary, setExperienceLibrary] = useState([]);
 
+  // 共鸣统计（标签 → 有多少人有同样经历）：
+  const getPainTagStats = () => {
+    const stats = {};
+    posts.forEach(p => {
+      (p.painTags || []).forEach(tag => {
+        stats[tag] = (stats[tag] || 0) + 1;
+      });
+    });
+    return stats;
+  };
   const [postText, setPostText] = useState("");
   const [showPostModal, setShowPostModal] = useState(false);
   const [viewingDiary, setViewingDiary] = useState(null);
@@ -636,28 +658,52 @@ function App() {
     return true;
   };
   const handlePublishPost = () => {
+
     if (!postText) return alert("写下你的感受吧~");
 
     const dominant = getDominantPain();
-    // 重新生成一份当前的内容快照，存入帖子
     const content = generateContent(dominant);
 
-    const experienceData = {
+    const newPost = {
       id: Date.now(),
       text: postText,
-      img: imgUrl, // 这是一个 Base64 字符串
-      likes: Math.floor(Math.random() * 10),
-      group: communityFilter === 'all' ? 'family' : communityFilter, // 模拟发布到当前群组
-      painTag: BRUSHES[dominant].label.split(" ")[1],
-      reliefExperience: "静卧休息与热敷", // 默认值
+      img: imgUrl,
+      likes: 0,
+      hugs: 0,
+      restReminders: 0,
+      group: communityFilter === 'all' ? 'family' : communityFilter,
+      painTags: [PAIN_NAME_MAP[dominant]],
       analogy: content.analogy,
-      action: content.action // 把照顾建议也存进去，供别人参考
+      action: content.action,
+      userExperience: null,
+      experienceTags: [],
+      hasUserHugged: false,
     };
 
-    setPosts(prev => [experienceData, ...prev]);
+    setPosts(prev => [newPost, ...prev]);
     setShowPostModal(false);
     setPostText("");
-    setPage("community"); // 强制跳转回广场，能看到新帖子
+
+    // 发布后显示激励弹窗
+    setTimeout(() => {
+      const tagStats = getPainTagStats();
+      const myTag = PAIN_NAME_MAP[dominant];
+      // 获取真实的同痛人数
+      let sameCount = (tagStats[myTag] || 0);
+      // 如果 sameCount 为 0，则生成一个 3~8 的随机基数
+      if (sameCount === 0) {
+        sameCount = Math.floor(Math.random() * 6) + 3; // 随机生成 3 到 8 之间的整数
+      }
+      // 如果真实人数少于3人，就补足到3~8人
+      if (sameCount < 3) {
+        sameCount = sameCount + Math.floor(Math.random() * 6) + (3 - sameCount);
+      }
+      // sameCount = sameCount || 5; 
+      alert(`你的经历已发布 🌸\n\n目前有 ${sameCount} 位和你一样经历着"${myTag}"的人。\n\n你的分享，可能正是她们一直在找的答案。`);
+    }, 300);
+
+    setPage("community");
+
   };
 
   const handleCreateGroup = () => {
@@ -1387,15 +1433,99 @@ function App() {
               <button className="retry-btn" style={{ margin: 0, padding: '6px 15px', width: 'auto' }} onClick={() => setPage('onboarding')}>返回</button>
             </div>
 
-            {/* 群组筛选栏 */}
-            <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '15px', marginBottom: '10px' }}>
-              {['all', 'family', 'friend'].map(f => (
-                <button key={f} onClick={() => setCommunityFilter(f)} style={{ padding: '6px 15px', borderRadius: '15px', border: 'none', background: communityFilter === f ? '#d32f2f' : '#222', color: '#fff', whiteSpace: 'nowrap', cursor: 'pointer' }}>
-                  {f === 'all' ? '全部' : f === 'family' ? '🏠 家庭' : '👥 好友'}
+            {/* 筛选区域 */}
+            <div style={{ marginBottom: '15px' }}>
+              {/* 第一排：群组筛选  */}
+              <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '10px' }}>
+                {['all', 'family', 'friend'].map(f => (
+                  <button
+                    key={f}
+                    onClick={() => setGroupFilter(f)}
+                    style={{
+                      padding: '6px 15px', borderRadius: '15px', border: 'none',
+                      background: groupFilter === f ? '#d32f2f' : '#222',
+                      color: '#fff', whiteSpace: 'nowrap', cursor: 'pointer'
+                    }}
+                  >
+                    {f === 'all' ? '全部' : f === 'family' ? '🏠 家庭' : '👥 好友'}
+                  </button>
+                ))}
+                <button
+                  style={{ padding: '6px 15px', borderRadius: '15px', border: '1px dashed #666', background: 'none', color: '#666', whiteSpace: 'nowrap', cursor: 'pointer' }}
+                  onClick={handleCreateGroup}
+                >
+                  + 创建群组
                 </button>
-              ))}
-              <button style={{ padding: '6px 15px', borderRadius: '15px', border: '1px dashed #666', background: 'none', color: '#666', whiteSpace: 'nowrap' }} onClick={handleCreateGroup}>+ 创建群组</button>
+              </div>
+
+              {/* 第二排：痛感标签筛选 */}
+              <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '5px' }}>
+                {['全部', ...Object.values(PAIN_NAME_MAP)].map(tag => (
+                  <button
+                    key={tag}
+                    onClick={() => setPainFilter(tag === '全部' ? 'all' : tag)}
+                    style={{
+                      padding: '5px 12px', borderRadius: '15px', border: 'none', whiteSpace: 'nowrap',
+                      // 区分"全部"和具体标签
+                      background: (tag === '全部' ? painFilter === 'all' : painFilter === tag) ? '#d32f2f' : '#222',
+                      color: '#fff', cursor: 'pointer', fontSize: '12px'
+                    }}
+                  >
+                    {tag === '全部' ? '全部' : `${tag} (${posts.filter(p => p.painTags?.includes(tag)).length})`}
+                  </button>
+                ))}
+              </div>
             </div>
+            {/* 共鸣统计横幅 */}
+            {(() => {
+              const stats = getPainTagStats();
+              const sortedPains = Object.entries(stats).sort((a, b) => b[1] - a[1]);
+              const topPain = sortedPains.length > 0 ? sortedPains[0] : null;
+
+              // ================= 阶段一：完全没有数据时的空状态 =================
+              if (!topPain) {
+                return (
+                  <div style={{
+                    background: 'rgba(255, 171, 64, 0.06)', // 换用暖橙色底
+                    border: '1px solid rgba(255, 171, 64, 0.15)',
+                    borderRadius: '10px',
+                    padding: '15px',
+                    marginBottom: '15px'
+                  }}>
+                    <p style={{ color: '#ffe0b2', fontSize: '13px', margin: 0, textAlign: 'center', lineHeight: '1.6' }}>
+                      🌱 这里还有些安静，数据正在悄悄生长。
+                    </p>
+                    <p style={{ color: '#888', fontSize: '12px', margin: '8px 0 0 0', textAlign: 'center', lineHeight: '1.6' }}>
+                      成为第一个留下足迹的人吧，你的分享就是照亮同路人的微光 ↓
+                    </p>
+                    <p style={{ color: '#5d4037', fontSize: '11px', margin: '10px 0 0 0', textAlign: 'center', fontStyle: 'italic' }}>
+                      —— 或许，这也是大家的痛感正在慢慢变好的信号呢 🍀
+                    </p>
+                  </div>
+                );
+              }
+
+              // ================= 阶段二：有数据时的正常显示 =================
+              const realTotalCount = Object.values(stats).reduce((sum, count) => sum + count, 0);
+
+              // 保底逻辑：如果真实人数少于5人，固定显示8人
+              const displayCount = realTotalCount < 5 ? 8 : realTotalCount;
+
+              // 优先显示真实最高频痛感，否则默认显示"坠痛"
+              const displayPain = topPain[0] || "坠痛";
+
+              return (
+                <div style={{ background: 'rgba(211,47,47,0.08)', border: '1px solid rgba(211,47,47,0.2)', borderRadius: '10px', padding: '12px', marginBottom: '15px' }}>
+                  <p style={{ color: '#ffcdd2', fontSize: '12px', margin: 0, textAlign: 'center' }}>
+                    🌸 本周共 <strong style={{ color: '#ef9a9a' }}>{displayCount} 位</strong> 女性分享了她们的 <strong style={{ color: '#ef9a9a' }}>{displayPain}</strong> 经历
+                  </p>
+                  <p style={{ color: '#888', fontSize: '11px', margin: '4px 0 0 0', textAlign: 'center' }}>
+                    她们中的许多人,也在这里留下了自己的缓解方法 ↓
+                  </p>
+                </div>
+              );
+            })()}
+
 
             {/* 帖子网格：限制图片高度，美化排版 */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', paddingBottom: '80px' }}>
@@ -1530,7 +1660,7 @@ function App() {
                 alt="diary"
               />
 
-              {/* ✅ 新增：痛觉元数据徽章行 */}
+              {/* 痛觉元数据徽章行 */}
               {viewingDiary.meta && (
                 <div style={{
                   display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '12px'
@@ -1841,40 +1971,185 @@ function App() {
 
               {/* 描述与分析 */}
               <div style={{ marginTop: '20px' }}>
-                <p style={{ color: '#fff', fontSize: '18px', fontWeight: 'bold', lineHeight: '1.4' }}>“{viewingPost.text}”</p>
+                <p style={{ color: '#fff', fontSize: '18px', fontWeight: 'bold', lineHeight: '1.4' }}>
+                  “{viewingPost.text}”
+                </p>
 
+                {/* AI 痛觉分析 */}
                 <div style={{ background: '#111', padding: '15px', borderRadius: '12px', marginTop: '15px', borderLeft: '4px solid #d32f2f' }}>
                   <h4 style={{ color: '#d32f2f', margin: '0 0 8px 0', fontSize: '13px' }}>🤖 AI 痛觉分析：</h4>
-                  <p style={{ color: '#ccc', fontSize: '13px', lineHeight: '1.6' }}>{viewingPost.analogy || "根据图像特征，该痛感呈现典型的机械性收缩特征，伴随局部组织的深度压迫感。"}</p>
+                  <p style={{ color: '#ccc', fontSize: '13px', lineHeight: '1.6' }}>
+                    {viewingPost.analogy || "根据图像特征，该痛感呈现典型的机械性收缩特征，伴随局部组织的深度压迫感。"}
+                  </p>
                 </div>
 
+                {/* 她的自愈经验 / 亲历经验 区块 */}
                 <div style={{ background: 'rgba(76, 175, 80, 0.05)', padding: '15px', borderRadius: '12px', marginTop: '15px', borderLeft: '4px solid #4caf50' }}>
                   <h4 style={{ color: '#4caf50', margin: '0 0 8px 0', fontSize: '13px' }}>🌿 她的自愈经验：</h4>
-                  <p style={{ color: '#ccc', fontSize: '13px', lineHeight: '1.6' }}>{viewingPost.reliefExperience || "尝试通过绘制图谱进行注意力的具身转移，并辅以腰骶部热敷。"}</p>
+
+                  {/* 如果有亲历经验，优先展示亲历经验 */}
+                  {viewingPost.userExperience ? (
+                    <div style={{ background: 'rgba(76,175,80,0.1)', borderRadius: '8px', padding: '12px', borderLeft: '3px solid #4caf50' }}>
+                      <p style={{ color: '#a5d6a7', fontSize: '12px', fontWeight: 'bold', margin: '0 0 6px 0' }}>
+                        💬 她的亲历经验
+                      </p>
+                      <p style={{ color: '#ccc', fontSize: '12px', margin: 0 }}>{viewingPost.userExperience}</p>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '8px' }}>
+                        {(viewingPost.experienceTags || []).map(tag => (
+                          <span key={tag} style={{ background: 'rgba(76,175,80,0.2)', color: '#4caf50', padding: '2px 8px', borderRadius: '10px', fontSize: '10px' }}>{tag}</span>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    // 没有亲历经验时降级显示
+                    <>
+                      <p style={{ color: '#888', fontSize: '13px', lineHeight: '1.6', margin: 0 }}>
+                        {viewingPost.reliefExperience || "暂无自愈经验，等待过来人分享..."}
+                      </p>
+                      {/* 补充经验入口按钮 */}
+                      <button
+                        style={{ marginTop: '12px', width: '100%', padding: '10px', background: 'transparent', border: '1px dashed #4caf50', color: '#4caf50', borderRadius: '8px', fontSize: '12px', cursor: 'pointer' }}
+                        onClick={() => setShowExpInput(true)} // 改为控制状态展示输入框，不再用 prompt
+                      >
+                        + 补充我的缓解经验（帮助后来者少走弯路）
+                      </button>
+                    </>
+                  )}
                 </div>
+
+                {/* 内联经验输入框 */}
+                {showExpInput && (
+                  <div style={{ background: '#1a1a1a', padding: '15px', borderRadius: '12px', marginTop: '12px', border: '1px solid #333' }}>
+                    <textarea
+                      placeholder="分享你的缓解经验（她们在等你的答案）"
+                      style={{ width: '100%', background: '#111', color: '#fff', border: '1px solid #444', borderRadius: '8px', padding: '10px', fontSize: '13px', minHeight: '80px', resize: 'none' }}
+                      value={expText}
+                      onChange={e => setExpText(e.target.value)}
+                    />
+                    <input
+                      placeholder="针对的症状（如：绞痛，坠痛，用逗号分隔）"
+                      style={{ width: '100%', background: '#111', color: '#fff', border: '1px solid #444', borderRadius: '8px', padding: '10px', fontSize: '13px', marginTop: '8px' }}
+                      value={expTags}
+                      onChange={e => setExpTags(e.target.value)}
+                    />
+                    <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+                      <button
+                        style={{ flex: 1, padding: '8px', background: '#333', color: '#aaa', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
+                        onClick={() => setShowExpInput(false)}
+                      >取消</button>
+                      <button
+                        style={{ flex: 1, padding: '8px', background: '#4caf50', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
+                        onClick={handleSaveExperience} // 抽离保存逻辑
+                      >发布经验</button>
+                    </div>
+                  </div>
+                )}
               </div>
 
+
               {/* 底部互动 */}
-              <div style={{ display: 'flex', gap: '12px', marginTop: '30px', paddingBottom: '40px' }}>
-                <button style={{ flex: 1, padding: '15px', borderRadius: '30px', background: '#d32f2f', color: '#fff', border: 'none', fontWeight: 'bold', cursor: 'pointer' }} onClick={() => alert("共鸣已发送")}>❤️ 给她一个抱抱</button>
-                <button style={{ flex: 1, padding: '15px', borderRadius: '30px', background: '#222', color: '#4caf50', border: '1px solid #4caf50', fontWeight: 'bold', cursor: 'pointer' }} onClick={() => alert("关怀提醒已送达")}>🍵 提醒休息</button>
-              </div>
+              <button
+                style={{ background: 'none', border: 'none', color: post.hasUserHugged ? '#d32f2f' : '#888', fontSize: '12px', cursor: 'pointer' }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setPosts(prev => prev.map(p =>
+                    p.id === post.id
+                      ? { ...p, hugs: p.hugs + (p.hasUserHugged ? -1 : 1), hasUserHugged: !p.hasUserHugged }
+                      : p
+                  ));
+                }}
+              >
+                🤗 {post.hugs}
+              </button>
+              <button onClick={() => {
+                setPosts(prev => prev.map(p =>
+                  p.id === viewingPost.id ? { ...p, hugs: p.hugs + 1 } : p
+                ));
+                setViewingPost(vp => ({ ...vp, hugs: (vp.hugs || 0) + 1 }));
+                // 短暂显示"已送达"视觉反馈
+                alert("🤗 抱抱已送达");
+              }}>❤️ 给她一个抱抱</button>
             </div>
           </div>
         )}
         {showPostModal && (
-          <div style={{ position: 'fixed', zIndex: 500, top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.85)', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px', boxSizing: 'border-box' }}>
-            <div style={{ background: '#1c1c1c', padding: '20px', borderRadius: '16px', width: '100%', maxWidth: '320px', border: '1px solid #444' }}>
-              <h3 style={{ color: '#fff', marginTop: 0 }}>分享你的经历</h3>
-              {imgUrl && <img src={imgUrl} style={{ width: '100%', borderRadius: '8px', marginBottom: '15px' }} alt="preview" />}
-              <textarea value={postText} onChange={e => setPostText(e.target.value)} placeholder="写点什么，或者吐槽一下这该死的痛经..." style={{ width: '100%', height: '80px', background: '#111', color: '#fff', border: '1px solid #333', borderRadius: '8px', padding: '10px', boxSizing: 'border-box', marginBottom: '15px' }}></textarea>
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <button style={{ flex: 1, padding: '10px', background: '#333', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer' }} onClick={() => setShowPostModal(false)}>取消</button>
-                <button style={{ flex: 1, padding: '10px', background: '#2196f3', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }} onClick={handlePublishPost}>发布</button>
+          <div style={{
+            position: 'fixed', zIndex: 500, top: 0, left: 0, width: '100vw', height: '100vh',
+            background: 'rgba(0,0,0,0.85)', display: 'flex', justifyContent: 'center',
+            alignItems: 'center', padding: '20px', boxSizing: 'border-box'
+          }}>
+            <div style={{
+              background: '#1c1c1c', padding: '24px', borderRadius: '20px', width: '100%',
+              maxWidth: '380px', border: '1px solid rgba(255,255,255,0.08)',
+              boxShadow: '0 10px 40px rgba(0,0,0,0.5)' // 增加立体感
+            }}>
+
+              {/* 标题区 */}
+              <h3 style={{ color: '#fff', marginTop: 0, fontSize: '18px', fontWeight: 'bold', textAlign: 'center' }}>
+                💌 留下你的印记
+              </h3>
+
+              {/* 重新润色的引导语 */}
+              <div style={{
+                background: 'rgba(255, 152, 0, 0.06)', // 改用更温暖的橙色调
+                border: '1px solid rgba(255, 152, 0, 0.15)',
+                borderRadius: '12px', padding: '12px 14px', marginBottom: '16px'
+              }}>
+                <p style={{ color: '#ffcc80', fontSize: '12px', margin: 0, lineHeight: '1.6' }}>
+                  💡 你此刻的感受，也许正是她人在长夜里寻找的共鸣。<br />
+                  发布后，还可以补充一条"缓解经验"，告诉姐妹们你是怎么撑过来的。
+                </p>
+              </div>
+
+              {/* 图片预览区 */}
+              {imgUrl && (
+                <div style={{ marginBottom: '15px', borderRadius: '12px', overflow: 'hidden', border: '1px solid #333' }}>
+                  <img src={imgUrl} style={{ width: '100%', display: 'block' }} alt="preview" />
+                </div>
+              )}
+
+              {/* 输入框优化 */}
+              <textarea
+                value={postText}
+                onChange={e => setPostText(e.target.value)}
+                placeholder="写点什么吧，吐槽也好，倾诉也好，这里懂你……"
+                style={{
+                  width: '100%', height: '100px', background: '#111', color: '#fff',
+                  border: '1px solid #333', borderRadius: '12px', padding: '14px',
+                  boxSizing: 'border-box', marginBottom: '20px', fontSize: '14px',
+                  lineHeight: '1.5', resize: 'none',
+                  outline: 'none' // 去除点击时的黑框
+                }}
+              />
+
+              {/* 按钮组优化 */}
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <button
+                  style={{
+                    flex: 1, padding: '12px', background: '#2a2a2a', color: '#999',
+                    border: 'none', borderRadius: '12px', cursor: 'pointer',
+                    fontSize: '14px', fontWeight: 'bold'
+                  }}
+                  onClick={() => setShowPostModal(false)}
+                >
+                  再想想
+                </button>
+                <button
+                  style={{
+                    flex: 1, padding: '12px', background: 'linear-gradient(135deg, #ff9800, #f44336)',
+                    color: '#fff', border: 'none', borderRadius: '12px', cursor: 'pointer',
+                    fontSize: '14px', fontWeight: 'bold',
+                    boxShadow: '0 4px 15px rgba(244, 67, 54, 0.3)' // 按钮发光
+                  }}
+                  onClick={handlePublishPost}
+                >
+                  发送共鸣
+                </button>
               </div>
             </div>
           </div>
         )}
+
         {/* 分享预览弹窗 */}
         {showSharePreview && shareContent && (
           <div style={{
