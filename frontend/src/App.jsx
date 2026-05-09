@@ -55,7 +55,7 @@ class ErrorBoundary extends React.Component {
   state = { hasError: false };
   static getDerivedStateFromError() { return { hasError: true }; }
   render() {
-    if (this.state.hasError) return <h1 style={{color:'#fff', textAlign:'center'}}>页面出了点小问题，请刷新重试</h1>;
+    if (this.state.hasError) return <h1 style={{ color: '#fff', textAlign: 'center' }}>页面出了点小问题，请刷新重试</h1>;
     return this.props.children;
   }
 }
@@ -243,6 +243,34 @@ function App() {
   const [editingField, setEditingField] = useState(null);     // 当前正在编辑的字段名
   // 新增：选择分享身份
   const [diaryShareIdentity, setDiaryShareIdentity] = useState('partner');
+  // 新增：补充经验输入状态
+  const [showExpInput, setShowExpInput] = useState(false);
+  const [expText, setExpText] = useState("");
+  const [expTags, setExpTags] = useState("");
+
+  // 新增：保存经验的函数
+  const handleSaveExperience = () => {
+    if (!expText.trim()) return alert("请写下你的经验");
+
+    const tagsArray = expTags ? expTags.split(/[,，]/).filter(t => t.trim()) : [];
+
+    setPosts(prev => prev.map(p =>
+      p.id === viewingPost.id
+        ? { ...p, userExperience: expText, experienceTags: tagsArray }
+        : p
+    ));
+
+    setViewingPost(vp => ({
+      ...vp,
+      userExperience: expText,
+      experienceTags: tagsArray
+    }));
+
+    setShowExpInput(false);
+    setExpText("");
+    setExpTags("");
+  };
+
   // 新增 ref
   const particlePositions = useRef([]);
   const speedHistory = useRef([]);
@@ -301,7 +329,8 @@ function App() {
   const [showPostModal, setShowPostModal] = useState(false);
   const [viewingDiary, setViewingDiary] = useState(null);
   const [viewingPost, setViewingPost] = useState(null);
-  const [communityFilter, setCommunityFilter] = useState("all");
+  const [groupFilter, setGroupFilter] = useState("all");   // 群组筛选
+  const [painFilter, setPainFilter] = useState("all");     // 痛感标签筛选
   const [communityGroups, setCommunityGroups] = useState([{ id: 'family', name: '👩‍👧 家庭群' }, { id: 'friend', name: '🤝 朋友群' }]);
 
   const brushCounts = useRef({ twist: 0, pierce: 0, heavy: 0, wave: 0, scrape: 0 });
@@ -679,7 +708,7 @@ function App() {
       likes: 0,
       hugs: 0,
       restReminders: 0,
-      group: communityFilter === 'all' ? 'family' : communityFilter,
+      group: groupFilter === 'all' ? 'family' : groupFilter,
       painTags: [PAIN_NAME_MAP[dominant]],
       analogy: content.analogy,
       action: content.action,
@@ -2073,19 +2102,12 @@ function App() {
 
 
               {/* 底部互动 */}
-              <button
-                style={{ background: 'none', border: 'none', color: post.hasUserHugged ? '#d32f2f' : '#888', fontSize: '12px', cursor: 'pointer' }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setPosts(prev => prev.map(p =>
-                    p.id === post.id
-                      ? { ...p, hugs: p.hugs + (p.hasUserHugged ? -1 : 1), hasUserHugged: !p.hasUserHugged }
-                      : p
-                  ));
-                }}
-              >
-                🤗 {post.hugs}
-              </button>
+              <button style={{ background: 'none', border: 'none', color: viewingPost.hasUserHugged ? '#d32f2f' : '#888', fontSize: '12px', cursor: 'pointer' }} onClick={(e) => {
+                e.stopPropagation();
+                setPosts(prev => prev.map(p => p.id === viewingPost.id ? { ...p, hugs: p.hugs + (p.hasUserHugged ? -1 : 1), hasUserHugged: !p.hasUserHugged } : p));
+                setViewingPost(vp => ({ ...vp, hugs: vp.hugs + (vp.hasUserHugged ? -1 : 1), hasUserHugged: !vp.hasUserHugged }));
+              }} > 🤗 {viewingPost.hugs} </button>
+
               <button onClick={() => {
                 setPosts(prev => prev.map(p =>
                   p.id === viewingPost.id ? { ...p, hugs: p.hugs + 1 } : p
