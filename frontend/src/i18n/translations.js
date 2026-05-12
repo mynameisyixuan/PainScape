@@ -534,11 +534,11 @@ painNames: {
     },
 
     brushes: {
-      twist: { label: "🌪️ Cramping", icon: "🌪️" },
-      pierce: { label: "⚡️ Stabbing", icon: "⚡️" },
-      heavy: { label: "🪨 Dragging", icon: "🪨" },
+      twist: { label: "🌪️ Cramp", icon: "🌪️" },
+      pierce: { label: "⚡️ Stab", icon: "⚡️" },
+      heavy: { label: "🪨 Drag", icon: "🪨" },
       wave: { label: "〰️ Fullness", icon: "〰️" },
-      scrape: { label: "🔪 Tearing", icon: "🔪" },
+      scrape: { label: "🔪 Tear", icon: "🔪" },
       eraser: { label: "🧽 Eraser", icon: "🧽" },
     },
     painNames: {
