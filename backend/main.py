@@ -146,6 +146,31 @@ ALLERGY_FALLBACK = {
 
 ALLERGY_NONE_KEYS = ["unknown", "none", "", None]
 
+# 空间区域名称双语映射（前端 spatialMap 的 key 可能是中文）
+SPATIAL_REGION_MAP_EN = {
+    "下腹部": "lower abdomen",
+    "上腹部": "upper abdomen",
+    "腰骶部": "lumbosacral region",
+    "后腰": "lower back",
+    "左侧": "left side",
+    "右侧": "right side",
+    "盆腔": "pelvic cavity",
+    "腹股沟": "groin",
+    "大腿内侧": "inner thigh",
+    "肚脐周围": "periumbilical area",
+    "全腹": "entire abdomen",
+    # 英文 key 直传（前端可能已经用英文）
+    "lower abdomen": "lower abdomen",
+    "upper abdomen": "upper abdomen",
+    "lumbosacral": "lumbosacral region",
+    "lower back": "lower back",
+    "left side": "left side",
+    "right side": "right side",
+    "pelvis": "pelvic cavity",
+    "groin": "groin",
+    "inner thigh": "inner thigh",
+}
+
 
 # ─────────────────────────────────────────────
 # 辅助函数：根据语言构建描述文本
@@ -166,8 +191,12 @@ def build_spatial_desc(spatial: Dict[str, float], lang: str) -> str:
     if not spatial:
         return "evenly distributed" if lang == "en" else "分布均匀"
     top_regions = sorted(spatial.items(), key=lambda x: x[1], reverse=True)[:3]
-    names = ", ".join(r[0] for r in top_regions)
-    return f"concentrated at: {names}" if lang == "en" else f"集中于{names.replace(', ', '、')}"
+    if lang == "en":
+        # 将中文区域名翻译为英文，未命中则保留原值
+        translated = [SPATIAL_REGION_MAP_EN.get(r[0], r[0]) for r in top_regions]
+        return "concentrated at: " + ", ".join(translated)
+    else:
+        return "集中于" + "、".join(r[0] for r in top_regions)
 
 
 def build_intensity_desc(avg_speed: float, lang: str) -> str:
@@ -258,10 +287,20 @@ def resolve_color(color: Optional[str], lang: str) -> str:
     return color
 
 
+# 周期天数中文 → 英文映射
+CYCLE_DAY_MAP_EN = {
+    "第1天": "Day 1", "第2天": "Day 2", "第3天": "Day 3",
+    "第4天": "Day 4", "第5天": "Day 5", "第6天": "Day 6",
+    "第7天": "Day 7", "排卵期": "Ovulation day", "排卵痛": "Ovulation pain",
+    "未提供": "Not provided",
+}
+
 def resolve_cycle_label(cycle_day: str, lang: str) -> str:
-    """用于 prompt 中的周期文字"""
+    """用于 prompt 中的周期文字，EN 模式下将中文天数转为英文"""
     if not cycle_day or cycle_day in ["未提供", ""]:
         return "Not provided" if lang == "en" else "未提供"
+    if lang == "en":
+        return CYCLE_DAY_MAP_EN.get(cycle_day, cycle_day)
     return cycle_day
 
 
@@ -296,6 +335,8 @@ SYSTEM_PROMPT_ZH_QUICK = SYSTEM_PROMPT_ZH + (
 
 SYSTEM_PROMPT_EN = """You are a professional menstrual pain management consultant, skilled at translating embodied pain perception data into language expressions for different social scenarios.
 
+CRITICAL LANGUAGE RULE: Your entire response must be in English only. Do NOT use any Chinese characters (汉字) in any field. Even if the input data contains Chinese text, your output must always be English. This is a hard constraint.
+
 You must output strictly according to the following JSON schema, without adding any extra fields or explanatory text:
 
 {
@@ -312,7 +353,7 @@ Rules:
 4. All content must be grounded in the provided pain data; do not fabricate symptoms
 5. Output must be valid JSON with no markdown code blocks
 6. When recommending examinations, use precise terms in med: pelvic ultrasound, transvaginal ultrasound, hormone panel, laparoscopy — with a brief plain-language explanation for each
-7. IMPORTANT: All output text must be in English only"""
+7. FINAL REMINDER: Every single word in every JSON field must be in English. Do NOT write any Chinese characters (汉字) anywhere — not even one character. If the input data contains Chinese text, translate it to English in your output."""
 
 SYSTEM_PROMPT_EN_QUICK = SYSTEM_PROMPT_EN + (
     "\n\nSpecial note: The user is in quick-log mode due to severe pain and data granularity is low. "
@@ -584,7 +625,7 @@ async def refine_content(data: dict):
         return {"refined": refined, "language": lang}
 
     except Exception as e:
-        print(f"🚨 优化错误: {e}")
+        print(f"error: {e}")
         return {"refined": current_text, "language": lang}
 
 
