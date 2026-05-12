@@ -579,7 +579,7 @@ painNames: {
       partner: {
         title: "Synesthesia Guide",
         experiencing: "She is experiencing intense",
-        actionPrompt: "💡 Please do the following immediately:",
+        actionPrompt: "💡 Please do the following actions:",
         copyAction: "📋 Copy Action List",
       },
       work: {
@@ -614,11 +614,11 @@ painNames: {
         optimizeComplaint: "Optimize Complaint",
         optimizeReference: "Optimize Reference",
       },
-      shareCard: "Share Card",
-      publish: "Post to Community",
-      backHome: "Back to Home",
+      shareCard: "Share",
+      publish: "Post",
+      backHome: "Home",
       reportError: "Report generation encountered an issue",
-      backToHome: "Back to Home",
+      backToHome: "Home",
     },
 
     community: {
