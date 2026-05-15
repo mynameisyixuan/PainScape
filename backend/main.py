@@ -7,17 +7,66 @@ import json
 import re
 from dotenv import load_dotenv
 from openai import OpenAI
+from zhipuai import ZhipuAI
 
 load_dotenv()
 
-DASHSCOPE_API_KEY = os.getenv("DASHSCOPE_API_KEY")
-if not DASHSCOPE_API_KEY:
-    raise ValueError("🚨 未找到 DASHSCOPE_API_KEY，请检查 .env 文件！")
+# ═══════════════════════════════════════════════════════════
+# 多 API Provider 配置（通过 .env 中的 LLM_PROVIDER 切换）
+# ═══════════════════════════════════════════════════════════
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "dashscope").lower()
+
+PROVIDER_CONFIG = {
+    "openai": {
+        "base_url": "https://api.openai.com/v1",
+        "api_key_env": "OPENAI_API_KEY",
+        "model": "gpt-4o",
+        "model_quick": "gpt-4o-mini",        # 快速模式用更快的模型
+        "model_refine": "gpt-4o-mini",       # refine 用便宜模型
+        "max_tokens": 4096,
+        "display_name": "OpenAI GPT-4o",
+    },
+    "zhipu": {
+        "base_url": "https://open.bigmodel.cn/api/paas/v4",
+        "api_key_env": "ZHIPU_API_KEY",
+        "model": "glm-4-plus",               # 智谱旗舰模型
+        "model_quick": "glm-4-flash",        # 快速模式用 flash
+        "model_refine": "glm-4-flash",
+        "max_tokens": 4096,
+        "display_name": "智谱 GLM-4-Plus",
+    },
+    "dashscope": {
+        "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        "api_key_env": "DASHSCOPE_API_KEY",
+        "model": "qwen-plus",
+        "model_quick": "qwen-turbo",
+        "model_refine": "qwen-turbo",
+        "max_tokens": 4096,
+        "display_name": "通义千问 Qwen-Plus",
+    },
+}
+
+if LLM_PROVIDER not in PROVIDER_CONFIG:
+    raise ValueError(
+        f"🚨 不支持的 LLM_PROVIDER: {LLM_PROVIDER}，"
+        f"可选值: {list(PROVIDER_CONFIG.keys())}"
+    )
+
+config = PROVIDER_CONFIG[LLM_PROVIDER]
+api_key = os.getenv(config["api_key_env"])
+
+if not api_key:
+    raise ValueError(
+        f"🚨 未找到 {config['api_key_env']}，请检查 .env 文件！\n"
+        f"当前 Provider: {LLM_PROVIDER}"
+    )
 
 client = OpenAI(
-    api_key=DASHSCOPE_API_KEY,
-    base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+    api_key=api_key,
+    base_url=config["base_url"],
 )
+
+print(f"✅ LLM Provider: {config['display_name']} ({config['model']})")
 
 app = FastAPI()
 
@@ -137,7 +186,7 @@ DIAGNOSED_MAP = {
     },
 }
 
-# 🆕 中文确诊名 → 英文确诊名 反向映射
+# 中文确诊名 → 英文确诊名 反向映射
 DIAGNOSED_ZH_TO_EN = {
     v: DIAGNOSED_MAP["en"][k]
     for k, v in DIAGNOSED_MAP["zh"].items()
@@ -151,7 +200,7 @@ ALLERGY_FALLBACK = {
 
 ALLERGY_NONE_KEYS = ["unknown", "none", "", None]
 
-# 🆕 常见过敏药中文 → 英文映射
+# 常见过敏药中文 → 英文映射
 ALLERGY_ZH_TO_EN = {
     "无已知过敏记录": "No known drug allergies",
     "青霉素": "Penicillin",
@@ -164,7 +213,7 @@ ALLERGY_ZH_TO_EN = {
     "NSAIDs": "NSAIDs",
 }
 
-# 🆕 色彩双语映射
+# 色彩双语映射
 COLOR_MAP = {
     "深红": "Crimson",
     "暗紫": "Dark Purple",
@@ -222,7 +271,7 @@ CYCLE_DAY_MAP_EN = {
 }
 
 # ─────────────────────────────────────────────
-# 辅助函数：根据语言构建描述文本
+# 辅助函数
 # ─────────────────────────────────────────────
 
 def build_brush_desc(brush_counts: Dict[str, int], lang: str) -> str:
@@ -247,7 +296,6 @@ def build_spatial_desc(spatial: Dict[str, float], lang: str) -> str:
         for r in top_regions:
             en_name = SPATIAL_REGION_MAP_EN.get(r[0])
             if en_name is None:
-                # 🆕 未命中映射表的中文 key，用通用描述替代，不泄漏中文
                 if any(ord(c) > 127 for c in r[0]):
                     en_name = "unspecified region"
                 else:
@@ -276,49 +324,42 @@ def build_intensity_desc(avg_speed: float, lang: str) -> str:
 
 
 def build_cycle_context(cycle_day: str, lang: str) -> str:
-    """根据月经周期天数生成临床指导语境描述（双语）"""
     if not cycle_day or cycle_day in ["未提供", "Not provided", ""]:
         return ""
-
     day_str = cycle_day.lower()
-
     if lang == "en":
         if "day 1" in day_str or "day 2" in day_str or "第1天" in cycle_day or "第2天" in cycle_day:
             return (
                 "Patient is in the acute phase (Day 1-2): prostaglandin secretion peaks, pain is most severe. "
-                "selfCare must focus on acute pain management (e.g., emergency relief postures, rapid heat therapy). "
+                "selfCare must focus on acute pain management. "
                 "analogy should reflect the sudden and intense onset of pain."
             )
         elif any(d in cycle_day for d in ["第3", "第4", "第5"]) or any(d in day_str for d in ["day 3", "day 4", "day 5"]):
             return (
                 "Patient is in the recovery phase (Day 3-5): acute pain subsiding but fatigue and heaviness remain. "
-                "selfCare must focus on recovery and nutrition (e.g., iron-rich diet, gentle stretching). "
+                "selfCare must focus on recovery and nutrition. "
                 "Note any persistent dull pain that may warrant follow-up."
             )
         elif "排卵" in cycle_day or "ovulat" in day_str:
             return (
-                "Patient is experiencing mid-cycle / ovulation pain (non-menstrual): this may indicate endometriosis or pelvic adhesions. "
-                "med must flag potential association and recommend evaluation. "
-                "selfCare should emphasize keeping a pain diary for non-menstrual pain episodes."
+                "Patient is experiencing mid-cycle / ovulation pain: this may indicate endometriosis or pelvic adhesions. "
+                "med must flag potential association and recommend evaluation."
             )
     else:
         if cycle_day in ["第1天", "第2天"]:
             return (
-                "患者处于月经第1-2天（急性期），此时前列腺素分泌达峰，疼痛最为剧烈。"
-                "selfCare 必须侧重急性疼痛管理（如紧急止痛姿势、快速热敷法），"
-                "analogy 需体现痛感的急性发作与猛烈程度。"
+                "患者处于月经第1-2天（急性期），前列腺素分泌达峰，疼痛最为剧烈。"
+                "selfCare 必须侧重急性疼痛管理，analogy 需体现痛感的急性发作与猛烈程度。"
             )
         elif any(d in cycle_day for d in ["第3", "第4", "第5"]):
             return (
                 "患者处于月经第3-5天（缓解期），急性疼痛开始消退但伴随疲劳与坠胀。"
-                "selfCare 必须侧重修复与营养补充（如补铁饮食、温和拉伸），"
-                "建议关注是否有需要复查的持续隐痛。"
+                "selfCare 必须侧重修复与营养补充，建议关注是否需要复查的持续隐痛。"
             )
         elif "排卵" in cycle_day:
             return (
                 "患者处于排卵期疼痛（非经期痛），这属于异常疼痛。"
-                "med 必须提示其与子宫内膜异位症或盆腔粘连的潜在关联，建议排查，"
-                "selfCare 需强调非经期痛的观察记录。"
+                "med 必须提示其与子宫内膜异位症或盆腔粘连的潜在关联，建议排查。"
             )
     return ""
 
@@ -326,81 +367,53 @@ def build_cycle_context(cycle_day: str, lang: str) -> str:
 def resolve_diagnosed(raw: Optional[str], lang: str) -> str:
     key = raw or ""
     d_map = DIAGNOSED_MAP.get(lang, DIAGNOSED_MAP["zh"])
-
-    # 1. 精确匹配当前语言映射
     if key in d_map:
         return d_map[key]
-
-    # 2. 🆕 如果目标是英文但传入中文，尝试反向翻译
     if lang == "en" and key in DIAGNOSED_ZH_TO_EN:
         return DIAGNOSED_ZH_TO_EN[key]
-
-    # 3. 🆕 英文模式下兜底：避免中文原文泄漏
     if lang == "en":
         return raw if raw and all(ord(c) < 128 for c in raw) else "No previous diagnosis on record"
-
     return raw if raw else d_map.get("none", "")
 
 
 def resolve_allergies(raw: Optional[str], lang: str) -> str:
     if raw in ALLERGY_NONE_KEYS:
         return ALLERGY_FALLBACK.get(lang, ALLERGY_FALLBACK["zh"])
-
     result = raw or ALLERGY_FALLBACK.get(lang, ALLERGY_FALLBACK["zh"])
-
-    # 🆕 英文模式下，尝试翻译中文过敏名
     if lang == "en" and result in ALLERGY_ZH_TO_EN:
         return ALLERGY_ZH_TO_EN[result]
-
-    # 🆕 英文模式下兜底：如果结果包含中文，用通用描述替代
     if lang == "en" and any(ord(c) > 127 for c in result):
         return "specific drug allergies (see patient records)"
-
     return result
 
 
 def resolve_color(color: Optional[str], lang: str) -> str:
     if not color:
         return "Crimson" if lang == "en" else "深红"
-
-    # 🆕 英文模式下映射中文色彩名
     if lang == "en":
         mapped = COLOR_MAP.get(color, COLOR_MAP.get(color.lower(), None))
         if mapped:
             return mapped
-        # 如果值含中文且映射表中没有，用默认英文
         if any(ord(c) > 127 for c in color):
             return "Crimson"
         return color
-
     return color
 
 
 def resolve_cycle_label(cycle_day: str, lang: str) -> str:
-    """用于 prompt 中的周期文字，EN 模式下将中文天数转为英文"""
     if not cycle_day or cycle_day in ["未提供", ""]:
         return "Not provided" if lang == "en" else "未提供"
-
     if lang == "en":
-        # 1. 精确映射
         if cycle_day in CYCLE_DAY_MAP_EN:
             return CYCLE_DAY_MAP_EN[cycle_day]
-
-        # 2. 🆕 正则提取"第X天"格式
         m = re.search(r"第(\d+)天", cycle_day)
         if m:
             return f"Day {m.group(1)}"
-
-        # 3. 🆕 正则提取"排卵"关键词
         if "排卵" in cycle_day:
             return "Ovulation"
-
-        # 4. 🆕 如果包含任何中文字符，返回通用英文
         if any(ord(c) > 127 for c in cycle_day):
             return "Day not specified"
-
         return cycle_day
-
     return cycle_day
 
 
@@ -412,14 +425,13 @@ async def generate_pain_report(data: PainData):
     lang = data.targetLanguage or "zh"
     is_quick = data.isQuickLog or False
 
-    # ── 1. 提取原始数据 ──
     mb = data.medicalBackground or {}
     intensity = data.intensityProfile or {}
     spatial = data.spatialMap or {}
     brush_counts = data.brushCounts or {}
     avg_speed = intensity.get("avgSpeed", 0)
 
-    # ── 2. 全量本地预翻译输入数据 ──
+    # 全量本地预翻译
     pain_type_dict = PAIN_MAP.get(lang, PAIN_MAP["zh"])
     body_mode_dict = BODY_MODE_MAP.get(lang, BODY_MODE_MAP["zh"])
 
@@ -437,7 +449,7 @@ async def generate_pain_report(data: PainData):
         "color": resolve_color(data.colorPalette, lang),
     }
 
-    # ── 3. 动态构建 System Prompt（含快速模式分支）──
+    # 构建 System Prompt
     if lang == "en":
         system_prompt = (
             "You are a senior Menstrual Health & Pain Management Consultant.\n"
@@ -450,8 +462,7 @@ async def generate_pain_report(data: PainData):
             "(e.g., \"unripe fruit being peeled\", \"electric barbs\"). Focus on the 'texture' of pain "
             "to bridge the empathy gap.\n"
             "   - \"work\": (100-130 words) Professional absence notice. Follow Western workplace norms: "
-            "emphasize \"temporary physiological incapacity\" and \"medical necessity\" over descriptive suffering. "
-            "Use phrases like \"unable to maintain the cognitive load required.\"\n"
+            "emphasize \"temporary physiological incapacity\" and \"medical necessity\" over descriptive suffering.\n"
             "   - \"med\": (80-120 words) Medical chief complaint. Start with \"Patient reports...\". "
             "Map metaphors to clinical terms (e.g., 'heavy' to 'pelvic congestion').\n"
             "   - \"selfCare\": (150-200 words) Provide 5 detailed, evidence-based steps. Avoid any allergens listed.\n"
@@ -471,12 +482,12 @@ async def generate_pain_report(data: PainData):
             "硬性规则：\n"
             "1. 格式：必须返回严格的 JSON，包含 \"analogy\", \"work\", \"med\", \"selfCare\" 字段。\n"
             "2. 深度要求：\n"
-            "   - \"analogy\": (180-250字) 面向伴侣。用震撼的通感比喻（如\"剥皮带肉\"、\"绞肉机\"）描述痛觉质地，引起生理共鸣。\n"
-            "   - \"work\": (100-150字) 职场请假条。语气专业、中性，强调\"生理机能暂时受损\"和\"无法维持专注度\"，符合职业规范。\n"
+            "   - \"analogy\": (180-250字) 面向伴侣。用震撼的通感比喻描述痛觉质地，引起生理共鸣。\n"
+            "   - \"work\": (100-150字) 职场请假条。语气专业、中性，强调\"生理机能暂时受损\"，符合职业规范。\n"
             "   - \"med\": (80-120字) 医疗主诉。以\"患者自述\"开头，使用专业术语，描述放射区域及排查建议。\n"
             "   - \"selfCare\": (180-250字) 5条深度的自愈建议，涵盖物理、营养、呼吸等。\n"
-            "3. selfCare 中严禁推荐患者过敏的药物（过敏信息会在数据中提供）。\n"
-            "4. 如需建议检查，在 med 字段使用精确术语：盆腔超声、经阴道超声、激素六项、腹腔镜，并附简要解释。\n"
+            "3. selfCare 中严禁推荐患者过敏的药物。\n"
+            "4. 如需建议检查，使用精确术语：盆腔超声、经阴道超声、激素六项、腹腔镜，并附简要解释。\n"
             "5. 所有输出文字必须使用简体中文。\n"
         )
         if is_quick:
@@ -485,12 +496,11 @@ async def generate_pain_report(data: PainData):
                 "请直接给出最核心的缓解建议，语气更安抚直接，减少长篇大论的比喻。\n"
             )
 
-    # ── 4. 构建 User Prompt ──
+    # 构建 User Prompt
     if lang == "en":
         cycle_section = f"Cycle: {processed_input['cycle']}"
         if processed_input['cycle_context']:
             cycle_section += f"\nClinical context: {processed_input['cycle_context']}"
-
         user_prompt = f"""Based on the following patient pain mapping data, generate a four-scenario translation report:
 
 [Somatic Data]
@@ -512,7 +522,6 @@ Generate the structured JSON report now:"""
         cycle_section = f"周期：{processed_input['cycle']}"
         if processed_input['cycle_context']:
             cycle_section += f"\n临床语境：{processed_input['cycle_context']}"
-
         user_prompt = f"""以下是患者的痛觉绘图数据，请据此生成四场景转译报告：
 
 【痛觉数据】
@@ -531,17 +540,21 @@ Generate the structured JSON report now:"""
 
 请生成 JSON 报告："""
 
-    # ── 5. 调用 AI ──
+    # ── 调用 AI（根据 provider 自动选择模型）──
+    model_name = config["model_quick"] if is_quick else config["model"]
+
     try:
-        print(f"🤖 正在请求通义千问... (目标语言: {lang}, 快速模式: {is_quick})")
+        print(f"🤖 正在请求 {config['display_name']}... (模型: {model_name}, 语言: {lang}, 快速: {is_quick})")
+
         completion = client.chat.completions.create(
-            model="qwen-plus",
+            model=model_name,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
             temperature=0.7,
             response_format={"type": "json_object"},
+            max_tokens=config["max_tokens"],
         )
         raw_content = completion.choices[0].message.content
         llm_reply = json.loads(raw_content)
@@ -553,10 +566,10 @@ Generate the structured JSON report now:"""
             if field not in llm_reply:
                 llm_reply[field] = missing_label
 
-        return {"status": "success", "language": lang, **llm_reply}
+        return {"status": "success", "language": lang, "provider": LLM_PROVIDER, **llm_reply}
 
     except Exception as e:
-        print(f"🚨 后端错误: {e}")
+        print(f"🚨 后端错误 ({config['display_name']}): {e}")
         return _fallback_response(lang)
 
 
@@ -687,9 +700,9 @@ async def refine_content(data: dict):
         )
 
     try:
-        print(f"🤖 正在优化内容... (字段: {field}, 语言: {lang})")
+        print(f"🤖 正在优化内容... (字段: {field}, 语言: {lang}, 模型: {config['model_refine']})")
         completion = client.chat.completions.create(
-            model="qwen-turbo",
+            model=config["model_refine"],
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
@@ -699,13 +712,18 @@ async def refine_content(data: dict):
         refined = completion.choices[0].message.content.strip()
         return {"refined": refined, "language": lang}
     except Exception as e:
-        print(f"error: {e}")
+        print(f"🚨 优化错误: {e}")
         return {"refined": current_text, "language": lang}
 
 
 # ─────────────────────────────────────────────
-# 健康检查
+# 健康检查（含 Provider 信息）
 # ─────────────────────────────────────────────
 @app.get("/")
 def read_root():
-    return {"message": "PainScape Backend (Powered by Qwen AI) is running!", "version": "3.0-bilingual"}
+    return {
+        "message": "PainScape Backend is running!",
+        "version": "3.0-multi-provider",
+        "provider": LLM_PROVIDER,
+        "model": config["display_name"],
+    }
