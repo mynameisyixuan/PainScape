@@ -449,7 +449,7 @@ async def generate_pain_report(data: PainData):
         "color": resolve_color(data.colorPalette, lang),
     }
 
-    # 构建 System Prompt（增强约束）
+    # 构建 System Prompt（强化约束）
     if lang == "en":
         system_prompt = (
             "You are a senior Menstrual Health & Pain Management Consultant.\n"
@@ -465,13 +465,15 @@ async def generate_pain_report(data: PainData):
             "emphasize \"temporary physiological incapacity\" and \"medical necessity\" over descriptive suffering.\n"
             "   - \"med\": (80-120 words) Medical chief complaint. Start with \"Patient reports...\". "
             "Map metaphors to clinical terms (e.g., 'heavy' to 'pelvic congestion').\n"
-            "   - \"selfCare\": (150-200 words) Provide 5 detailed, evidence-based steps. Each step must be on a new line. "
-            "Cover 5 dimensions: posture, heat therapy, nutrition, breathing, and psychological support. "
+            "   - \"selfCare\": (150-200 words) Provide EXACTLY 5 detailed, evidence-based steps. "
+            "Each step must be on a new line. "
+            "MUST cover these 5 dimensions: posture, heat therapy, nutrition, breathing, and psychological support. "
             "Avoid any allergens listed.\n"
             "4. selfCare must NEVER recommend medications the patient is allergic to.\n"
             "5. When recommending examinations, use precise terms: pelvic ultrasound, transvaginal ultrasound, "
             "hormone panel, laparoscopy — with a brief plain-language explanation for each.\n"
             "6. FORMAT: Use \\n for line breaks in selfCare and analogy fields.\n"
+            "7. IMPORTANT: If you cannot generate 5 distinct selfCare steps, return an error message instead.\n"
         )
         if is_quick:
             system_prompt += (
@@ -488,11 +490,12 @@ async def generate_pain_report(data: PainData):
             "   - \"analogy\": (180-250字) 面向伴侣。用震撼的通感比喻描述痛觉质地，引起生理共鸣。\n"
             "   - \"work\": (100-150字) 职场请假条。语气专业、中性，强调\"生理机能暂时受损\"，符合职业规范。\n"
             "   - \"med\": (80-120字) 医疗主诉。以\"患者自述\"开头，使用专业术语，描述放射区域及排查建议。\n"
-            "   - \"selfCare\": (180-250字) 5条深度的自愈建议，每条单独一行。涵盖姿势、热敷、营养、呼吸、心理5个维度，避免建议过敏药物。\n"
+            "   - \"selfCare\": (180-250字) 提供 **恰好5条** 深度的自愈建议，每条单独一行。必须涵盖姿势、热敷、营养、呼吸、心理5个维度，避免建议过敏药物。\n"
             "3. selfCare 中严禁推荐患者过敏的药物。\n"
             "4. 如需建议检查，使用精确术语：盆腔超声、经阴道超声、激素六项、腹腔镜，并附简要解释。\n"
             "5. 所有输出文字必须使用简体中文。\n"
             "6. 格式：selfCare 和 analogy 字段使用换行符 \\n 分行。\n"
+            "7. 重要：如果无法生成5条不同的建议，返回错误信息。\n"
         )
         if is_quick:
             system_prompt += (
@@ -576,6 +579,18 @@ Generate the structured JSON report now:"""
                     llm_reply[field] = llm_reply[field].replace("\\n", "\n").replace("\n\n", "\n")
                 else:
                     llm_reply[field] = llm_reply[field].replace("\\n", "\n").replace("\n\n", "\n")
+
+        # 额外检查：确保 selfCare 有5条建议
+        if "selfCare" in llm_reply and lang == "en":
+            lines = llm_reply["selfCare"].split("\n")
+            if len(lines) < 5:
+                llm_reply["selfCare"] = (
+                    "• Apply a heat pad to your lower abdomen for 15–20 minutes to ease muscle spasms\n"
+                    "• Try the knee-chest (child's pose) position to reduce pelvic pressure\n"
+                    "• Eat magnesium-rich foods (e.g., nuts, dark chocolate) to help relax muscle contractions\n"
+                    "• Practice slow diaphragmatic breathing: 4 counts in, hold 4, out 6\n"
+                    "• Give yourself permission to rest — your pain is real and you deserve care"
+                )
 
         return {"status": "success", "language": lang, "provider": LLM_PROVIDER, **llm_reply}
 
@@ -745,4 +760,3 @@ def read_root():
         "provider": LLM_PROVIDER,
         "model": config["display_name"],
     }
-
