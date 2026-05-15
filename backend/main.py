@@ -1,3 +1,4 @@
+from zhipuai import ZhipuAI
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -7,7 +8,6 @@ import json
 import re
 from dotenv import load_dotenv
 from openai import OpenAI
-from zhipuai import ZhipuAI
 
 load_dotenv()
 
@@ -21,16 +21,16 @@ PROVIDER_CONFIG = {
         "base_url": "https://api.openai.com/v1",
         "api_key_env": "OPENAI_API_KEY",
         "model": "gpt-4o",
-        "model_quick": "gpt-4o-mini",        # 快速模式用更快的模型
-        "model_refine": "gpt-4o-mini",       # refine 用便宜模型
+        "model_quick": "gpt-4o-mini",
+        "model_refine": "gpt-4o-mini",
         "max_tokens": 4096,
         "display_name": "OpenAI GPT-4o",
     },
     "zhipu": {
         "base_url": "https://open.bigmodel.cn/api/paas/v4",
         "api_key_env": "ZHIPU_API_KEY",
-        "model": "glm-4-plus",               # 智谱旗舰模型
-        "model_quick": "glm-4-flash",        # 快速模式用 flash
+        "model": "glm-4-plus",
+        "model_quick": "glm-4-flash",
         "model_refine": "glm-4-flash",
         "max_tokens": 4096,
         "display_name": "智谱 GLM-4-Plus",
@@ -449,7 +449,7 @@ async def generate_pain_report(data: PainData):
         "color": resolve_color(data.colorPalette, lang),
     }
 
-    # 构建 System Prompt
+    # 构建 System Prompt（增强约束）
     if lang == "en":
         system_prompt = (
             "You are a senior Menstrual Health & Pain Management Consultant.\n"
@@ -465,10 +465,13 @@ async def generate_pain_report(data: PainData):
             "emphasize \"temporary physiological incapacity\" and \"medical necessity\" over descriptive suffering.\n"
             "   - \"med\": (80-120 words) Medical chief complaint. Start with \"Patient reports...\". "
             "Map metaphors to clinical terms (e.g., 'heavy' to 'pelvic congestion').\n"
-            "   - \"selfCare\": (150-200 words) Provide 5 detailed, evidence-based steps. Avoid any allergens listed.\n"
+            "   - \"selfCare\": (150-200 words) Provide 5 detailed, evidence-based steps. Each step must be on a new line. "
+            "Cover 5 dimensions: posture, heat therapy, nutrition, breathing, and psychological support. "
+            "Avoid any allergens listed.\n"
             "4. selfCare must NEVER recommend medications the patient is allergic to.\n"
             "5. When recommending examinations, use precise terms: pelvic ultrasound, transvaginal ultrasound, "
             "hormone panel, laparoscopy — with a brief plain-language explanation for each.\n"
+            "6. FORMAT: Use \\n for line breaks in selfCare and analogy fields.\n"
         )
         if is_quick:
             system_prompt += (
@@ -485,10 +488,11 @@ async def generate_pain_report(data: PainData):
             "   - \"analogy\": (180-250字) 面向伴侣。用震撼的通感比喻描述痛觉质地，引起生理共鸣。\n"
             "   - \"work\": (100-150字) 职场请假条。语气专业、中性，强调\"生理机能暂时受损\"，符合职业规范。\n"
             "   - \"med\": (80-120字) 医疗主诉。以\"患者自述\"开头，使用专业术语，描述放射区域及排查建议。\n"
-            "   - \"selfCare\": (180-250字) 5条深度的自愈建议，涵盖物理、营养、呼吸等。\n"
+            "   - \"selfCare\": (180-250字) 5条深度的自愈建议，每条单独一行。涵盖姿势、热敷、营养、呼吸、心理5个维度，避免建议过敏药物。\n"
             "3. selfCare 中严禁推荐患者过敏的药物。\n"
             "4. 如需建议检查，使用精确术语：盆腔超声、经阴道超声、激素六项、腹腔镜，并附简要解释。\n"
             "5. 所有输出文字必须使用简体中文。\n"
+            "6. 格式：selfCare 和 analogy 字段使用换行符 \\n 分行。\n"
         )
         if is_quick:
             system_prompt += (
@@ -559,12 +563,19 @@ Generate the structured JSON report now:"""
         raw_content = completion.choices[0].message.content
         llm_reply = json.loads(raw_content)
 
-        # 字段校验
+        # 字段校验和格式化
         required_fields = ["analogy", "work", "med", "selfCare"]
         missing_label = "[generation failed, please retry]" if lang == "en" else "[生成失败，请重试]"
+        
         for field in required_fields:
             if field not in llm_reply:
                 llm_reply[field] = missing_label
+            else:
+                # 确保换行符被正确处理
+                if lang == "en":
+                    llm_reply[field] = llm_reply[field].replace("\\n", "\n").replace("\n\n", "\n")
+                else:
+                    llm_reply[field] = llm_reply[field].replace("\\n", "\n").replace("\n\n", "\n")
 
         return {"status": "success", "language": lang, "provider": LLM_PROVIDER, **llm_reply}
 
@@ -660,12 +671,14 @@ REFINE_SYSTEM_PROMPT = {
     "zh": (
         "你是一个专业的医疗内容编辑。根据用户的反馈重写以下文字，保持原意但调整风格/语气。"
         "只输出优化后的文字，不要添加任何解释或前缀。重要：回复必须使用简体中文。"
+        "确保每条建议单独一行，使用换行符 \\n 分隔。"
     ),
     "en": (
         "You are a professional medical content editor. Rewrite the following text based on user feedback, "
         "preserving the original meaning while adjusting style or tone as requested. "
         "Output ONLY the refined text — no explanations, no labels, no preamble. "
-        "IMPORTANT: Your response must be in English only."
+        "IMPORTANT: Your response must be in English only. "
+        "Ensure each suggestion is on a new line using \\n."
     ),
 }
 
@@ -689,14 +702,14 @@ async def refine_content(data: dict):
             f"Context: {field_context}\n\n"
             f"Original text:\n{current_text}\n\n"
             f"User feedback: {user_feedback}\n\n"
-            f"Please output only the refined text in English:"
+            f"Please output only the refined text in English with proper line breaks:"
         )
     else:
         user_prompt = (
             f"内容类型：{field_context}\n\n"
             f"原文：\n{current_text}\n\n"
             f"用户反馈：{user_feedback}\n\n"
-            f"请直接输出优化后的中文文字："
+            f"请直接输出优化后的中文文字，每条建议单独一行："
         )
 
     try:
@@ -710,6 +723,11 @@ async def refine_content(data: dict):
             temperature=0.7,
         )
         refined = completion.choices[0].message.content.strip()
+        # 确保换行符正确
+        if lang == "en":
+            refined = refined.replace("\\n", "\n").replace("\n\n", "\n")
+        else:
+            refined = refined.replace("\\n", "\n").replace("\n\n", "\n")
         return {"refined": refined, "language": lang}
     except Exception as e:
         print(f"🚨 优化错误: {e}")
@@ -727,3 +745,4 @@ def read_root():
         "provider": LLM_PROVIDER,
         "model": config["display_name"],
     }
+
