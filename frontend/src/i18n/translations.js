@@ -13,7 +13,7 @@ const translations = {
     },
     painAdjectives: {
       faint: "隐隐约约的",
-      persistent: "持续性的", 
+      persistent: "持续性的",
       intense: "强烈的",
       extremelyIntense: "极其剧烈的",
     },
@@ -239,7 +239,7 @@ const translations = {
       feelingHint: "「语言在痛苦面前总是匮乏的，但每一种描述都是真实的。」",
       brushCount: "涂抹 {{count}} 次",
       bodyFront: "腹部正面",
-      bodyBack: "腰骶背面", 
+      bodyBack: "腰骶背面",
       bodyBoth: "正背双侧",
       dominantBrush: "主导",
       durationLabel: "⏱️ 这种感觉持续了...",
@@ -418,19 +418,19 @@ const translations = {
     },
 
     // ============ PDF 导出 ============
-   pdf: {
-  title: "PainScape",
-  subtitle: "患者疼痛档案",
-  reportRange: "报告范围：{{start}} - {{end}}",
-  totalRecords: "总记录数：{{count}}",
-  disclaimer1: "本文档由 AI 基于患者的视觉绘画生成，仅供参考。",
-  disclaimer2: "请将此报告出示给您的医生。",
-  recordLabel: "记录 {{index}}:{{date}}",
-  dominantPain: "主导痛感：{{pain}}",
-  medicalComplaint: "医疗主诉：",
-  medicalReference: "诊疗参考：",
-  footer: "PainScape 生成",
-},
+    pdf: {
+      title: "PainScape",
+      subtitle: "患者疼痛档案",
+      reportRange: "报告范围：{{start}} - {{end}}",
+      totalRecords: "总记录数：{{count}}",
+      disclaimer1: "本文档由 AI 基于患者的视觉绘画生成，仅供参考。",
+      disclaimer2: "请将此报告出示给您的医生。",
+      recordLabel: "记录 {{index}}:{{date}}",
+      dominantPain: "主导痛感：{{pain}}",
+      medicalComplaint: "医疗主诉：",
+      medicalReference: "诊疗参考：",
+      footer: "PainScape 生成",
+    },
   },
 
   // ==================== 英文 ====================
@@ -446,19 +446,19 @@ const translations = {
         "Something went wrong with the page, please refresh and try again",
     },
     painAdjectives: {
-  faint: "faint",
-  persistent: "persistent",
-  intense: "intense",
-  extremelyIntense: "extremely intense",
-},
+      faint: "faint",
+      persistent: "persistent",
+      intense: "intense",
+      extremelyIntense: "extremely intense",
+    },
 
-painNames: {
-  twist: "cramping",
-  pierce: "stabbing",
-  heavy: "heavy dragging",
-  wave: "diffuse bloating",
-  scrape: "tearing",
-},
+    painNames: {
+      twist: "cramping",
+      pierce: "stabbing",
+      heavy: "heavy dragging",
+      wave: "diffuse bloating",
+      scrape: "tearing",
+    },
     splash: {
       quotes: [
         'Chronic pain is a prolonged "unmaking"—trapping a person in a body prison.\n— Elaine Scarry',
@@ -536,17 +536,17 @@ painNames: {
     brushes: {
       twist: { label: "🌪️ Cramp", icon: "🌪️" },
       pierce: { label: "⚡️ Stab", icon: "⚡️" },
-      heavy: { label: "🪨 Drag", icon: "🪨" },
+      heavy: { label: "🪨 Sink", icon: "🪨" },
       wave: { label: "〰️ Fullness", icon: "〰️" },
-      scrape: { label: "🔪 Tear", icon: "🔪" },
+      scrape: { label: "🔪 Scrape", icon: "🔪" },
       eraser: { label: "🧽 Eraser", icon: "🧽" },
     },
     painNames: {
       twist: "Cramping",
       pierce: "Stabbing",
-      heavy: "Heavy Pain",
-      wave: "Distending Pain",
-      scrape: "Tearing Pain",
+      heavy: "Dragging Sinking",// 下坠坠痛
+      wave: "Bloating Fullness",// 胀痛/胀满闷胀
+      scrape: "Scraping Tearing"// 撕扯/刮坠裂痛
     },
     colors: {
       crimson: { label: "🩸" },
@@ -671,10 +671,10 @@ painNames: {
     diary: {
       close: "Close",
       brushCount: "{{count}} brush strokes",
-  bodyFront: "Abdomen (Front)",
-  bodyBack: "Lower Back",
-  bodyBoth: "Both Sides",
-  dominantBrush: "Dominant",
+      bodyFront: "Abdomen (Front)",
+      bodyBack: "Lower Back",
+      bodyBoth: "Both Sides",
+      dominantBrush: "Dominant",
       recordFeelings: "📝 Record Your Feelings",
       feelingHint:
         '"Language always falls short before pain, but every description is real."',
@@ -736,18 +736,18 @@ painNames: {
     },
 
     sharePreview: {
-         shareTitle: "My Pain Statement Card",
-        title: "📤 Share Preview",
-        loading: "Loading...",
-        noContent: "No drawing content",
-        livePreview: "Live Drawing Preview",
-        archiveReview: "Pain Archive Review",
-        cancel: "Cancel",
-        confirm: "Confirm Share",
-        defaultTitle: "Status Statement",
-        defaultDoctorContent: "Embodied pain map recorded",
-        defaultContent: "Currently experiencing {{pain}}",
-},
+      shareTitle: "My Pain Statement Card",
+      title: "📤 Share Preview",
+      loading: "Loading...",
+      noContent: "No drawing content",
+      livePreview: "Live Drawing Preview",
+      archiveReview: "Pain Archive Review",
+      cancel: "Cancel",
+      confirm: "Confirm Share",
+      defaultTitle: "Status Statement",
+      defaultDoctorContent: "Embodied pain map recorded",
+      defaultContent: "Currently experiencing {{pain}}",
+    },
 
     toast: {
       copySuccess: "Text copied to clipboard!",

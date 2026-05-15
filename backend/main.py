@@ -4,10 +4,12 @@ from pydantic import BaseModel
 from typing import Optional, Dict
 import os
 import json
+import re
 from dotenv import load_dotenv
 from openai import OpenAI
 
 load_dotenv()
+
 DASHSCOPE_API_KEY = os.getenv("DASHSCOPE_API_KEY")
 if not DASHSCOPE_API_KEY:
     raise ValueError("🚨 未找到 DASHSCOPE_API_KEY，请检查 .env 文件！")
@@ -27,11 +29,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 # ─────────────────────────────────────────────
 # 数据模型
 # ─────────────────────────────────────────────
-
 class PainData(BaseModel):
     dominantPain: str
     userPref: str
@@ -47,11 +47,9 @@ class PainData(BaseModel):
     targetLanguage: Optional[str] = "zh"
     isQuickLog: Optional[bool] = False
 
-
 # ─────────────────────────────────────────────
 # 双语映射表
 # ─────────────────────────────────────────────
-
 PAIN_MAP = {
     "zh": {
         "twist": "绞痛/痉挛性收缩痛",
@@ -139,6 +137,13 @@ DIAGNOSED_MAP = {
     },
 }
 
+# 🆕 中文确诊名 → 英文确诊名 反向映射
+DIAGNOSED_ZH_TO_EN = {
+    v: DIAGNOSED_MAP["en"][k]
+    for k, v in DIAGNOSED_MAP["zh"].items()
+    if k in DIAGNOSED_MAP["en"]
+}
+
 ALLERGY_FALLBACK = {
     "zh": "无已知过敏记录",
     "en": "No known drug allergies",
@@ -146,7 +151,39 @@ ALLERGY_FALLBACK = {
 
 ALLERGY_NONE_KEYS = ["unknown", "none", "", None]
 
-# 空间区域名称双语映射（前端 spatialMap 的 key 可能是中文）
+# 🆕 常见过敏药中文 → 英文映射
+ALLERGY_ZH_TO_EN = {
+    "无已知过敏记录": "No known drug allergies",
+    "青霉素": "Penicillin",
+    "磺胺类": "Sulfonamides",
+    "阿司匹林": "Aspirin",
+    "布洛芬": "Ibuprofen",
+    "对乙酰氨基酚": "Acetaminophen",
+    "头孢类": "Cephalosporins",
+    "止痛药": "Painkillers (general)",
+    "NSAIDs": "NSAIDs",
+}
+
+# 🆕 色彩双语映射
+COLOR_MAP = {
+    "深红": "Crimson",
+    "暗紫": "Dark Purple",
+    "火红": "Flame Red",
+    "暗蓝": "Dark Blue",
+    "灰黑": "Charcoal",
+    "橙黄": "Amber",
+    "苍白": "Pale White",
+    "暗红": "Dark Red",
+    "紫红": "Magenta",
+    "crimson": "Crimson",
+    "darkPurple": "Dark Purple",
+    "flameRed": "Flame Red",
+    "darkBlue": "Dark Blue",
+    "charcoal": "Charcoal",
+    "amber": "Amber",
+}
+
+# 空间区域名称双语映射
 SPATIAL_REGION_MAP_EN = {
     "下腹部": "lower abdomen",
     "上腹部": "upper abdomen",
@@ -159,7 +196,6 @@ SPATIAL_REGION_MAP_EN = {
     "大腿内侧": "inner thigh",
     "肚脐周围": "periumbilical area",
     "全腹": "entire abdomen",
-    # 英文 key 直传（前端可能已经用英文）
     "lower abdomen": "lower abdomen",
     "upper abdomen": "upper abdomen",
     "lumbosacral": "lumbosacral region",
@@ -171,6 +207,19 @@ SPATIAL_REGION_MAP_EN = {
     "inner thigh": "inner thigh",
 }
 
+# 周期天数中文 → 英文映射
+CYCLE_DAY_MAP_EN = {
+    "第1天": "Day 1",
+    "第2天": "Day 2",
+    "第3天": "Day 3",
+    "第4天": "Day 4",
+    "第5天": "Day 5",
+    "第6天": "Day 6",
+    "第7天": "Day 7",
+    "排卵期": "Ovulation day",
+    "排卵痛": "Ovulation pain",
+    "未提供": "Not provided",
+}
 
 # ─────────────────────────────────────────────
 # 辅助函数：根据语言构建描述文本
@@ -179,7 +228,9 @@ SPATIAL_REGION_MAP_EN = {
 def build_brush_desc(brush_counts: Dict[str, int], lang: str) -> str:
     label_map = BRUSH_LABEL_MAP.get(lang, BRUSH_LABEL_MAP["zh"])
     parts = [
-        f"{label_map[k]}({v})" for k, v in brush_counts.items() if v > 0 and k in label_map
+        f"{label_map[k]}({v})"
+        for k, v in brush_counts.items()
+        if v > 0 and k in label_map
     ]
     if not parts:
         return "single stroke type" if lang == "en" else "单一笔触"
@@ -192,8 +243,16 @@ def build_spatial_desc(spatial: Dict[str, float], lang: str) -> str:
         return "evenly distributed" if lang == "en" else "分布均匀"
     top_regions = sorted(spatial.items(), key=lambda x: x[1], reverse=True)[:3]
     if lang == "en":
-        # 将中文区域名翻译为英文，未命中则保留原值
-        translated = [SPATIAL_REGION_MAP_EN.get(r[0], r[0]) for r in top_regions]
+        translated = []
+        for r in top_regions:
+            en_name = SPATIAL_REGION_MAP_EN.get(r[0])
+            if en_name is None:
+                # 🆕 未命中映射表的中文 key，用通用描述替代，不泄漏中文
+                if any(ord(c) > 127 for c in r[0]):
+                    en_name = "unspecified region"
+                else:
+                    en_name = r[0]
+            translated.append(en_name)
         return "concentrated at: " + ", ".join(translated)
     else:
         return "集中于" + "、".join(r[0] for r in top_regions)
@@ -221,7 +280,6 @@ def build_cycle_context(cycle_day: str, lang: str) -> str:
     if not cycle_day or cycle_day in ["未提供", "Not provided", ""]:
         return ""
 
-    # 标准化：支持中英文周期描述
     day_str = cycle_day.lower()
 
     if lang == "en":
@@ -268,207 +326,225 @@ def build_cycle_context(cycle_day: str, lang: str) -> str:
 def resolve_diagnosed(raw: Optional[str], lang: str) -> str:
     key = raw or ""
     d_map = DIAGNOSED_MAP.get(lang, DIAGNOSED_MAP["zh"])
-    # 尝试精确匹配
+
+    # 1. 精确匹配当前语言映射
     if key in d_map:
         return d_map[key]
-    # 未命中：返回原始值（用户自填内容），如果为空则用默认
+
+    # 2. 🆕 如果目标是英文但传入中文，尝试反向翻译
+    if lang == "en" and key in DIAGNOSED_ZH_TO_EN:
+        return DIAGNOSED_ZH_TO_EN[key]
+
+    # 3. 🆕 英文模式下兜底：避免中文原文泄漏
+    if lang == "en":
+        return raw if raw and all(ord(c) < 128 for c in raw) else "No previous diagnosis on record"
+
     return raw if raw else d_map.get("none", "")
 
 
 def resolve_allergies(raw: Optional[str], lang: str) -> str:
     if raw in ALLERGY_NONE_KEYS:
         return ALLERGY_FALLBACK.get(lang, ALLERGY_FALLBACK["zh"])
-    return raw or ALLERGY_FALLBACK.get(lang, ALLERGY_FALLBACK["zh"])
+
+    result = raw or ALLERGY_FALLBACK.get(lang, ALLERGY_FALLBACK["zh"])
+
+    # 🆕 英文模式下，尝试翻译中文过敏名
+    if lang == "en" and result in ALLERGY_ZH_TO_EN:
+        return ALLERGY_ZH_TO_EN[result]
+
+    # 🆕 英文模式下兜底：如果结果包含中文，用通用描述替代
+    if lang == "en" and any(ord(c) > 127 for c in result):
+        return "specific drug allergies (see patient records)"
+
+    return result
 
 
 def resolve_color(color: Optional[str], lang: str) -> str:
     if not color:
         return "Crimson" if lang == "en" else "深红"
+
+    # 🆕 英文模式下映射中文色彩名
+    if lang == "en":
+        mapped = COLOR_MAP.get(color, COLOR_MAP.get(color.lower(), None))
+        if mapped:
+            return mapped
+        # 如果值含中文且映射表中没有，用默认英文
+        if any(ord(c) > 127 for c in color):
+            return "Crimson"
+        return color
+
     return color
 
-
-# 周期天数中文 → 英文映射
-CYCLE_DAY_MAP_EN = {
-    "第1天": "Day 1", "第2天": "Day 2", "第3天": "Day 3",
-    "第4天": "Day 4", "第5天": "Day 5", "第6天": "Day 6",
-    "第7天": "Day 7", "排卵期": "Ovulation day", "排卵痛": "Ovulation pain",
-    "未提供": "Not provided",
-}
 
 def resolve_cycle_label(cycle_day: str, lang: str) -> str:
     """用于 prompt 中的周期文字，EN 模式下将中文天数转为英文"""
     if not cycle_day or cycle_day in ["未提供", ""]:
         return "Not provided" if lang == "en" else "未提供"
+
     if lang == "en":
-        return CYCLE_DAY_MAP_EN.get(cycle_day, cycle_day)
+        # 1. 精确映射
+        if cycle_day in CYCLE_DAY_MAP_EN:
+            return CYCLE_DAY_MAP_EN[cycle_day]
+
+        # 2. 🆕 正则提取"第X天"格式
+        m = re.search(r"第(\d+)天", cycle_day)
+        if m:
+            return f"Day {m.group(1)}"
+
+        # 3. 🆕 正则提取"排卵"关键词
+        if "排卵" in cycle_day:
+            return "Ovulation"
+
+        # 4. 🆕 如果包含任何中文字符，返回通用英文
+        if any(ord(c) > 127 for c in cycle_day):
+            return "Day not specified"
+
+        return cycle_day
+
     return cycle_day
-
-
-# ─────────────────────────────────────────────
-# System Prompts（双语）
-# ─────────────────────────────────────────────
-
-SYSTEM_PROMPT_ZH = """你是一个专业的痛经疼痛管理顾问，擅长将具身化的疼痛感知数据转译为不同社会场景下的语言表达。
-
-你必须严格按照以下 JSON schema 输出，不得添加任何额外字段或解释性文字：
-
-{
-  "analogy": "（面向伴侣）用生动的通感比喻描述这种痛觉，帮助没有痛经经验的人感同身受，语气温柔真实，120-160字",
-  "work": "（面向职场/HR）一段正式简洁的请假或居家申请说明，避免情绪化表达，突出生理客观性，80-120字",
-  "med": "（面向医生）规范医疗语言的主诉描述，包含疼痛性质、部位、强度、伴随症状推测，60-100字",
-  "selfCare": "（面向自身）5条具体可操作的当下自愈建议，分行列出，每条30字以内，涵盖姿势、热敷、饮食、呼吸、心理5个维度，避免建议过敏药物"
-}
-
-规则：
-1. selfCare 中严禁推荐患者过敏的药物（过敏信息会在数据中提供）
-2. analogy 必须包含至少一个具体的感官比喻，语言要丰富，用通用器官的痛感转译让大多数人能够想象。参考：强烈的刺钻神经性痛感可描述为"不打麻药做根管治疗"，"用脚碾小腿骨"等。
-3. med 必须以"患者自述"开头
-4. 所有内容必须基于提供的疼痛数据，不得虚构症状
-5. 输出必须是合法 JSON，不含 markdown 代码块
-6. 如需建议检查，在 med 字段使用精确术语：盆腔超声、经阴道超声、激素六项、腹腔镜，并附简要解释
-7. 重要：所有输出文字必须使用简体中文"""
-
-SYSTEM_PROMPT_ZH_QUICK = SYSTEM_PROMPT_ZH + (
-    "\n\n特别注意：用户处于剧烈疼痛的快速记录模式，数据颗粒度较粗。"
-    "请基于提供的疼痛类型和评分直接给出最核心、最急需的缓解建议，语气要更加安抚和直接，减少长篇大论的比喻。"
-)
-
-SYSTEM_PROMPT_EN = """You are a professional menstrual pain management consultant, skilled at translating embodied pain perception data into language expressions for different social scenarios.
-
-CRITICAL LANGUAGE RULE: Your entire response must be in English only. Do NOT use any Chinese characters (汉字) in any field. Even if the input data contains Chinese text, your output must always be English. This is a hard constraint.
-
-You must output strictly according to the following JSON schema, without adding any extra fields or explanatory text:
-
-{
-  "analogy": "(For partner) A vivid synesthetic metaphor describing this pain, helping those without period pain experience it empathetically, in a warm and authentic tone, 100-150 words",
-  "work": "(For workplace/HR) A formal, concise leave or work-from-home request, avoiding emotional language, emphasizing physiological objectivity, 60-100 words",
-  "med": "(For doctor) A standardized medical chief complaint, including pain nature, location, intensity, and suspected accompanying symptoms, 50-80 words",
-  "selfCare": "(For self) 5 specific, immediately actionable self-care suggestions, listed separately, each within 20 words, covering posture, heat therapy, diet, breathing, and psychological dimensions; avoid recommending allergen medications"
-}
-
-Rules:
-1. selfCare must NEVER recommend medications the patient is allergic to (allergy info provided in the data)
-2. analogy must include at least one specific sensory metaphor using common bodily pain references most people can imagine (e.g., intense nerve pain: "like a root canal without anesthesia", "someone pressing a heel into your shin bone")
-3. med must start with "Patient reports"
-4. All content must be grounded in the provided pain data; do not fabricate symptoms
-5. Output must be valid JSON with no markdown code blocks
-6. When recommending examinations, use precise terms in med: pelvic ultrasound, transvaginal ultrasound, hormone panel, laparoscopy — with a brief plain-language explanation for each
-7. FINAL REMINDER: Every single word in every JSON field must be in English. Do NOT write any Chinese characters (汉字) anywhere — not even one character. If the input data contains Chinese text, translate it to English in your output."""
-
-SYSTEM_PROMPT_EN_QUICK = SYSTEM_PROMPT_EN + (
-    "\n\nSpecial note: The user is in quick-log mode due to severe pain and data granularity is low. "
-    "Prioritize the most essential and immediately actionable relief suggestions. "
-    "Keep the tone calm, reassuring, and direct. Minimize lengthy analogies."
-)
 
 
 # ─────────────────────────────────────────────
 # /api/generate 端点
 # ─────────────────────────────────────────────
-
 @app.post("/api/generate")
 async def generate_pain_report(data: PainData):
+    lang = data.targetLanguage or "zh"
+    is_quick = data.isQuickLog or False
+
+    # ── 1. 提取原始数据 ──
     mb = data.medicalBackground or {}
     intensity = data.intensityProfile or {}
     spatial = data.spatialMap or {}
     brush_counts = data.brushCounts or {}
-    lang = data.targetLanguage or "zh"
-    is_quick = data.isQuickLog or False
-
-    # ── 解析映射值（双语）──
-    pain_type = PAIN_MAP.get(lang, PAIN_MAP["zh"]).get(data.dominantPain, "complex dysmenorrhea" if lang == "en" else "复合性痛经")
-    body_location = BODY_MODE_MAP.get(lang, BODY_MODE_MAP["zh"]).get(data.bodyMode or "front", "anterior abdomen/pelvis" if lang == "en" else "腹部/盆腔")
-    diagnosed = resolve_diagnosed(mb.get("diagnosed"), lang)
-    allergies = resolve_allergies(mb.get("allergies"), lang)
-    tone_desc = TONE_MAP.get(lang, TONE_MAP["zh"]).get(data.tonePreference or "gentle", "warm and empathetic" if lang == "en" else "温柔体贴")
-    color = resolve_color(data.colorPalette, lang)
-    cycle_label = resolve_cycle_label(data.cycleDay, lang)
-
-    # ── 构建描述性文本（双语）──
-    brush_desc = build_brush_desc(brush_counts, lang)
-    spatial_desc = build_spatial_desc(spatial, lang)
     avg_speed = intensity.get("avgSpeed", 0)
-    intensity_desc = build_intensity_desc(avg_speed, lang)
-    cycle_context = build_cycle_context(data.cycleDay, lang)
 
-    # ── 选择 System Prompt ──
+    # ── 2. 全量本地预翻译输入数据 ──
+    pain_type_dict = PAIN_MAP.get(lang, PAIN_MAP["zh"])
+    body_mode_dict = BODY_MODE_MAP.get(lang, BODY_MODE_MAP["zh"])
+
+    processed_input = {
+        "pain_type": pain_type_dict.get(data.dominantPain, "complex pain" if lang == "en" else "复合性痛经"),
+        "location": body_mode_dict.get(data.bodyMode or "front", "pelvic region" if lang == "en" else "盆腔区域"),
+        "diagnosis": resolve_diagnosed(mb.get("diagnosed"), lang),
+        "allergies": resolve_allergies(mb.get("allergies"), lang),
+        "cycle": resolve_cycle_label(data.cycleDay, lang),
+        "cycle_context": build_cycle_context(data.cycleDay, lang),
+        "tone": TONE_MAP.get(lang, TONE_MAP["zh"]).get(data.tonePreference or "gentle"),
+        "brush_desc": build_brush_desc(brush_counts, lang),
+        "spatial_desc": build_spatial_desc(spatial, lang),
+        "intensity_desc": build_intensity_desc(avg_speed, lang),
+        "color": resolve_color(data.colorPalette, lang),
+    }
+
+    # ── 3. 动态构建 System Prompt（含快速模式分支）──
     if lang == "en":
-        system_prompt = SYSTEM_PROMPT_EN_QUICK if is_quick else SYSTEM_PROMPT_EN
+        system_prompt = (
+            "You are a senior Menstrual Health & Pain Management Consultant.\n"
+            "Your task is to translate somatic pain data into four highly specific support artifacts.\n\n"
+            "CRITICAL RULES:\n"
+            "1. LANGUAGE: Output MUST be 100% in English. No Chinese characters allowed.\n"
+            "2. JSON SCHEMA: Return a valid JSON with keys: \"analogy\", \"work\", \"med\", \"selfCare\".\n"
+            "3. DEPTH & LENGTH:\n"
+            "   - \"analogy\": (150-200 words) For partners. Use visceral, synesthetic metaphors "
+            "(e.g., \"unripe fruit being peeled\", \"electric barbs\"). Focus on the 'texture' of pain "
+            "to bridge the empathy gap.\n"
+            "   - \"work\": (100-130 words) Professional absence notice. Follow Western workplace norms: "
+            "emphasize \"temporary physiological incapacity\" and \"medical necessity\" over descriptive suffering. "
+            "Use phrases like \"unable to maintain the cognitive load required.\"\n"
+            "   - \"med\": (80-120 words) Medical chief complaint. Start with \"Patient reports...\". "
+            "Map metaphors to clinical terms (e.g., 'heavy' to 'pelvic congestion').\n"
+            "   - \"selfCare\": (150-200 words) Provide 5 detailed, evidence-based steps. Avoid any allergens listed.\n"
+            "4. selfCare must NEVER recommend medications the patient is allergic to.\n"
+            "5. When recommending examinations, use precise terms: pelvic ultrasound, transvaginal ultrasound, "
+            "hormone panel, laparoscopy — with a brief plain-language explanation for each.\n"
+        )
+        if is_quick:
+            system_prompt += (
+                "\nSPECIAL MODE: User is in severe pain quick-log mode. "
+                "Prioritize essential, immediately actionable relief. "
+                "Be calm, reassuring, direct. Minimize lengthy analogies.\n"
+            )
     else:
-        system_prompt = SYSTEM_PROMPT_ZH_QUICK if is_quick else SYSTEM_PROMPT_ZH
+        system_prompt = (
+            "你是一位资深的女性健康转译专家。你需要将具身痛觉数据转化为四种社会语境下的表达。\n\n"
+            "硬性规则：\n"
+            "1. 格式：必须返回严格的 JSON，包含 \"analogy\", \"work\", \"med\", \"selfCare\" 字段。\n"
+            "2. 深度要求：\n"
+            "   - \"analogy\": (180-250字) 面向伴侣。用震撼的通感比喻（如\"剥皮带肉\"、\"绞肉机\"）描述痛觉质地，引起生理共鸣。\n"
+            "   - \"work\": (100-150字) 职场请假条。语气专业、中性，强调\"生理机能暂时受损\"和\"无法维持专注度\"，符合职业规范。\n"
+            "   - \"med\": (80-120字) 医疗主诉。以\"患者自述\"开头，使用专业术语，描述放射区域及排查建议。\n"
+            "   - \"selfCare\": (180-250字) 5条深度的自愈建议，涵盖物理、营养、呼吸等。\n"
+            "3. selfCare 中严禁推荐患者过敏的药物（过敏信息会在数据中提供）。\n"
+            "4. 如需建议检查，在 med 字段使用精确术语：盆腔超声、经阴道超声、激素六项、腹腔镜，并附简要解释。\n"
+            "5. 所有输出文字必须使用简体中文。\n"
+        )
+        if is_quick:
+            system_prompt += (
+                "\n特别注意：用户处于剧烈疼痛快速记录模式，"
+                "请直接给出最核心的缓解建议，语气更安抚直接，减少长篇大论的比喻。\n"
+            )
 
-    # ── 构建 User Prompt（双语）──
+    # ── 4. 构建 User Prompt ──
     if lang == "en":
-        cycle_section = f"Menstrual cycle: {cycle_label}"
-        if cycle_context:
-            cycle_section += f"\nClinical context: {cycle_context}"
+        cycle_section = f"Cycle: {processed_input['cycle']}"
+        if processed_input['cycle_context']:
+            cycle_section += f"\nClinical context: {processed_input['cycle_context']}"
 
         user_prompt = f"""Based on the following patient pain mapping data, generate a four-scenario translation report:
 
-[Basic Pain Information]
-- Dominant pain type: {pain_type}
-- Pain location: {body_location}
-- Self-rated pain score: {data.painScore}/100
-- Color choice: {color} (reflects emotional state)
+[Somatic Data]
+- Type: {processed_input['pain_type']}
+- Intensity: {data.painScore}/100 ({processed_input['intensity_desc']})
+- Mapping: {processed_input['brush_desc']} at {processed_input['location']} ({processed_input['spatial_desc']})
+- Color: {processed_input['color']} (emotional indicator)
 
-[Drawing Behavior Data]
-- Brush distribution: {brush_desc}
-- Stroke intensity: {intensity_desc}
-- Spatial distribution: {spatial_desc}
+[Medical Context]
+- Diagnosis: {processed_input['diagnosis']}
+- {cycle_section}
+- Drug Allergies: {processed_input['allergies']} (DO NOT recommend these in selfCare)
 
-[Medical History]
-- Diagnosed condition: {diagnosed}
-- Drug allergies: {allergies} (DO NOT recommend these in selfCare)
+[Tone Preference]
+{processed_input['tone']}
 
-[{cycle_section}]
-
-[Tone Preference] {tone_desc}
-
-Please generate the JSON report:"""
-
+Generate the structured JSON report now:"""
     else:
-        cycle_section = f"月经周期：{cycle_label}"
-        if cycle_context:
-            cycle_section += f"\n临床语境：{cycle_context}"
+        cycle_section = f"周期：{processed_input['cycle']}"
+        if processed_input['cycle_context']:
+            cycle_section += f"\n临床语境：{processed_input['cycle_context']}"
 
         user_prompt = f"""以下是患者的痛觉绘图数据，请据此生成四场景转译报告：
 
-【疼痛基本信息】
-- 主导痛觉类型：{pain_type}
-- 疼痛部位：{body_location}
-- 疼痛自评分：{data.painScore}/100
-- 色彩选择：{color}（反映情绪状态）
+【痛觉数据】
+- 类型：{processed_input['pain_type']}
+- 强度：{data.painScore}/100 ({processed_input['intensity_desc']})
+- 绘图特征：{processed_input['brush_desc']}，位置：{processed_input['location']} ({processed_input['spatial_desc']})
+- 色彩选择：{processed_input['color']}（反映情绪状态）
 
-【绘图行为数据】
-- 笔触分布：{brush_desc}
-- 涂抹强度：{intensity_desc}
-- 空间分布：{spatial_desc}
+【医疗背景】
+- 已确诊疾病：{processed_input['diagnosis']}
+- {cycle_section}
+- 药物过敏：{processed_input['allergies']}（selfCare 中严禁推荐此类药物）
 
-【既往病史】
-- 已确诊疾病：{diagnosed}
-- 药物过敏：{allergies}（selfCare 中严禁推荐此类药物）
-
-【{cycle_section}】
-
-【语气偏好】{tone_desc}
+【语气偏好】
+{processed_input['tone']}
 
 请生成 JSON 报告："""
 
-    # ── 调用 AI ──
+    # ── 5. 调用 AI ──
     try:
         print(f"🤖 正在请求通义千问... (目标语言: {lang}, 快速模式: {is_quick})")
         completion = client.chat.completions.create(
-            model="qwen-turbo",
+            model="qwen-plus",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
-            temperature=0.6,
+            temperature=0.7,
             response_format={"type": "json_object"},
         )
-
-        raw = completion.choices[0].message.content
-        llm_reply = json.loads(raw)
+        raw_content = completion.choices[0].message.content
+        llm_reply = json.loads(raw_content)
 
         # 字段校验
         required_fields = ["analogy", "work", "med", "selfCare"]
@@ -487,15 +563,15 @@ Please generate the JSON report:"""
 # ─────────────────────────────────────────────
 # 降级内容（双语）
 # ─────────────────────────────────────────────
-
 def _fallback_response(lang: str) -> dict:
     if lang == "en":
         return {
             "status": "error",
             "language": "en",
             "analogy": (
-                "Imagine someone has twisted your lower abdomen into a tight knot, then pressed a scalding iron against it—"
-                "over and over, without letting up. That's not an exaggeration. That is what is actually happening right now."
+                "Imagine someone has twisted your lower abdomen into a tight knot, "
+                "then pressed a scalding iron against it—over and over, without letting up. "
+                "That's not an exaggeration. That is what is actually happening right now."
             ),
             "work": (
                 "Due to severe primary dysmenorrhea causing significant physiological impairment, "
@@ -544,7 +620,6 @@ def _fallback_response(lang: str) -> dict:
 # ─────────────────────────────────────────────
 # /api/refine 端点
 # ─────────────────────────────────────────────
-
 REFINE_FIELD_CONTEXT = {
     "zh": {
         "analogy": "这是给伴侣看的痛觉通感描述",
@@ -623,7 +698,6 @@ async def refine_content(data: dict):
         )
         refined = completion.choices[0].message.content.strip()
         return {"refined": refined, "language": lang}
-
     except Exception as e:
         print(f"error: {e}")
         return {"refined": current_text, "language": lang}
@@ -632,7 +706,6 @@ async def refine_content(data: dict):
 # ─────────────────────────────────────────────
 # 健康检查
 # ─────────────────────────────────────────────
-
 @app.get("/")
 def read_root():
-    return {"message": "PainScape Backend (Powered by Qwen AI) is running!", "version": "2.0-bilingual"}
+    return {"message": "PainScape Backend (Powered by Qwen AI) is running!", "version": "3.0-bilingual"}
