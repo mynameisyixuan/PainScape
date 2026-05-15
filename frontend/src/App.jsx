@@ -591,7 +591,12 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
       const pd = (e) => e.preventDefault(); document.addEventListener("contextmenu", pd);
       return () => document.removeEventListener("contextmenu", pd);
     }, []);
-
+    // 确保语言切换时重新请求 API
+    useEffect(() => {
+      if (targetLanguage) {
+        handleFinish(); // 重新生成内容
+      }
+    }, [targetLanguage]);
     const preload = (p5) => {
       bgFrontRef.current = p5.loadImage("body_front.png");
       bgBackRef.current = p5.loadImage("body_back.png");
@@ -1026,15 +1031,11 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
       const hasLlm = activeLlm?.status === 'success';
       const dominant = overrideType || getDominantPain(); // 痛觉主导类型
 
-      // 【新增】：获取压感强度描述
+      const isEn = targetLanguage === 'en'; // 预判语言环境
+
       const intensityProfile = calculateIntensity();
       const pressureLevel = intensityProfile?.avgPressure || 0.5; // 0.2~1.0
-
       let painAdjectiveKey = "persistent";
-      if (pressureLevel > 0.8) painAdjectiveKey = "extremelyIntense";
-      else if (pressureLevel > 0.6) painAdjectiveKey = "intense";
-      else if (pressureLevel < 0.4) painAdjectiveKey = "faint";
-
       const painNameMap = {
         twist: `${t(`painAdjectives.${painAdjectiveKey}`)}${t('painNames.twist')}`,
         pierce: `${t(`painAdjectives.${painAdjectiveKey}`)}${t('painNames.pierce')}`,
@@ -1042,104 +1043,109 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
         wave: `${t(`painAdjectives.${painAdjectiveKey}`)}${t('painNames.wave')}`,
         scrape: `${t(`painAdjectives.${painAdjectiveKey}`)}${t('painNames.scrape')}`,
       };
-      const painName = painNameMap[dominant];
+      if (pressureLevel > 0.8) painAdjectiveKey = "extremelyIntense";
+      else if (pressureLevel > 0.6) painAdjectiveKey = "intense";
+      else if (pressureLevel < 0.4) painAdjectiveKey = "faint";
 
-      const TEXTS = {
-        twist: { analogy: "想象把一条湿毛巾用力拧干...", med: "下腹部持续性绞痛，建议排查子宫痉挛。", selfCare: "✨ 尝试【婴儿蜷缩式】侧卧..." },
-        pierce: { analogy: "想象不打麻药进行根管治疗...", med: "锐痛，建议排查神经性疼痛。", selfCare: "✨ 刺痛发作易引发冷汗..." },
-        heavy: { analogy: "像在腹部绑了5公斤沙袋...", med: "下腹部严重坠胀感，建议排查盆腔充血。", selfCare: "✨ 尝试【臀部垫高平躺】..." },
-        wave: { analogy: "像肚子里有个气球在不断充气...", med: "弥漫性胀痛，建议排查水肿或肠胀气。", selfCare: "✨ 穿着极度宽松的衣物..." },
-        scrape: { analogy: "像一颗未成熟的果实被强行剥皮...", med: "强烈的撕裂样锐痛，建议排查组织粘连。", selfCare: "✨ 这是最耗费体力的痛感..." }
-      };
+      const painName = `${t(`painAdjectives.${painAdjectiveKey}`)}${t(`painNames.${dominant}`)}`;
 
-      let finalMedComplaint = hasLlm ? activeLlm.med : (TEXTS[dominant]?.med || "主诉：持续性痛经。");
-
-      let examPreps = [];
-      const EXAM_KEYWORDS = {
-        "盆腔超声": ["盆腔超声", "腹部超声", "B超", "继发性", "子宫内膜异位"],
-        "经阴道超声": ["经阴道超声", "阴超"],
-        "激素六项": ["激素六项", "性激素"],
-        "腹腔镜": ["腹腔镜", "微创手术"]
-      };
-      Object.keys(EXAM_KEYWORDS).forEach(std => {
-        if (EXAM_KEYWORDS[std].some(a => finalMedComplaint.includes(a))) {
-          examPreps.push(`📝【${std}须知】: ${EXAM_DATABASE[std]?.prep}`);
-        }
-      });
-
+      // 【修复 1】：彻底处理多语言的“医生参考”硬编码
+      let finalMedComplaint = hasLlm ? activeLlm.med : (isEn ? "Chief complaint: Dysmenorrhea." : "主诉：持续性痛经。");
       let auxiliaryInfo = [];
-      const diagMap = {
+
+      const diagMap = isEn ? {
+        'endometriosis': 'Endometriosis', 'adenomyosis': 'Adenomyosis', 'pcos': 'PCOS',
+        'fibroids': 'Uterine Fibroids', 'pid': 'PID', 'ovariancyst': 'Ovarian Cyst',
+        'cervicalstenosis': 'Cervical Stenosis', 'unchecked': 'No prior gynecological exams', 'none': 'None'
+      } : {
         'endometriosis': '子宫内膜异位症', 'adenomyosis': '子宫腺肌症', 'pcos': '多囊卵巢综合征',
         'fibroids': '子宫肌瘤', 'pid': '盆腔炎性疾病（PID）', 'ovariancyst': '卵巢囊肿',
         'cervicalstenosis': '宫颈管狭窄', 'unchecked': '未做过相关检查', 'none': '无确诊'
       };
+
       const diagValue = medicalBackground.diagnosed;
       if (diagValue && diagValue !== '' && diagValue !== 'none' && diagValue !== 'unchecked') {
-        auxiliaryInfo.push(`• 既往诊断：${diagMap[diagValue] || diagValue}。`);
+        auxiliaryInfo.push(isEn ? `• History: ${diagMap[diagValue]}` : `• 既往诊断：${diagMap[diagValue]}。`);
       } else if (diagValue === 'unchecked') {
-        auxiliaryInfo.push(`• 既往病史：患者自述未做过痛经相关妇科检查。`);
+        auxiliaryInfo.push(isEn ? `• History: Patient reports no prior exams for dysmenorrhea.` : `• 既往病史：患者自述未做过痛经相关妇科检查。`);
       }
 
       const allergyValue = medicalBackground.allergies;
-      const allergyLabelMap = { aspirin: '阿司匹林', ibuprofen: '布洛芬', nsaids: '多种NSAIDs' };
       if (allergyValue && allergyValue !== '' && allergyValue !== 'none' && allergyValue !== 'unknown') {
-        auxiliaryInfo.push(`• 药物过敏：${allergyLabelMap[allergyValue] || allergyValue}过敏，请注意用药。`);
+        const allergyName = isEn
+          ? (allergyValue === 'nsaids' ? 'NSAIDs' : allergyValue)
+          : (allergyValue === 'nsaids' ? '多种NSAIDs' : (allergyValue === 'ibuprofen' ? '布洛芬' : '阿司匹林'));
+        auxiliaryInfo.push(isEn ? `• Allergies: ${allergyName}.` : `• 药物过敏：${allergyName}过敏，请注意用药。`);
       }
 
-      // 1. 先定义 finalMedReference
       let finalMedReference = auxiliaryInfo.join('\n');
-      if (examPreps.length > 0) {
-        finalMedReference += (finalMedReference ? '\n' : '') + examPreps.join('\n');
-      } else if (!finalMedReference) {
-        finalMedReference = "• 建议向医生详细描述本次记录的痛觉质地与发作时间。";
-      }
 
-      // 2. 然后再追加时间节律分析
+      // 【修复 2】：处理时间节律的硬编码
       const timeRhythm = calculateTimeRhythm();
       if (timeRhythm) {
-        const periodMap = {
-          morning: { name: '上午/晨间', insight: '这与前列腺素/子宫收缩素在晨间分泌达峰的节律高度一致，常伴随起床后的下腹坠胀感。' },
-          afternoon: { name: '下午', insight: '午后疼痛加剧，可能与久坐导致的盆腔充血及体力消耗有关。' },
-          night: { name: '夜间/晚间', insight: '夜间痛觉敏感度生理性升高，且平卧时盆腔血流改变，易使坠痛感加剧。' }
+        const periodMap = isEn ? {
+          morning: { name: 'Morning', insight: 'Aligns with peak prostaglandin secretion rhythm.' },
+          afternoon: { name: 'Afternoon', insight: 'Exacerbated potentially by prolonged sitting and pelvic congestion.' },
+          night: { name: 'Night', insight: 'Heightened nociception during nighttime and altered pelvic blood flow when lying down.' }
+        } : {
+          morning: { name: '上午/晨间', insight: '与前列腺素在晨间分泌达峰的节律高度一致。' },
+          afternoon: { name: '下午', insight: '午后疼痛加剧，可能与久坐导致的盆腔充血有关。' },
+          night: { name: '夜间/晚间', insight: '夜间平卧时盆腔血流改变，易使坠痛感加剧。' }
         };
-        // 修复：更改变量名避免覆盖 dominant
         const dominantPeriodInfo = periodMap[timeRhythm.dominantPeriod];
         if (dominantPeriodInfo) {
-          finalMedReference += `\n\n⏱️【时间节律分析】：您的图谱绘制行为显示，痛感主要集中于${dominantPeriodInfo.name}（占比 ${Math.round(timeRhythm[timeRhythm.dominantPeriod] * 100)}%）。${dominantPeriodInfo.insight}`;
+          finalMedReference += isEn
+            ? `\n\n⏱️ [Temporal Pattern]: Pain concentrated in the ${dominantPeriodInfo.name}. ${dominantPeriodInfo.insight}`
+            : `\n\n⏱️【时间节律分析】：痛感集中于${dominantPeriodInfo.name}。${dominantPeriodInfo.insight}`;
         }
       }
 
-      // 根据过敏史智能推荐止痛药
-      let safePainkiller = "布洛芬";
-      if (medicalBackground.allergies === 'ibuprofen') safePainkiller = "对乙酰氨基酚（泰诺）";
-      else if (medicalBackground.allergies === 'nsaids') safePainkiller = "对乙酰氨基酚（请遵医嘱）";
-      else if (medicalBackground.allergies === 'aspirin') safePainkiller = "布洛芬（避免阿司匹林）";
+      if (!finalMedReference) {
+        finalMedReference = isEn ? "• Please describe the pain texture to your doctor." : "• 建议向医生详细描述痛觉质地与发作时间。";
+      }
+
+      const extractField = (llmData, key, fallback) => {
+        // 如果没有 LLM 数据，或者该字段为空，返回备用文案
+        if (!llmData || !llmData[key] || llmData[key].length === 0) return fallback;
+
+        const val = llmData[key];
+        // 如果是数组，强制用双换行拼接
+        if (Array.isArray(val)) return val.join('\n\n');
+        // 如果是字符串，兼容处理可能被转义的换行符
+        return String(val).replace(/\\n/g, '\n');
+      };
 
       let actionParts = [];
+      const safePainkiller = isEn
+        ? (medicalBackground.allergies === 'ibuprofen' ? 'Acetaminophen' : 'Ibuprofen')
+        : (medicalBackground.allergies === 'ibuprofen' ? '对乙酰氨基酚' : '布洛芬');
+
       if (userPrefs.includes('alone')) {
-        actionParts.push(`☑️ 帮她倒杯温水，备好${safePainkiller}。`);
-        actionParts.push("☑️ 调暗灯光，关门出去，不要频繁询问。");
+        actionParts.push(isEn ? `☑️ Bring warm water and ${safePainkiller}.` : `☑️ 帮她倒杯温水，备好${safePainkiller}。`);
+        actionParts.push(isEn ? "☑️ Dim lights, leave the room, give her space." : "☑️ 调暗灯光，关门出去，不要频繁询问。");
       } else {
-        if (userPrefs.includes('care')) actionParts.push("☑️ 搓热手掌捂在她小腹或后腰。主动承担家务。");
-        if (userPrefs.includes('comfort')) actionParts.push("☑️ 坐在旁边握着她的手，不用说话，给予安全感。");
+        actionParts.push(isEn ? "☑️ Warm your hands and place on her abdomen. Do the chores." : "☑️ 搓热手掌捂在她小腹。主动承担家务。");
       }
 
-      const workTemplate = `领导/HR 您好：本人今日突发严重原发性痛经（${painName}），伴随体力透支与冷汗。目前状态已无法维持正常专注度，特申请今日居家休息。紧急事务已交接。感谢批准。`;
+      const workTemplate = isEn
+        ? "Hi manager, I have a sudden medical emergency today and am physically unable to work. I need to take a sick leave to rest. Urgent matters have been handed over. Thank you."
+        : "老板/HR你好，我今天突发身体急症，目前疼得实在起不来，申请请假一天居家休息，紧急工作已交接，感谢批准。";
 
-      let finalSelfCare = hasLlm ? activeLlm.selfCare : (TEXTS[dominant]?.selfCare || TEXTS.twist.selfCare);
-      if (tonePreference === 'gentle' && !hasLlm) {
-        finalSelfCare += "\n\n✨ 允许自己今天做一个废物，好好休息。";
-      }
+      // 安全提取，如果 AI 没返回则回退到本地模板
+      const finalAction = extractField(activeLlm, 'action', actionParts.join("\n\n"));
+      const finalSelfCare = extractField(activeLlm, 'selfCare', isEn ? "✨ Allow yourself to rest today." : "✨ 允许自己今天做一个废物，好好休息。");
+      const finalWorkText = extractField(activeLlm, 'work', workTemplate);
+      const finalAnalogy = extractField(activeLlm, 'analogy', isEn ? "A sharp, persistent pain." : "强烈的痛觉。");
 
       return {
         pain: painName,
-        analogy: hasLlm ? activeLlm.analogy : (TEXTS[dominant]?.analogy || TEXTS.twist.analogy),
-        med_complaint: hasLlm ? activeLlm.med : (TEXTS[dominant]?.med || "主诉：持续性痛经。"),
+        analogy: finalAnalogy,
+        med_complaint: finalMedComplaint,
         med_reference: finalMedReference,
-        med_profile: `PainScape 痛觉成像显示强烈的 ${painName} 特征。`,
+        med_profile: isEn ? `PainScape visual profile shows intense ${painName}.` : `PainScape 痛觉成像显示强烈的 ${painName} 特征。`,
+        workText: finalWorkText,
+        action: finalAction,
         selfCare: finalSelfCare,
-        workText: hasLlm ? activeLlm.work : workTemplate,
-        action: actionParts.join("\n"),
         med: finalMedComplaint
       };
     };
@@ -1292,31 +1298,58 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
       // 找出使用次数最多的画笔，如果都没用过，默认返回 'twist'
       return maxVal > 0 ? Object.keys(counts).reduce((a, b) => counts[a] > counts[b] ? a : b) : 'twist';
     };
-    const API_BASE = 'https://painscape-api.onrender.com';
+    // 【修改】：自动判断环境，本地开发连本地后端，打包部署后连云端
+    const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+      ? 'http://127.0.0.1:8000'
+      : 'https://painscape-api.onrender.com';
 
     const handleRefine = async (fieldKey) => {
-      if (!refineInput.trim() || refiningField) return; // 正在请求中时，拒绝重复点击
+      if (!refineInput.trim() || refiningField) return;
       setRefiningField(fieldKey);
 
-      const currentText = getEditedOrDefault(fieldKey, generateContent()[fieldKey]);
+      // ✅ 修复：fieldKey → content对象里实际的字段名映射
+      const fieldToContentKey = {
+        'analogy': 'analogy',
+        'work': 'workText',   // ← 'work' 对应 content.workText
+        'workText': 'workText',
+        'med_complaint': 'med_complaint',
+        'med_reference': 'med_reference',
+        'selfCare': 'selfCare',
+        'selfcare': 'selfCare',   // ← 小写c也能找到
+        'action': 'action',
+      };
+      const contentKey = fieldToContentKey[fieldKey] || fieldKey;
+      const currentText = getEditedOrDefault(contentKey, generateContent()[contentKey]);
+
+      // ✅ 修复：如果取不到文字，提前退出，避免后端收到空字符串
+      if (!currentText) {
+        showToast('refineEmpty');
+        setRefiningField(null);
+        return;
+      }
 
       try {
         const res = await fetch(`${API_BASE}/api/refine`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ field: fieldKey, currentText: currentText, userFeedback: refineInput })
+          body: JSON.stringify({
+            field: fieldKey,
+            currentText: currentText,
+            userFeedback: refineInput,
+            targetLanguage: targetLanguage,   // ✅ 修复：传语言
+          })
         });
 
-        // 【关键修复】抛出异常给 catch
         if (!res.ok) {
-          throw new Error(`接口请求失败: ${res.status}`);
+          throw new Error(`请求失败: ${res.status}`);
         }
 
         const data = await res.json();
         const refined = data.refined;
 
-        if (refined) {
-          setEditedContents(prev => ({ ...prev, [fieldKey]: refined }));
+        if (refined && refined.trim()) {
+          // ✅ 修复：存回去也用 contentKey，保证显示更新
+          setEditedContents(prev => ({ ...prev, [contentKey]: refined }));
           setRefineInput('');
           showToast('refineSuccess');
         } else {
@@ -1365,11 +1398,14 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
           bodyMode: 'front',
           medicalBackground: medicalBackground,
           tonePreference: tonePreference,
+          targetLanguage: targetLanguage,
           cycleDay: cycleDay || t('medical.cycleNotProvided'),
           isQuickLog: true // 【新增】：告知后端这是快速模式，可能描述需要更简练
         };
 
-        const API_BASE = 'https://painscape-api.onrender.com';
+        const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+          ? 'http://127.0.0.1:8000'
+          : 'https://painscape-api.onrender.com';
         try {
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), 90000);
@@ -1425,6 +1461,7 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
           colorPalette: activeColor,
           bodyMode: bodyMode,
           medicalBackground: medicalBackground,
+          targetLanguage: targetLanguage,
           tonePreference: tonePreference,
           cycleDay: cycleDay || t('medical.cycleNotProvided'), // 【新增】：传入周期天数
         };
@@ -1944,6 +1981,16 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
           {page === "result" && (() => {
             try {
               const content = generateContent();
+              const getRefinePlaceholder = (tabIdentity) => {
+                const isEn = targetLanguage === 'en';
+                switch (tabIdentity) {
+                  case 'partner': return isEn ? "e.g., Make it sound more urgent..." : "例如：语气更强烈一点，让他意识到严重性...";
+                  case 'work': return isEn ? "e.g., Make it brief and extremely professional..." : "例如：语气更委婉客观，只说突发急病...";
+                  case 'doctor': return isEn ? "e.g., Mention that Ibuprofen doesn't work..." : "例如：补充说明吃布洛芬没有任何缓解...";
+                  case 'self': return isEn ? "e.g., Comfort me, I feel guilty for not working..." : "例如：给我一点心理安慰，我因为请假很内疚...";
+                  default: return t('result.refine.placeholder');
+                }
+              };
               return (
                 <div style={{ pointerEvents: 'auto', position: 'absolute', top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 20, background: 'rgba(10,10,10,0.95)', backdropFilter: 'blur(8px)', padding: '20px', overflowY: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
 
@@ -1957,20 +2004,24 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
                     ))}
                   </div>
 
-                  <div style={{ background: 'rgba(28,28,28,0.9)', padding: '20px', borderRadius: '12px', width: '100%', maxWidth: '350px', border: '1px solid #444', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' }}>
+                  <div className="info-card" style={{ background: 'rgba(28,28,28,0.9)', padding: '20px', borderRadius: '12px', width: '100%', maxWidth: '350px', border: '1px solid #444', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' }}>
                     {/* === 伴侣 tab === */}
                     {identity === 'partner' && (
                       <>
                         <h3 style={{ color: '#fff', margin: '0 0 15px 0' }}>{t('result.partner.title')}</h3>
                         <div style={{ background: 'rgba(211,47,47,0.1)', padding: '12px', borderRadius: '8px', borderLeft: '3px solid #d32f2f' }}>
-                          <p style={{ color: '#ffcdd2', fontSize: '13px', margin: '0 0 6px 0', lineHeight: '1.5' }}>
-                            {t('result.partner.experiencing')}<strong>{content.pain}</strong>。
-                          </p>
+                          <p style={{ color: '#ffcdd2', fontSize: '13px', margin: '0 0 6px 0', whiteSpace: 'pre-wrap', lineHeight: '1.5' }}> {t('result.partner.experiencing')}<strong>{content.pain}</strong>。 </p>
                           <EditableBlock fieldKey="analogy" defaultValue={content.analogy} color="#ffcdd2" />
                         </div>
                         <div style={{ marginTop: '20px' }}>
                           <strong style={{ color: '#fff', fontSize: '14px' }}>{t('result.partner.actionPrompt')}</strong>
-                          <EditableBlock fieldKey="action" defaultValue={content.action} color="#ccc" style={{ marginTop: '10px' }} />
+                          {/* 关键修复：添加 whiteSpace 属性 */}
+                          <EditableBlock
+                            fieldKey="action"
+                            defaultValue={content.action}
+                            color="#ccc"
+                            style={{ marginTop: '10px', whiteSpace: 'pre-wrap' }}
+                          />
                         </div>
                         <button
                           onClick={() => handleCopy(getEditedOrDefault('action', content.action))}
@@ -1983,7 +2034,7 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
                           <p style={{ color: '#888', fontSize: '12px', margin: '0 0 10px 0' }}>{t('result.refine.prompt')}</p>
                           <div style={{ display: 'flex', gap: '8px' }}>
                             <input
-                              placeholder={t('result.refine.placeholder')}
+                              placeholder={getRefinePlaceholder('partner')}
                               value={refineInput}
                               onChange={(e) => setRefineInput(e.target.value)}
                               style={{ flex: 1, background: '#111', border: '1px solid #333', color: '#fff', borderRadius: '8px', padding: '10px', fontSize: '12px' }}
@@ -2011,7 +2062,7 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
                     {identity === 'work' && (
                       <>
                         <h3 style={{ color: '#ff9800', margin: '0 0 15px 0' }}>{t('result.work.title')}</h3>
-                        <p style={{ color: '#888', fontSize: '12px', marginBottom: '10px' }}>{t('result.work.description')}</p>
+                        <p style={{ color: '#888', fontSize: '12px', marginBottom: '10px', whiteSpace: 'pre-wrap' }}>{t('result.work.description')}</p>
                         <div style={{ background: 'rgba(255,152,0,0.05)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(255,152,0,0.3)' }}>
                           <EditableBlock fieldKey="workText" defaultValue={content.workText} color="#ccc" />
                         </div>
@@ -2026,7 +2077,7 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
                           <p style={{ color: '#888', fontSize: '12px', margin: '0 0 10px 0' }}>{t('result.refine.prompt')}</p>
                           <div style={{ display: 'flex', gap: '8px' }}>
                             <input
-                              placeholder={t('result.refine.placeholder')}
+                              placeholder={getRefinePlaceholder('work')}
                               value={refineInput}
                               onChange={(e) => setRefineInput(e.target.value)}
                               style={{ flex: 1, background: '#111', border: '1px solid #333', color: '#fff', borderRadius: '8px', padding: '10px', fontSize: '12px' }}
@@ -2057,7 +2108,7 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
                           <h3 style={{ color: '#2196f3', margin: 0 }}>{t('result.doctor.title')}</h3>
                           <span style={{ color: '#666', fontSize: '10px', background: '#111', padding: '2px 8px', borderRadius: '10px' }}>{t('result.doctor.disclaimer')}</span>
                         </div>
-                        <div style={{ marginBottom: '15px' }}>
+                        <div style={{ marginBottom: '15px', whiteSpace: 'pre-wrap' }}>
                           <h4 style={{ color: '#90caf9', margin: '0 0 5px 0', fontSize: '13px' }}>{t('result.doctor.clinicalAdvice')}</h4>
                           <EditableBlock fieldKey="med_complaint" defaultValue={content.med_complaint} color="#fff" />
                         </div>
@@ -2120,7 +2171,7 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
                           <div style={{ display: 'flex', gap: '8px' }}>
                             <input
                               list="refine-options-doctor"
-                              placeholder={t('result.refine.placeholder')}
+                              placeholder={getRefinePlaceholder('doctor')}
                               value={refineInput}
                               onChange={(e) => setRefineInput(e.target.value)}
                               style={{ flex: 1, background: '#111', border: '1px solid #333', color: '#fff', borderRadius: '8px', padding: '10px', fontSize: '12px' }}
@@ -2156,11 +2207,12 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
                     {identity === 'self' && (
                       <>
                         <h3 style={{ color: '#9c27b0', margin: '0 0 15px 0' }}>{t('result.self.title')}</h3>
-                        <p style={{ color: '#ccc', fontSize: '13px', lineHeight: '1.5', marginBottom: '15px' }}>
-                          {t('result.self.comfort')}
-                        </p>
+                        <p style={{ color: '#ccc', fontSize: '13px', lineHeight: '1.6', marginBottom: '15px' }}> {t('result.self.comfort')} </p>
                         <div style={{ background: 'rgba(156,39,176,0.1)', padding: '12px', borderRadius: '8px', borderLeft: '3px solid #9c27b0' }}>
-                          <EditableBlock fieldKey="selfCare" defaultValue={content.selfCare} color="#e1bee7" />
+                          {/* 关键修复：添加 whiteSpace 属性 */}
+                          <div style={{ color: '#e1bee7', fontSize: '13px', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>
+                            {getEditedOrDefault('selfCare', content.selfCare)}
+                          </div>
                         </div>
                         <button
                           onClick={() => handleCopy(getEditedOrDefault('selfCare', content.selfCare))}
@@ -2173,7 +2225,7 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
                           <p style={{ color: '#888', fontSize: '12px', margin: '0 0 10px 0' }}>{t('result.refine.prompt')}</p>
                           <div style={{ display: 'flex', gap: '8px' }}>
                             <input
-                              placeholder={t('result.refine.placeholder')}
+                              placeholder={getRefinePlaceholder('self')}
                               value={refineInput}
                               onChange={(e) => setRefineInput(e.target.value)}
                               style={{ flex: 1, background: '#111', border: '1px solid #333', color: '#fff', borderRadius: '8px', padding: '10px', fontSize: '12px' }}

@@ -191,7 +191,7 @@ canvas {
 
 .info-card {
   background: #1c1c1c; padding: 20px; border-radius: 12px; width: 100%; max-width: 350px;
-  border: 1px solid #333; margin-bottom: 30px;
+  border: 1px solid #333; margin-bottom: 30px; white-space: pre-wrap;
 }
 .action-box { 
   margin-top: 15px; padding: 12px; background: rgba(46, 125, 50, 0.15); 
