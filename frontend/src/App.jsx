@@ -2475,10 +2475,24 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', position: 'sticky', top: 0, background: '#0a0a0a', zIndex: 10, paddingBottom: '10px' }}>
                 <h2 style={{ color: '#fff', margin: 0 }}>{t('history.title')}</h2>
-                <button style={{ margin: 0, padding: '6px 12px', width: 'auto', background: '#2196f3', borderColor: '#2196f3', fontSize: '12px' }} onClick={exportHistoryPDF}>
+                <button
+                  style={{
+                    margin: 0,
+                    padding: '4px 10px',
+                    width: 'auto',
+                    background: '#d32f2f',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '12px',  // 柔和圆角
+                    fontSize: '11px',      // 更小字体
+                    cursor: 'pointer',
+                    lineHeight: '1.2'
+                  }}
+                  onClick={exportHistoryPDF}
+                >
                   {t('history.export')}
                 </button>
-                <button className="retry-btn" style={{ margin: 0, padding: '6px 15px', width: 'auto' }} onClick={() => setPage('onboarding')}>
+                <button className="retry-btn" style={{ margin: 0, padding: '6px 15px', width: 'auto', fontSize: '11px'}} onClick={() => setPage('onboarding')}>
                   {t('history.back')}
                 </button>
               </div>
