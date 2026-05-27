@@ -102,9 +102,15 @@ class PainParticle {
       p.drawingContext.shadowBlur = 0;
     }
     if (this.type === 'pierce') {
-      // ⚡️ 【恢复】主刺干 + 荆棘倒刺
       let endX = this.pos.x + this.vel.x; let endY = this.pos.y + this.vel.y;
-      p.noStroke(); p.fill(255, 255, 255, 220);
+
+      p.noStroke();
+      p.fill(
+        Math.min(255, this.color[0] + 100),
+        Math.min(255, this.color[1] + 100),
+        Math.min(255, this.color[2] + 100),
+        220
+      );
       p.beginShape();
       let perpAngle = this.vel.heading() + p.PI / 2;
       let halfW = this.size / 2;
@@ -112,7 +118,14 @@ class PainParticle {
       p.vertex(this.pos.x - p.cos(perpAngle) * halfW, this.pos.y - p.sin(perpAngle) * halfW);
       p.vertex(endX, endY);
       p.endShape(p.CLOSE);
-      p.fill(255, 255, 255, 150 + (105 * this.pressureScale)); // 轻点半透，重按全白
+
+      // 倒刺：使用当前颜色的深色版本
+      p.fill(
+        this.color[0] * 0.7,
+        this.color[1] * 0.3,
+        this.color[2] * 0.3,
+        150 + (105 * this.pressureScale)
+      );
       this.thorns.forEach(thorn => {
         let rootX = this.pos.x + this.vel.x * thorn.distRatio;
         let rootY = this.pos.y + this.vel.y * thorn.distRatio;
@@ -1688,7 +1701,7 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
               padding: '20px',
               boxSizing: 'border-box',
               overflowY: 'auto', // 确保内容过长时可以滚动
-              paddingBottom: '120px' // 【关键修复】：增加底部留白，防止被遮挡
+              paddingBottom: '120px' // 增加底部留白，防止被遮挡
             }}>
               {/* 快速指南问号按钮 */}
               <div style={{ position: 'absolute', top: '15px', right: '15px', zIndex: 10 }}>
@@ -1743,46 +1756,56 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
               <div style={{
                 width: '100%',
                 maxWidth: '360px',
+                maxHeight: '70vh',           // 【新增】限制卡片最大高度
                 background: 'rgba(255, 255, 255, 0.03)',
                 borderRadius: '24px',
                 padding: '24px',
                 border: '1px solid rgba(255, 255, 255, 0.05)',
                 backdropFilter: 'blur(20px)',
-                boxShadow: '0 20px 40px rgba(0,0,0,0.4)'
+                boxShadow: '0 20px 40px rgba(0,0,0,0.4)',
+                display: 'flex',              // 【新增】flex 布局
+                flexDirection: 'column',      // 【新增】纵向排列
+                overflowY: 'auto',            // 【新增】内容溢出时可滚动
               }}>
                 {/* 陪伴偏好内容 */}
                 {showContent === 'preference' && (
-                  <div style={{ width: '100%' }}>
-                    <label style={{
-                      color: '#eee',
-                      fontSize: '1rem',
-                      display: 'block',
-                      marginBottom: '20px',
-                      textAlign: 'center',
-                      fontWeight: '300'
-                    }}>
-                      {t('onboarding.preferenceTitle')}
-                    </label>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                      {['alone', 'care', 'comfort'].map((p, i) => (
-                        <button key={p} onClick={() => togglePref(p)} style={{
-                          padding: '16px',
-                          borderRadius: '16px',
-                          textAlign: 'left',
-                          background: userPrefs.includes(p) ? 'rgba(211, 47, 47, 0.1)' : '#111',
-                          border: userPrefs.includes(p) ? '1.5px solid #d32f2f' : '1.5px solid #222',
-                          color: userPrefs.includes(p) ? '#fff' : '#888',
-                          cursor: 'pointer',
-                          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: '4px'
-                        }}>
-                          <span style={{ fontSize: '15px', fontWeight: 'bold' }}>
-                            {t(`onboarding.preferences.${i}.title`)}
-                          </span>
-                        </button>
-                      ))}
+                  <div style={{
+                    flex: 1,           // 占据剩余空间
+                    overflowY: 'auto', // 内容溢出时滚动
+                    paddingRight: '4px' // 防止滚动条遮挡内容
+                  }}>
+                    <div style={{ width: '100%' }}>
+                      <label style={{
+                        color: '#eee',
+                        fontSize: '1rem',
+                        display: 'block',
+                        marginBottom: '20px',
+                        textAlign: 'center',
+                        fontWeight: '300'
+                      }}>
+                        {t('onboarding.preferenceTitle')}
+                      </label>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                        {['alone', 'care', 'comfort'].map((p, i) => (
+                          <button key={p} onClick={() => togglePref(p)} style={{
+                            padding: '16px',
+                            borderRadius: '16px',
+                            textAlign: 'left',
+                            background: userPrefs.includes(p) ? 'rgba(211, 47, 47, 0.1)' : '#111',
+                            border: userPrefs.includes(p) ? '1.5px solid #d32f2f' : '1.5px solid #222',
+                            color: userPrefs.includes(p) ? '#fff' : '#888',
+                            cursor: 'pointer',
+                            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '4px'
+                          }}>
+                            <span style={{ fontSize: '15px', fontWeight: 'bold' }}>
+                              {t(`onboarding.preferences.${i}.title`)}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 )}
@@ -1898,30 +1921,19 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
                       {/* === 底部操作按钮组 === */}
                       <div style={{
                         display: 'flex',
+                        justifyContent: 'center',
                         gap: '12px',
                         marginTop: '20px',
                         paddingTop: '16px',
                         borderTop: '1px solid #222'
                       }}>
-                        <button
-                          onClick={() => setShowContent('preference')}
-                          style={{
-                            flex: 1, padding: '12px', borderRadius: '12px', background: 'transparent',
-                            border: '1px solid #444', color: '#888', fontSize: '13px', cursor: 'pointer'
-                          }}
-                        >
-                          ← {t('onboarding.switchToPreference')}
-                        </button>
-                        <button
-                          onClick={() => { setShowContent('preference'); setPage("canvas"); }}
-                          style={{
-                            flex: 1, padding: '12px', borderRadius: '12px', background: '#d32f2f',
-                            border: 'none', color: '#fff', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer'
-                          }}
-                        >
-                          {t('onboarding.startDrawing')} ✨
-                        </button>
-                      </div>
+                          <button
+                            onClick={() => { setShowContent('preference'); setPage("canvas"); }}
+                            style={{ marginTop: '30px', width: '200px', padding: '16px', background: '#d32f2f', color: '#fff', border: 'none', borderRadius: '25px', fontWeight: 'bold', cursor: 'pointer', fontSize: '16px', boxShadow: '0 4px 15px rgba(211, 47, 47, 0.3)' }}
+                          >
+                            {t('onboarding.startDrawing')} ✨
+                          </button>
+                        </div>
                     </div>
                   </div>
                 )}
@@ -1939,17 +1951,6 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
                   <span style={{ transition: 'transform 0.3s', transform: showContent === 'medical' ? 'rotate(180deg)' : 'rotate(0deg)' }}>↑</span>
                 </button>
               </div>
-
-              {/* 主动作区 */}
-              <button
-                onClick={() => {
-                  setShowContent('preference');
-                  setPage("canvas");
-                }}
-                style={{ marginTop: '30px', width: '200px', padding: '16px', background: '#d32f2f', color: '#fff', border: 'none', borderRadius: '25px', fontWeight: 'bold', cursor: 'pointer', fontSize: '16px', boxShadow: '0 4px 15px rgba(211, 47, 47, 0.3)' }}
-              >
-                {t('onboarding.startDrawing')}
-              </button>
 
               {/* 快速记录入口 */}
               <button onClick={() => setPage("quickLog")} style={{
