@@ -653,8 +653,8 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
     }, []);
     // 确保语言切换时重新请求 API
     useEffect(() => {
-      if (targetLanguage) {
-        handleFinish(); // 重新生成内容
+      if (targetLanguage && page === 'result') {
+        handleFinish();
       }
     }, [targetLanguage]);
     const preload = (p5) => {
@@ -1927,13 +1927,13 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
                         paddingTop: '16px',
                         borderTop: '1px solid #222'
                       }}>
-                          <button
-                            onClick={() => { setShowContent('preference'); setPage("canvas"); }}
-                            style={{ marginTop: '30px', width: '200px', padding: '16px', background: '#d32f2f', color: '#fff', border: 'none', borderRadius: '25px', fontWeight: 'bold', cursor: 'pointer', fontSize: '16px', boxShadow: '0 4px 15px rgba(211, 47, 47, 0.3)' }}
-                          >
-                            {t('onboarding.startDrawing')} ✨
-                          </button>
-                        </div>
+                        <button
+                          onClick={() => { setShowContent('preference'); setPage("canvas"); }}
+                          style={{ marginTop: '30px', width: '200px', padding: '16px', background: '#d32f2f', color: '#fff', border: 'none', borderRadius: '25px', fontWeight: 'bold', cursor: 'pointer', fontSize: '16px', boxShadow: '0 4px 15px rgba(211, 47, 47, 0.3)' }}
+                        >
+                          {t('onboarding.startDrawing')} ✨
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )}
