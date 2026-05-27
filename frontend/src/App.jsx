@@ -1676,7 +1676,20 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
 
           {/* === Onboarding 页面 === */}
           {page === "onboarding" && (
-            <div style={{ pointerEvents: 'auto', background: '#0a0a0a', width: '100%', minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '20px', boxSizing: 'border-box' }}>
+            <div style={{
+              pointerEvents: 'auto',
+              background: '#0a0a0a',
+              width: '100%',
+              minHeight: '100vh',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '20px',
+              boxSizing: 'border-box',
+              overflowY: 'auto', // 确保内容过长时可以滚动
+              paddingBottom: '120px' // 【关键修复】：增加底部留白，防止被遮挡
+            }}>
               {/* 快速指南问号按钮 */}
               <div style={{ position: 'absolute', top: '15px', right: '15px', zIndex: 10 }}>
                 <button onClick={() => setShowGuide(!showGuide)}
@@ -1773,7 +1786,6 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
                     </div>
                   </div>
                 )}
-
                 {/* 健康信息内容 */}
                 {showContent === 'medical' && (
                   <div style={{ width: '100%' }}>
@@ -1788,6 +1800,7 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
                       {t('onboarding.medicalTitle')}
                     </label>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+
                       {/* 月经周期选择 */}
                       <div>
                         <span style={{ color: '#888', fontSize: '12px', display: 'block', marginBottom: '8px' }}>{t('onboarding.cycleLabel')}</span>
@@ -1818,95 +1831,7 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
                           <option key={value} value={value}>{label}</option>
                         ))}
                       </select>
-                        {/* === 新增：痛经高发因素收集 === */}
-                        <div style={{ marginTop: '16px', borderTop: '1px solid #222', paddingTop: '12px' }}>
 
-                          {/* 年龄范围 */}
-                          <label style={{ color: '#888', fontSize: '11px', display: 'block', marginBottom: '4px' }}>
-                            {t('onboarding.ageLabel')}
-                          </label>
-                          <select
-                            value={medicalBackground.age}
-                            onChange={(e) => setMedicalBackground({ ...medicalBackground, age: e.target.value })}
-                            style={{ width: '100%', padding: '10px', background: '#111', color: '#fff', border: '1.5px solid #222', borderRadius: '12px', fontSize: '12px', outline: 'none', marginBottom: '8px' }}
-                          >
-                            {Object.entries(t('onboarding.ageOptions')).map(([value, label]) => (
-                              <option key={value} value={value}>{label}</option>
-                            ))}
-                          </select>
-
-                          {/* 体力活动量 */}
-                          <label style={{ color: '#888', fontSize: '11px', display: 'block', marginBottom: '4px' }}>
-                            {t('onboarding.activityLabel')}
-                          </label>
-                          <select
-                            value={medicalBackground.activityLevel}
-                            onChange={(e) => setMedicalBackground({ ...medicalBackground, activityLevel: e.target.value })}
-                            style={{ width: '100%', padding: '10px', background: '#111', color: '#fff', border: '1.5px solid #222', borderRadius: '12px', fontSize: '12px', outline: 'none', marginBottom: '8px' }}
-                          >
-                            {Object.entries(t('onboarding.activityOptions')).map(([value, label]) => (
-                              <option key={value} value={value}>{label}</option>
-                            ))}
-                          </select>
-
-                          {/* 生活习惯 */}
-                          <label style={{ color: '#888', fontSize: '11px', display: 'block', marginBottom: '4px' }}>
-                            {t('onboarding.lifestyleLabel')}
-                          </label>
-                          <select
-                            value={medicalBackground.lifestyle}
-                            onChange={(e) => setMedicalBackground({ ...medicalBackground, lifestyle: e.target.value })}
-                            style={{ width: '100%', padding: '10px', background: '#111', color: '#fff', border: '1.5px solid #222', borderRadius: '12px', fontSize: '12px', outline: 'none', marginBottom: '8px' }}
-                          >
-                            {Object.entries(t('onboarding.lifestyleOptions')).map(([value, label]) => (
-                              <option key={value} value={value}>{label}</option>
-                            ))}
-                          </select>
-
-                          {/* 家族史 */}
-                          <label style={{ color: '#888', fontSize: '11px', display: 'block', marginBottom: '4px' }}>
-                            {t('onboarding.familyHistoryLabel')}
-                          </label>
-                          <select
-                            value={medicalBackground.familyHistory}
-                            onChange={(e) => setMedicalBackground({ ...medicalBackground, familyHistory: e.target.value })}
-                            style={{ width: '100%', padding: '10px', background: '#111', color: '#fff', border: '1.5px solid #222', borderRadius: '12px', fontSize: '12px', outline: 'none', marginBottom: '8px' }}
-                          >
-                            {Object.entries(t('onboarding.familyHistoryOptions')).map(([value, label]) => (
-                              <option key={value} value={value}>{label}</option>
-                            ))}
-                          </select>
-
-                          {/* 心理社会因素 */}
-                          <label style={{ color: '#888', fontSize: '11px', display: 'block', marginBottom: '4px' }}>
-                            {t('onboarding.psychosocialLabel')}
-                          </label>
-                          <select
-                            value={medicalBackground.psychosocial}
-                            onChange={(e) => setMedicalBackground({ ...medicalBackground, psychosocial: e.target.value })}
-                            style={{ width: '100%', padding: '10px', background: '#111', color: '#fff', border: '1.5px solid #222', borderRadius: '12px', fontSize: '12px', outline: 'none', marginBottom: '8px' }}
-                          >
-                            {Object.entries(t('onboarding.psychosocialOptions')).map(([value, label]) => (
-                              <option key={value} value={value}>{label}</option>
-                            ))}
-                          </select>
-
-                          {/* 生育史 */}
-                          <label style={{ color: '#888', fontSize: '11px', display: 'block', marginBottom: '4px' }}>
-                            {t('onboarding.reproductiveHistoryLabel')}
-                          </label>
-                          <select
-                            value={medicalBackground.reproductiveHistory}
-                            onChange={(e) => setMedicalBackground({ ...medicalBackground, reproductiveHistory: e.target.value })}
-                            style={{ width: '100%', padding: '10px', background: '#111', color: '#fff', border: '1.5px solid #222', borderRadius: '12px', fontSize: '12px', outline: 'none', marginBottom: '8px' }}
-                          >
-                            {Object.entries(t('onboarding.reproductiveHistoryOptions')).map(([value, label]) => (
-                              <option key={value} value={value}>{label}</option>
-                            ))}
-                          </select>
-
-                        </div>
-                      </div>
                       {/* 语气偏好 */}
                       <div style={{ display: 'flex', gap: '12px' }}>
                         <button onClick={() => setTonePreference('gentle')} style={{
@@ -1923,7 +1848,82 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
                         }}>{t('onboarding.toneDirect')}</button>
                       </div>
                       <span style={{ color: '#666', fontSize: '11px', opacity: 0.6 }}>{t('onboarding.toneHint')}</span>
+
+                      {/* === 新增：痛经高发因素收集 === */}
+                      <div style={{ marginTop: '16px', borderTop: '1px solid #222', paddingTop: '12px' }}>
+
+                        {/* 年龄范围 */}
+                        <label style={{ color: '#888', fontSize: '11px', display: 'block', marginBottom: '4px' }}>{t('onboarding.ageLabel')}</label>
+                        <select value={medicalBackground.age} onChange={(e) => setMedicalBackground({ ...medicalBackground, age: e.target.value })}
+                          style={{ width: '100%', padding: '10px', background: '#111', color: '#fff', border: '1.5px solid #222', borderRadius: '12px', fontSize: '12px', outline: 'none', marginBottom: '8px' }}>
+                          {Object.entries(t('onboarding.ageOptions')).map(([value, label]) => (<option key={value} value={value}>{label}</option>))}
+                        </select>
+
+                        {/* 体力活动量 */}
+                        <label style={{ color: '#888', fontSize: '11px', display: 'block', marginBottom: '4px' }}>{t('onboarding.activityLabel')}</label>
+                        <select value={medicalBackground.activityLevel} onChange={(e) => setMedicalBackground({ ...medicalBackground, activityLevel: e.target.value })}
+                          style={{ width: '100%', padding: '10px', background: '#111', color: '#fff', border: '1.5px solid #222', borderRadius: '12px', fontSize: '12px', outline: 'none', marginBottom: '8px' }}>
+                          {Object.entries(t('onboarding.activityOptions')).map(([value, label]) => (<option key={value} value={value}>{label}</option>))}
+                        </select>
+
+                        {/* 生活习惯 */}
+                        <label style={{ color: '#888', fontSize: '11px', display: 'block', marginBottom: '4px' }}>{t('onboarding.lifestyleLabel')}</label>
+                        <select value={medicalBackground.lifestyle} onChange={(e) => setMedicalBackground({ ...medicalBackground, lifestyle: e.target.value })}
+                          style={{ width: '100%', padding: '10px', background: '#111', color: '#fff', border: '1.5px solid #222', borderRadius: '12px', fontSize: '12px', outline: 'none', marginBottom: '8px' }}>
+                          {Object.entries(t('onboarding.lifestyleOptions')).map(([value, label]) => (<option key={value} value={value}>{label}</option>))}
+                        </select>
+
+                        {/* 家族史 */}
+                        <label style={{ color: '#888', fontSize: '11px', display: 'block', marginBottom: '4px' }}>{t('onboarding.familyHistoryLabel')}</label>
+                        <select value={medicalBackground.familyHistory} onChange={(e) => setMedicalBackground({ ...medicalBackground, familyHistory: e.target.value })}
+                          style={{ width: '100%', padding: '10px', background: '#111', color: '#fff', border: '1.5px solid #222', borderRadius: '12px', fontSize: '12px', outline: 'none', marginBottom: '8px' }}>
+                          {Object.entries(t('onboarding.familyHistoryOptions')).map(([value, label]) => (<option key={value} value={value}>{label}</option>))}
+                        </select>
+
+                        {/* 心理社会因素 */}
+                        <label style={{ color: '#888', fontSize: '11px', display: 'block', marginBottom: '4px' }}>{t('onboarding.psychosocialLabel')}</label>
+                        <select value={medicalBackground.psychosocial} onChange={(e) => setMedicalBackground({ ...medicalBackground, psychosocial: e.target.value })}
+                          style={{ width: '100%', padding: '10px', background: '#111', color: '#fff', border: '1.5px solid #222', borderRadius: '12px', fontSize: '12px', outline: 'none', marginBottom: '8px' }}>
+                          {Object.entries(t('onboarding.psychosocialOptions')).map(([value, label]) => (<option key={value} value={value}>{label}</option>))}
+                        </select>
+
+                        {/* 生育史 */}
+                        <label style={{ color: '#888', fontSize: '11px', display: 'block', marginBottom: '4px' }}>{t('onboarding.reproductiveHistoryLabel')}</label>
+                        <select value={medicalBackground.reproductiveHistory} onChange={(e) => setMedicalBackground({ ...medicalBackground, reproductiveHistory: e.target.value })}
+                          style={{ width: '100%', padding: '10px', background: '#111', color: '#fff', border: '1.5px solid #222', borderRadius: '12px', fontSize: '12px', outline: 'none', marginBottom: '8px' }}>
+                          {Object.entries(t('onboarding.reproductiveHistoryOptions')).map(([value, label]) => (<option key={value} value={value}>{label}</option>))}
+                        </select>
+                      </div>
+
+                      {/* === 底部操作按钮组 === */}
+                      <div style={{
+                        display: 'flex',
+                        gap: '12px',
+                        marginTop: '20px',
+                        paddingTop: '16px',
+                        borderTop: '1px solid #222'
+                      }}>
+                        <button
+                          onClick={() => setShowContent('preference')}
+                          style={{
+                            flex: 1, padding: '12px', borderRadius: '12px', background: 'transparent',
+                            border: '1px solid #444', color: '#888', fontSize: '13px', cursor: 'pointer'
+                          }}
+                        >
+                          ← {t('onboarding.switchToPreference')}
+                        </button>
+                        <button
+                          onClick={() => { setShowContent('preference'); setPage("canvas"); }}
+                          style={{
+                            flex: 1, padding: '12px', borderRadius: '12px', background: '#d32f2f',
+                            border: 'none', color: '#fff', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer'
+                          }}
+                        >
+                          {t('onboarding.startDrawing')} ✨
+                        </button>
+                      </div>
                     </div>
+                  </div>
                 )}
 
                 {/* 切换按钮 - 放入卡片底部 */}
