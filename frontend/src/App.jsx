@@ -137,17 +137,56 @@ class PainParticle {
       p.endShape(p.CLOSE);
     }
     else if (this.type === 'scrape') {
-      // 主线条 + 乱序纤维 + 三角血块
       let endX = this.pos.x + this.vel.x; let endY = this.pos.y + this.vel.y;
-      p.stroke(this.color[0] * 0.5, 0, 0, 255); p.strokeWeight(this.size); p.line(this.pos.x, this.pos.y, endX, endY);
-      p.stroke(this.color[0], this.color[1] * 0.3, this.color[2] * 0.3, 180); p.strokeWeight(1);
-      // 【修改】：重按刮痕更粗更红
+
+      // 主刮痕：深色粗线
+      p.stroke(this.color[0] * 0.5, this.color[1] * 0.2, this.color[2] * 0.2, 255);
       p.strokeWeight(this.size * (0.5 + this.pressureScale));
-      p.line(this.pos.x + p.random(-8, 8), this.pos.y + p.random(-8, 8), endX + p.random(-8, 8), endY + p.random(-8, 8));
-      if (p.random(1) < 0.6) {
-        p.noStroke(); p.fill(this.color[0], 0, 0, 220);
-        let spX = endX + p.random(-6, 6); let spY = endY + p.random(-6, 6);
-        p.triangle(spX, spY, spX + p.random(-4, 4), spY + p.random(-4, 4), spX + p.random(-4, 4), spY + p.random(-4, 4));
+      p.line(this.pos.x, this.pos.y, endX, endY);
+
+      // === 增强撕裂感：多根平行副线（纤维丝） ===
+      const numFibers = Math.floor(3 + this.pressureScale * 5); // 压感越高，纤维越多
+      for (let f = 0; f < numFibers; f++) {
+        const offsetX = p.random(-12, 12);
+        const offsetY = p.random(-12, 12);
+        const offsetEndX = p.random(-10, 10);
+        const offsetEndY = p.random(-10, 10);
+
+        // 纤维颜色：浅色半透明，模拟被拉扯的组织
+        p.stroke(
+          Math.min(255, this.color[0] * 0.8 + 50),
+          Math.min(255, this.color[1] * 0.4 + 30),
+          Math.min(255, this.color[2] * 0.4 + 30),
+          100 + p.random(-30, 30)
+        );
+        p.strokeWeight(0.5 + p.random(0.5));
+        p.line(
+          this.pos.x + offsetX, this.pos.y + offsetY,
+          endX + offsetEndX, endY + offsetEndY
+        );
+      }
+
+      // === 模拟血肉碎屑 ===
+      const numDebris = Math.floor(2 + this.pressureScale * 4);
+      for (let d = 0; d < numDebris; d++) {
+        const debrisX = endX + p.random(-15, 15);
+        const debrisY = endY + p.random(-15, 15);
+        const debrisSize = p.random(1, 3) * this.pressureScale;
+
+        p.noStroke();
+        p.fill(this.color[0], this.color[1] * 0.3, this.color[2] * 0.3, 180 + p.random(-40, 40));
+        p.ellipse(debrisX, debrisY, debrisSize, debrisSize);
+
+        // 偶尔加一个不规则三角形碎屑
+        if (p.random(1) < 0.4) {
+          p.fill(this.color[0] * 0.8, 0, 0, 150 + p.random(-30, 30));
+          let spX = endX + p.random(-10, 10); let spY = endY + p.random(-10, 10);
+          p.triangle(
+            spX, spY,
+            spX + p.random(-5, 5), spY + p.random(-5, 5),
+            spX + p.random(-5, 5), spY + p.random(-5, 5)
+          );
+        }
       }
     }
     else if (this.type === 'twist') {
@@ -195,6 +234,7 @@ const wrapText = (ctx, text, x, y, maxWidth, lineHeight) => {
 
 function AppContent({ targetLanguage, setTargetLanguage }) {
   console.log("AppContent rendering start");
+  const isEn = targetLanguage === 'en';
   const { t, texts } = useI18n();
   try {
     const [page, setPage] = useState("splash");
@@ -228,8 +268,15 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
     const [showMedicalOpt, setShowMedicalOpt] = useState(false);
     const [showContent, setShowContent] = useState('preference'); // 'preference' 或 'medical'
     const [medicalBackground, setMedicalBackground] = useState({
-      diagnosed: '',
-      allergies: '',
+      diagnosed: '',        // 既往诊断
+      allergies: '',        // 药物过敏史
+      age: '',              // 【新增】年龄
+      lifestyle: '',        // 【新增】生活习惯（久坐/运动频率等）
+      habits: '',           // 【新增】不良嗜好（吸烟/饮酒等）
+      activityLevel: '',    // 【新增】体力活动量
+      familyHistory: '',    // 【新增】家族史（母亲/姐妹是否有严重痛经）
+      psychosocial: '',     // 【新增】心理社会因素（压力/焦虑等）
+      reproductiveHistory: '', // 【新增】生育史（未生育/已生育/流产史等）
     });
     const [showCompare, setShowCompare] = useState(false);
 
@@ -1460,7 +1507,7 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
           timeRhythm: calculateTimeRhythm(),
           colorPalette: activeColor,
           bodyMode: bodyMode,
-          medicalBackground: medicalBackground,
+          medicalBackground: medicalBackground, // 已包含所有新增字段
           targetLanguage: targetLanguage,
           tonePreference: tonePreference,
           cycleDay: cycleDay || t('medical.cycleNotProvided'), // 【新增】：传入周期天数
@@ -1771,7 +1818,95 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
                           <option key={value} value={value}>{label}</option>
                         ))}
                       </select>
+                        {/* === 新增：痛经高发因素收集 === */}
+                        <div style={{ marginTop: '16px', borderTop: '1px solid #222', paddingTop: '12px' }}>
 
+                          {/* 年龄范围 */}
+                          <label style={{ color: '#888', fontSize: '11px', display: 'block', marginBottom: '4px' }}>
+                            {t('onboarding.ageLabel')}
+                          </label>
+                          <select
+                            value={medicalBackground.age}
+                            onChange={(e) => setMedicalBackground({ ...medicalBackground, age: e.target.value })}
+                            style={{ width: '100%', padding: '10px', background: '#111', color: '#fff', border: '1.5px solid #222', borderRadius: '12px', fontSize: '12px', outline: 'none', marginBottom: '8px' }}
+                          >
+                            {Object.entries(t('onboarding.ageOptions')).map(([value, label]) => (
+                              <option key={value} value={value}>{label}</option>
+                            ))}
+                          </select>
+
+                          {/* 体力活动量 */}
+                          <label style={{ color: '#888', fontSize: '11px', display: 'block', marginBottom: '4px' }}>
+                            {t('onboarding.activityLabel')}
+                          </label>
+                          <select
+                            value={medicalBackground.activityLevel}
+                            onChange={(e) => setMedicalBackground({ ...medicalBackground, activityLevel: e.target.value })}
+                            style={{ width: '100%', padding: '10px', background: '#111', color: '#fff', border: '1.5px solid #222', borderRadius: '12px', fontSize: '12px', outline: 'none', marginBottom: '8px' }}
+                          >
+                            {Object.entries(t('onboarding.activityOptions')).map(([value, label]) => (
+                              <option key={value} value={value}>{label}</option>
+                            ))}
+                          </select>
+
+                          {/* 生活习惯 */}
+                          <label style={{ color: '#888', fontSize: '11px', display: 'block', marginBottom: '4px' }}>
+                            {t('onboarding.lifestyleLabel')}
+                          </label>
+                          <select
+                            value={medicalBackground.lifestyle}
+                            onChange={(e) => setMedicalBackground({ ...medicalBackground, lifestyle: e.target.value })}
+                            style={{ width: '100%', padding: '10px', background: '#111', color: '#fff', border: '1.5px solid #222', borderRadius: '12px', fontSize: '12px', outline: 'none', marginBottom: '8px' }}
+                          >
+                            {Object.entries(t('onboarding.lifestyleOptions')).map(([value, label]) => (
+                              <option key={value} value={value}>{label}</option>
+                            ))}
+                          </select>
+
+                          {/* 家族史 */}
+                          <label style={{ color: '#888', fontSize: '11px', display: 'block', marginBottom: '4px' }}>
+                            {t('onboarding.familyHistoryLabel')}
+                          </label>
+                          <select
+                            value={medicalBackground.familyHistory}
+                            onChange={(e) => setMedicalBackground({ ...medicalBackground, familyHistory: e.target.value })}
+                            style={{ width: '100%', padding: '10px', background: '#111', color: '#fff', border: '1.5px solid #222', borderRadius: '12px', fontSize: '12px', outline: 'none', marginBottom: '8px' }}
+                          >
+                            {Object.entries(t('onboarding.familyHistoryOptions')).map(([value, label]) => (
+                              <option key={value} value={value}>{label}</option>
+                            ))}
+                          </select>
+
+                          {/* 心理社会因素 */}
+                          <label style={{ color: '#888', fontSize: '11px', display: 'block', marginBottom: '4px' }}>
+                            {t('onboarding.psychosocialLabel')}
+                          </label>
+                          <select
+                            value={medicalBackground.psychosocial}
+                            onChange={(e) => setMedicalBackground({ ...medicalBackground, psychosocial: e.target.value })}
+                            style={{ width: '100%', padding: '10px', background: '#111', color: '#fff', border: '1.5px solid #222', borderRadius: '12px', fontSize: '12px', outline: 'none', marginBottom: '8px' }}
+                          >
+                            {Object.entries(t('onboarding.psychosocialOptions')).map(([value, label]) => (
+                              <option key={value} value={value}>{label}</option>
+                            ))}
+                          </select>
+
+                          {/* 生育史 */}
+                          <label style={{ color: '#888', fontSize: '11px', display: 'block', marginBottom: '4px' }}>
+                            {t('onboarding.reproductiveHistoryLabel')}
+                          </label>
+                          <select
+                            value={medicalBackground.reproductiveHistory}
+                            onChange={(e) => setMedicalBackground({ ...medicalBackground, reproductiveHistory: e.target.value })}
+                            style={{ width: '100%', padding: '10px', background: '#111', color: '#fff', border: '1.5px solid #222', borderRadius: '12px', fontSize: '12px', outline: 'none', marginBottom: '8px' }}
+                          >
+                            {Object.entries(t('onboarding.reproductiveHistoryOptions')).map(([value, label]) => (
+                              <option key={value} value={value}>{label}</option>
+                            ))}
+                          </select>
+
+                        </div>
+                      </div>
                       {/* 语气偏好 */}
                       <div style={{ display: 'flex', gap: '12px' }}>
                         <button onClick={() => setTonePreference('gentle')} style={{
@@ -1789,7 +1924,6 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
                       </div>
                       <span style={{ color: '#666', fontSize: '11px', opacity: 0.6 }}>{t('onboarding.toneHint')}</span>
                     </div>
-                  </div>
                 )}
 
                 {/* 切换按钮 - 放入卡片底部 */}
@@ -2492,7 +2626,7 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
                 >
                   {t('history.export')}
                 </button>
-                <button className="retry-btn" style={{ margin: 0, padding: '6px 15px', width: 'auto', fontSize: '11px'}} onClick={() => setPage('onboarding')}>
+                <button className="retry-btn" style={{ margin: 0, padding: '6px 15px', width: 'auto', fontSize: '11px' }} onClick={() => setPage('onboarding')}>
                   {t('history.back')}
                 </button>
               </div>

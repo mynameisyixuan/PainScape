@@ -115,6 +115,71 @@ def build_cycle_context(cycle_day: str, lang: str) -> str:
         elif "排卵" in cycle_day: return "排卵期异常痛：需在主诉中提示排查继发性病变。"
     return ""
 
+
+def build_lifestyle_context(mb: Dict, lang: str) -> str:
+    """构建生活习惯/家族史/生育史等痛经高发因素的上下文"""
+    if not mb: return ""
+    
+    contexts = []
+    
+    # 年龄范围
+    age_map_zh = {"under18": "18岁以下", "18-25": "18-25岁", "26-35": "26-35岁", "36-45": "36-45岁", "over45": "45岁以上"}
+    age_map_en = {"under18": "Under 18", "18-25": "18-25", "26-35": "26-35", "36-45": "36-45", "over45": "Over 45"}
+    if mb.get("age"):
+        age_label = age_map_en.get(mb["age"], mb["age"]) if lang == "en" else age_map_zh.get(mb["age"], mb["age"])
+        prefix = "Age range" if lang == "en" else "年龄范围"
+        contexts.append(f"{prefix}: {age_label}.")
+    
+    # 体力活动量
+    activity_map_zh = {"sedentary": "久坐少动", "light": "轻度活动", "moderate": "中等强度运动", "active": "高强度运动"}
+    activity_map_en = {"sedentary": "Sedentary", "light": "Light activity", "moderate": "Moderate exercise", "active": "High-intensity exercise"}
+    if mb.get("activityLevel"):
+        activity_label = activity_map_en.get(mb["activityLevel"], mb["activityLevel"]) if lang == "en" else activity_map_zh.get(mb["activityLevel"], mb["activityLevel"])
+        prefix = "Activity level" if lang == "en" else "体力活动量"
+        contexts.append(f"{prefix}: {activity_label}.")
+        # 久坐少动提示盆腔充血风险
+        if mb["activityLevel"] == "sedentary":
+            hint = "Prolonged sitting may contribute to pelvic congestion." if lang == "en" else "久坐少动可能与盆腔充血有关。"
+            contexts.append(hint)
+    
+    # 生活习惯
+    lifestyle_map_zh = {"regular": "作息规律", "irregular": "作息不规律/常熬夜", "smoking": "有吸烟习惯", "alcohol": "常饮酒", "coldPref": "喜食生冷"}
+    lifestyle_map_en = {"regular": "Regular schedule", "irregular": "Irregular schedule/staying up late", "smoking": "Smoking", "alcohol": "Alcohol consumption", "coldPref": "Prefers cold food/drinks"}
+    if mb.get("lifestyle"):
+        lifestyle_label = lifestyle_map_en.get(mb["lifestyle"], mb["lifestyle"]) if lang == "en" else lifestyle_map_zh.get(mb["lifestyle"], mb["lifestyle"])
+        prefix = "Lifestyle" if lang == "en" else "生活习惯"
+        contexts.append(f"{prefix}: {lifestyle_label}.")
+    
+    # 家族史
+    family_map_zh = {"none": "无家族痛经史", "mother": "母亲有严重痛经", "sister": "姐妹有严重痛经", "both": "多位女性亲属有痛经", "unknown": "不清楚"}
+    family_map_en = {"none": "No family history", "mother": "Mother has severe dysmenorrhea", "sister": "Sister has severe dysmenorrhea", "both": "Multiple family members affected", "unknown": "Unknown"}
+    if mb.get("familyHistory") and mb["familyHistory"] != "none":
+        family_label = family_map_en.get(mb["familyHistory"], mb["familyHistory"]) if lang == "en" else family_map_zh.get(mb["familyHistory"], mb["familyHistory"])
+        prefix = "Family history" if lang == "en" else "家族史"
+        contexts.append(f"{prefix}: {family_label}. Possible genetic predisposition." if lang == "en" else f"{prefix}: {family_label}。可能存在遗传倾向。")
+    
+    # 心理社会因素
+    psycho_map_zh = {"lowStress": "压力较小", "moderateStress": "适度压力", "highStress": "压力大/焦虑", "trauma": "有创伤经历"}
+    psycho_map_en = {"lowStress": "Low stress", "moderateStress": "Moderate stress", "highStress": "High stress/anxiety", "trauma": "History of trauma"}
+    if mb.get("psychosocial") and mb["psychosocial"] not in ["lowStress"]:
+        psycho_label = psycho_map_en.get(mb["psychosocial"], mb["psychosocial"]) if lang == "en" else psycho_map_zh.get(mb["psychosocial"], mb["psychosocial"])
+        prefix = "Psychosocial factors" if lang == "en" else "心理社会因素"
+        contexts.append(f"{prefix}: {psycho_label}. Stress may exacerbate pain perception." if lang == "en" else f"{prefix}: {psycho_label}。压力可能加剧疼痛感知。")
+    
+    # 生育史
+    repro_map_zh = {"nulliparous": "未生育", "parous": "已生育", "miscarriage": "有流产史", "multiple": "多次生育"}
+    repro_map_en = {"nulliparous": "Nulliparous", "parous": "Parous", "miscarriage": "History of miscarriage", "multiple": "Multiparous"}
+    if mb.get("reproductiveHistory"):
+        repro_label = repro_map_en.get(mb["reproductiveHistory"], mb["reproductiveHistory"]) if lang == "en" else repro_map_zh.get(mb["reproductiveHistory"], mb["reproductiveHistory"])
+        prefix = "Reproductive history" if lang == "en" else "生育史"
+        contexts.append(f"{prefix}: {repro_label}.")
+    
+    if contexts:
+        header = "\n【生活习惯与风险因素】\n" if lang == "zh" else "\n[Lifestyle & Risk Factors]\n"
+        return header + "\n".join(f"- {c}" for c in contexts)
+    return ""
+
+
 # ─────────────────────────────────────────────
 # 核心生成端点
 # ─────────────────────────────────────────────
@@ -128,8 +193,15 @@ async def generate_pain_report(data: PainData):
     bm_dict = BODY_MODE_MAP.get(lang, BODY_MODE_MAP["zh"])
     tone = TONE_MAP.get(lang, TONE_MAP["zh"]).get(data.tonePreference or "gentle")
     cycle_ctx = build_cycle_context(data.cycleDay, lang)
+    lifestyle_ctx = build_lifestyle_context(mb, lang)
     allergy = mb.get("allergies", "无")
     diag = mb.get("diagnosed", "无既往确诊")
+    
+    # 根据过敏史确定安全的止痛药名称
+    safe_painkiller = "对乙酰氨基酚" if lang == "zh" else "Acetaminophen"
+    default_painkiller = "布洛芬" if lang == "zh" else "Ibuprofen"
+    allergy_list = ["ibuprofen", "aspirin", "nsaids"]
+    painkiller = safe_painkiller if (allergy in allergy_list) else default_painkiller
     
     JSON_TEMPLATE = """
     {
@@ -147,9 +219,9 @@ async def generate_pain_report(data: PainData):
             "CRITICAL CONSTRAINTS:\n"
             "1. 'analogy': Visceral metaphorical description. Make it highly specific to the exact pain type.\n"
             "2. 'work': Brief text message to a boss requesting sick leave (under 40 words). Ban formal medical terms.\n"
-            "3. 'med': Detailed clinical complaint (80-120 words). Must strongly reflect the specific pain type, patient history, and suggest ONLY ONE medical exam (e.g., Pelvic Ultrasound) to avoid UI clutter.\n"
-            "4. 'action': Array of 3-4 detailed actions. MUST directly target the specific pain type.\n"
-            "5. 'selfCare': Array of 4-5 items. Integrate 'Crip Time' and physical relief tailored to this exact pain. Do not recommend allergens.\n"
+            "3. 'med': Detailed clinical complaint (80-120 words). Must strongly reflect the specific pain type, patient history, lifestyle factors, and suggest ONLY ONE medical exam (e.g., Pelvic Ultrasound) to avoid UI clutter.\n"
+            "4. 'action': Array of 3-4 detailed actions. MUST directly target the specific pain type. If patient has drug allergies, NEVER recommend those drugs. Use safe alternatives like warm compress, positioning, hydration.\n"
+            "5. 'selfCare': Array of 4-5 items. Integrate 'Crip Time' and physical relief tailored to this exact pain. Do not recommend allergens. Address lifestyle factors if provided (e.g., suggest movement breaks for sedentary users).\n"
             f"MUST USE THIS EXACT JSON STRUCTURE:\n{JSON_TEMPLATE}"
         )
     else:
@@ -157,10 +229,10 @@ async def generate_pain_report(data: PainData):
             "你是一个受女性主义HCI启发的健康助理。必须严格输出JSON，绝对不要输出Markdown标记！\n"
             "硬性规则：\n"
             "1. 'analogy': 极具画面感的通感比喻。必须与给定的【痛感质地】高度吻合！\n"
-            "2. 'work': 极其接地气的微信请假条（40字以内）。如：“老板，今天突发急病疼得起不来，请假一天休息，工作已交接。” 绝不能用公文体词汇。\n"
-            "3. 'med': 饱满的临床主诉（80-120字）。【极其重要】：必须根据特定的痛感（如绞痛/坠痛/撕裂痛）来写主诉！融合既往病史，并仅推荐【一项】最具针对性的检查（如仅写'盆腔超声'或'腹腔镜'），绝对不要罗列多个检查！\n"
-            "4. 'action': 必须是字符串数组！提供 3-4 条具体的伴侣实操动作。必须与痛觉类型（如针对坠胀、针对刺痛）强关联配合！\n"
-            "5. 'selfCare': 必须是字符串数组！提供 4-5 条带女性主义视角的建议。必须针对该痛觉给出特定的缓解姿势，融入'残疾时间'理念，严禁推荐过敏药物。\n"
+            "2. 'work': 极其接地气的微信请假条（40字以内）。如：'老板，今天突发急病疼得起不来，请假一天休息，工作已交接。' 绝不能用公文体词汇。\n"
+            "3. 'med': 饱满的临床主诉（80-120字）。【极其重要】：必须根据特定的痛感（如绞痛/坠痛/撕裂痛）来写主诉！融合既往病史、生活习惯、家族史等信息，并仅推荐【一项】最具针对性的检查（如仅写'盆腔超声'或'腹腔镜'），绝对不要罗列多个检查！\n"
+            "4. 'action': 必须是字符串数组！提供 3-4 条具体的伴侣实操动作。必须与痛觉类型（如针对坠胀、针对刺痛）强关联配合！如患者有药物过敏史，绝对不要推荐该药物，改用热敷、体位调整、温水等安全方式。\n"
+            "5. 'selfCare': 必须是字符串数组！提供 4-5 条带女性主义视角的建议。必须针对该痛觉给出特定的缓解姿势，融入'残疾时间'理念，严禁推荐过敏药物。如有生活习惯信息（如久坐），可针对性给出改善建议。\n"
             f"【警告】必须严格按照以下JSON格式输出，不要改变键名：\n{JSON_TEMPLATE}"
         )
 
@@ -173,7 +245,9 @@ async def generate_pain_report(data: PainData):
 【医疗与周期背景】
 - 既往诊断：{diag}
 - 月经周期语境：{cycle_ctx}
-- 药物过敏：{allergy} （绝不能在此次建议中推荐此药）
+- 药物过敏：{allergy} （绝不能在此次建议中推荐此药，可用{painkiller}作为安全替代）
+
+{lifestyle_ctx}
 
 【语气偏好】
 {tone}
@@ -196,7 +270,7 @@ async def generate_pain_report(data: PainData):
         
         raw_text = completion.choices[0].message.content
         
-        # 终极暴力清洗与截取
+        # 清洗与截取
         cleaned_text = re.sub(r"^```(?:json)?\s*", "", raw_text, flags=re.MULTILINE|re.IGNORECASE)
         cleaned_text = re.sub(r"```\s*$", "", cleaned_text, flags=re.MULTILINE).strip()
         
@@ -206,7 +280,7 @@ async def generate_pain_report(data: PainData):
         if start != -1 and end != -1:
             cleaned_text = cleaned_text[start:end+1]
         
-        # 【救命神药】：strict=False 允许大模型在 JSON 字符串里乱敲回车！
+        # strict=False 允许大模型在 JSON 字符串里敲回车
         parsed_json = json.loads(cleaned_text, strict=False)
         
         print("✅ JSON 解析成功! 主诉内容获取正常。")
@@ -214,14 +288,14 @@ async def generate_pain_report(data: PainData):
 
     except Exception as e:
         print(f"❌ 生成失败，触发保底。错误原因: {str(e)}")
-        # 注意：此处必须返回 success，否则前端 React 会强制覆盖掉我们的优质保底文案！
-        return _fallback_response(lang)
+        return _fallback_response(lang, painkiller)
 
 # ─────────────────────────────────────────────
-# 降级字典 (即使报错，也会强制让前端显示以下优质内容)
+# 降级字典
 # ─────────────────────────────────────────────
-def _fallback_response(lang: str) -> dict:
+def _fallback_response(lang: str, painkiller: str = "布洛芬") -> dict:
     if lang == "en":
+        painkiller_en = painkiller if painkiller != "布洛芬" else "Ibuprofen"
         return {
             "status": "success", 
             "language": "en",
@@ -229,9 +303,9 @@ def _fallback_response(lang: str) -> dict:
             "work": "Hi Manager, I have a sudden severe medical issue today and can't get out of bed. I need to take a sick leave. Urgent matters are handed over.",
             "med": "Patient presents with intense, spasmodic cramping in the lower abdomen, accompanied by pronounced lumbosacral heaviness. Symptoms suggest acute dysmenorrhea exacerbation. Given the pain severity and disruption of daily activities, a pelvic ultrasound is recommended to rule out secondary etiologies.",
             "action": [
-                "☑️ Immediately prepare a heat pad and secure it against her lower back or abdomen.",
-                "☑️ Quietly bring a glass of warm water and her preferred, safe painkiller.",
-                "☑️ Take over all cognitive and physical household labor for the day."
+                f"☑️ Immediately prepare a heat pad and secure it against her lower back or abdomen.",
+                f"☑️ Quietly bring a glass of warm water and her preferred, safe painkiller (avoid allergens).",
+                f"☑️ Take over all cognitive and physical household labor for the day."
             ],
             "selfCare": [
                 "✨ Embrace 'Crip Time': It is completely valid to cancel plans and exist in survival mode today.",
@@ -247,19 +321,19 @@ def _fallback_response(lang: str) -> dict:
             "work": "老板你好，我今天突发身体急症，目前疼得实在起不来，申请请假一天居家休息，紧急工作已交接，感谢批准。",
             "med": "患者自述下腹部呈持续性剧烈痉挛绞痛，阵发性加剧，并伴有明显的腰骶部沉重坠胀感。疼痛已导致患者无法直立行走及维持专注。结合既往病史，为排查继发性病变，建议择期行盆腔超声检查。",
             "action": [
-                "☑️ 针对痉挛绞痛：立刻准备一个温度适宜的热水袋或暖贴，帮她妥善固定在下腹部或后腰。",
-                "☑️ 针对体力耗竭：帮她倒一杯温水放在床头，主动承担今天的全部家务，甚至包括点外卖这种‘决策劳动’。",
-                "☑️ 空间陪伴法则：如果她不想说话，请调暗灯光安静退出房间；如果她需要支撑，把搓热的手掌贴在她的痛处。"
+                f"☑️ 针对痉挛绞痛：立刻准备一个温度适宜的热水袋或暖贴，帮她妥善固定在下腹部或后腰。",
+                f"☑️ 针对体力耗竭：帮她倒一杯温水放在床头，备好{painkiller}（确保无过敏），主动承担今天的全部家务。",
+                f"☑️ 空间陪伴法则：如果她不想说话，请调暗灯光安静退出房间；如果她需要支撑，把搓热的手掌贴在她的痛处。"
             ],
             "selfCare": [
-                "✨ 赋权你的‘残疾时间’：今天不生产任何价值也是完全合法的。允许自己躺平，不要为请假感到哪怕一丝愧疚。",
+                "✨ 赋权你的'残疾时间'：今天不生产任何价值也是完全合法的。允许自己躺平，不要为请假感到哪怕一丝愧疚。",
                 "✨ 缓解特定坠痛的姿势：尝试侧卧婴儿蜷缩式，或者膝胸卧位（臀部抬高），这样能最快减轻盆腔充血。",
-                "✨ 神经系统安抚：疼痛会让身体误以为处于危险中。试着拉长呼气的时间，告诉大脑‘我们现在很安全’。"
+                "✨ 神经系统安抚：疼痛会让身体误以为处于危险中。试着拉长呼气的时间，告诉大脑'我们现在很安全'。"
             ],
         }
 
 # ─────────────────────────────────────────────
-# 真实的 /api/refine (优化引擎)
+# /api/refine (优化引擎)
 # ─────────────────────────────────────────────
 @app.post("/api/refine")
 async def refine_content(data: dict):
