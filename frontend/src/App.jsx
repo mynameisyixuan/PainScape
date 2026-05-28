@@ -249,6 +249,77 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
   console.log("AppContent rendering start");
   const isEn = targetLanguage === 'en';
   const { t, texts } = useI18n();
+  // ══════════════════════════════════════════
+  // JSONBin 配置（替换为你的真实值）
+  // ══════════════════════════════════════════
+  const JSONBIN_BIN_ID = '6a17a2b121f9ee59d2939707';
+  const JSONBIN_API_KEY = '$2a$10$tAISFkFwGQjiyJXWHNRTKOTqCND35OcoGtJxUvKYK5vdnxVKdyJqy';
+  const JSONBIN_URL = `https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}`;
+
+  // 从 JSONBin 加载帖子
+  const loadCommunityPosts = async () => {
+    try {
+      const res = await fetch(`${JSONBIN_URL}/latest`, {
+        headers: { 'X-Master-Key': JSONBIN_API_KEY }
+      });
+      if (!res.ok) throw new Error('Failed to load');
+      const data = await res.json();
+      return data.record || [];
+    } catch (e) {
+      console.warn('JSONBin 加载失败，使用本地数据', e);
+      return null;
+    }
+  };
+
+  // 发布新帖到 JSONBin
+  const publishToCommunity = async (newPost) => {
+    try {
+      const posts = await loadCommunityPosts();
+      const currentPosts = posts || [];
+      currentPosts.unshift({
+        ...newPost,
+        id: Date.now(),
+        createdAt: new Date().toISOString()
+      });
+      const trimmed = currentPosts.slice(0, 100);
+      await fetch(JSONBIN_URL, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Master-Key': JSONBIN_API_KEY
+        },
+        body: JSON.stringify(trimmed)
+      });
+      return trimmed;
+    } catch (e) {
+      console.error('JSONBin 发布失败', e);
+      return null;
+    }
+  };
+  // 更新 JSONBin 中的单条帖子（用于抱抱、缓解经验等）
+  const updatePostInCloud = async (postId, updates) => {
+    try {
+      const posts = await loadCommunityPosts();
+      if (!posts) return null;
+
+      const updatedPosts = posts.map(p =>
+        p.id === postId ? { ...p, ...updates } : p
+      );
+
+      await fetch(JSONBIN_URL, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Master-Key': JSONBIN_API_KEY
+        },
+        body: JSON.stringify(updatedPosts)
+      });
+      return updatedPosts;
+    } catch (e) {
+      console.error('更新帖子失败', e);
+      return null;
+    }
+  };
   try {
     const [page, setPage] = useState("splash");
     // 1. Splash 页面 - 使用 t('splash.quotes') 并取随机
@@ -306,24 +377,33 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
     const [expText, setExpText] = useState("");
     const [expTags, setExpTags] = useState("");
     const [refineTargetField, setRefineTargetField] = useState('med_complaint'); // 【新增】：医生Tab优化目标，默认为主诉
+    //保存经验到云端
+    const handleSaveExperience = async () => {
+      if (!expText.trim()) return alert(t('toast.saveExperienceRequired'));
 
-    // 新增：保存经验的函数
-    const handleSaveExperience = () => {
-      if (!expText.trim()) return alert("请写下你的经验");
       const tagsArray = expTags ? expTags.split(/[,，]/).filter(t => t.trim()) : [];
-      setPosts(prev => prev.map(p =>
-        p.id === viewingPost.id
-          ? { ...p, userExperience: expText, experienceTags: tagsArray }
-          : p
-      ));
-      setViewingPost(vp => ({
-        ...vp,
+
+      // 1. 先更新本地状态（立即反馈）
+      const updates = {
         userExperience: expText,
         experienceTags: tagsArray
-      }));
+      };
+
+      setPosts(prev => prev.map(p =>
+        p.id === viewingPost.id ? { ...p, ...updates } : p
+      ));
+
+      setViewingPost(vp => ({ ...vp, ...updates }));
+
       setShowExpInput(false);
       setExpText("");
       setExpTags("");
+
+      // 2. 异步同步到 JSONBin
+      const updatedPosts = await updatePostInCloud(viewingPost.id, updates);
+      if (updatedPosts) {
+        setPosts(updatedPosts);
+      }
     };
     // 轻量级提示
     const showToast = (msgKey, vars = {}) => {
@@ -513,86 +593,7 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
     const [bodyMode, setBodyMode] = useState('front');
 
     const [history, setHistory] = useState(() => JSON.parse(localStorage.getItem('painscape_history') || '[]'));
-    const [posts, setPosts] = useState([
-      // 中文帖子
-      {
-        id: 1,
-        text: "痛得下不了床...",
-        img: "https://images.unsplash.com/photo-1550684848-fac1c5b4e853?q=80&w=200",
-        painTags: ["twist"],  // ✅ 使用 key
-        likes: 0,
-        hugs: 0,
-        restReminders: 0,
-        group: "family",
-        analogy: "🌪️ 像拧毛巾一样，一圈一圈拧紧",
-        userExperience: null,
-        experienceTags: [],
-        hasUserHugged: false,
-        lang: "zh",
-      },
-      {
-        id: 2,
-        text: "腰快断了，一直坠坠的。",
-        img: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=200",
-        painTags: ["heavy"],  // ✅ 使用 key
-        likes: 0,
-        hugs: 0,
-        restReminders: 0,
-        group: "friend",
-        analogy: "🪨 像绑了沙袋往下坠，站着就想蹲下",
-        userExperience: null,
-        experienceTags: [],
-        hasUserHugged: false,
-        lang: "zh",
-      },
-
-      // 英文帖子 - 也使用相同的 key
-      {
-        id: 3,
-        text: "Feels like my insides are being twisted with a hot knife...",
-        img: "https://images.unsplash.com/photo-1579684385127-1ef15d508118?q=80&w=200",
-        painTags: ["twist"],  // ✅ 使用 key
-        likes: 0,
-        hugs: 0,
-        restReminders: 0,
-        group: "friend",
-        analogy: "🌪️ Like a wet towel being wrung out, tighter and tighter",
-        userExperience: null,
-        experienceTags: [],
-        hasUserHugged: false,
-        lang: "en",
-      },
-      {
-        id: 4,
-        text: "The heaviness in my lower back makes it impossible to stand for more than 5 minutes.",
-        img: "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?q=80&w=200",
-        painTags: ["heavy"],  // ✅ 使用 key
-        likes: 0,
-        hugs: 0,
-        restReminders: 0,
-        group: "family",
-        analogy: "🪨 Like carrying a 10kg weight pulling down from inside",
-        userExperience: null,
-        experienceTags: [],
-        hasUserHugged: false,
-        lang: "en",
-      },
-      {
-        id: 5,
-        text: "Sharp stabbing pain that comes out of nowhere, then disappears just as fast.",
-        img: "https://images.unsplash.com/photo-1584362917165-526a968579e8?q=80&w=200",
-        painTags: ["pierce"],  // ✅ 使用 key
-        likes: 0,
-        hugs: 0,
-        restReminders: 0,
-        group: "friend",
-        analogy: "⚡️ Like an electric drill piercing through without warning",
-        userExperience: null,
-        experienceTags: [],
-        hasUserHugged: false,
-        lang: "en",
-      },
-    ]);
+    const [posts, setPosts] = useState([]);
     // 经验仓库（独立于帖子）：
     const [experienceLibrary, setExperienceLibrary] = useState([]);
 
@@ -646,7 +647,16 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
         return () => { clearTimeout(timer1); clearTimeout(timer2); };
       }
     }, [page]);
-
+    // 进入社区页面时从 JSONBin 拉取帖子
+    useEffect(() => {
+      if (page === 'community') {
+        loadCommunityPosts().then(cloudPosts => {
+          if (cloudPosts && cloudPosts.length > 0) {
+            setPosts(cloudPosts);
+          }
+        });
+      }
+    }, [page]);
     useEffect(() => {
       const pd = (e) => e.preventDefault(); document.addEventListener("contextmenu", pd);
       return () => document.removeEventListener("contextmenu", pd);
@@ -1008,53 +1018,54 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
 
       return true;
     };
-    const handlePublishPost = () => {
-
+    const handlePublishPost = async () => {
       if (!postText) return alert(t('toast.postRequired'));
 
       const dominant = getDominantPain();
       const content = generateContent(dominant);
 
       const newPost = {
-        id: Date.now(),
         text: postText,
         img: imgUrl,
+        painTags: [dominant],
+        group: groupFilter === 'all' ? 'family' : groupFilter,
+        analogy: content.analogy,
+        lang: targetLanguage,
         likes: 0,
         hugs: 0,
         restReminders: 0,
-        group: groupFilter === 'all' ? 'family' : groupFilter,
-        painTags: [PAIN_NAME_MAP[dominant]],
-        analogy: content.analogy,
-        action: content.action,
+        hasUserHugged: false,
         userExperience: null,
         experienceTags: [],
-        hasUserHugged: false,
       };
 
-      setPosts(prev => [newPost, ...prev]);
+      // 发送到 JSONBin 云端
+      const updatedPosts = await publishToCommunity(newPost);
+
+      if (updatedPosts) {
+        // 云端存储成功，使用云端数据
+        setPosts(updatedPosts);
+      } else {
+        // 降级：云端不可用时存到本地
+        const localPost = { ...newPost, id: Date.now() };
+        setPosts(prev => [localPost, ...prev]);
+      }
+
       setShowPostModal(false);
       setPostText("");
 
-      // 发布后显示激励弹窗
+      // 发布后显示激励弹窗（使用当前 posts 计算统计）
       setTimeout(() => {
         const tagStats = getPainTagStats();
-        const myTag = PAIN_NAME_MAP[dominant];
-        // 获取真实的同痛人数
-        let sameCount = (tagStats[myTag] || 0);
-        // 如果 sameCount 为 0，则生成一个 3~8 的随机基数
-        if (sameCount === 0) {
-          sameCount = Math.floor(Math.random() * 6) + 3; // 随机生成 3 到 8 之间的整数
-        }
-        // 如果真实人数少于3人，就补足到3~8人
+        const myTag = dominant;
+        let sameCount = tagStats[myTag] || 0;
         if (sameCount < 3) {
           sameCount = sameCount + Math.floor(Math.random() * 6) + (3 - sameCount);
         }
-        // sameCount = sameCount || 5; 
-        alert(t('toast.publishSuccess', { count: sameCount, pain: myTag }));
+        alert(t('toast.publishSuccess', { count: sameCount, pain: t(`painNames.${myTag}`) }));
       }, 300);
 
       setPage("community");
-
     };
 
     const handleCreateGroup = () => {
@@ -1733,8 +1744,27 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
                           setShowGuide(false);
                           const fb = prompt(t('onboarding.feedbackPrompt'));
                           if (fb !== null) {
-                            localStorage.setItem('painscape_feedback_' + Date.now(), fb);
-                            alert(t('onboarding.feedbackThanks'));
+                            const handleSubmitFeedback = async (feedbackText) => {
+                              // 1. 仍然保留本地存储（作为备份）
+                              localStorage.setItem('painscape_feedback_' + Date.now(), feedbackText);
+
+                              // 2. 发送到 Formspree
+                              try {
+                                await fetch('https://formspree.io/f/xdajyywe', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({
+                                    feedback: feedbackText,
+                                    timestamp: new Date().toISOString(),
+                                    page: window.location.href,
+                                    language: targetLanguage,
+                                  }),
+                                });
+                              } catch (e) {
+                                // 静默失败，不影响用户体验
+                                console.log('反馈发送失败，但已保存在本地', e);
+                              }
+                            };
                           }
                         }}
                         style={{ width: '100%', padding: '8px', background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', color: '#888', borderRadius: '10px', fontSize: '11px', cursor: 'pointer' }}
@@ -1742,7 +1772,14 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
                         {t('onboarding.submitFeedback')}
                       </button>
                     </div>
-                    <button onClick={() => setShowGuide(false)} style={{ marginTop: '8px', width: '100%', background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', color: '#666', padding: '6px', borderRadius: '10px', fontSize: '10px', cursor: 'pointer' }}>
+                    <button onClick={() => {
+                      setShowGuide(false);
+                      const fb = prompt(t('onboarding.feedbackPrompt'));
+                      if (fb !== null) {
+                        handleSubmitFeedback(fb);  // ← 调用新函数
+                        alert(t('onboarding.feedbackThanks'));
+                      }
+                    }} style={{ marginTop: '8px', width: '100%', background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', color: '#666', padding: '6px', borderRadius: '10px', fontSize: '10px', cursor: 'pointer' }}>
                       {t('onboarding.gotIt')}
                     </button>
                   </div>
@@ -2523,7 +2560,13 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
                   <div key={post.id}
                     style={{ background: '#1c1c1c', borderRadius: '12px', overflow: 'hidden', border: '1px solid #333', display: 'flex', flexDirection: 'column' }}>
 
-                    <img src={post.img} onClick={() => setViewingPost(post)}
+                    <img src={post.img} onClick={() => setViewingPost({
+                      ...post,
+                      hugs: post.hugs || 0,
+                      hasUserHugged: post.hasUserHugged || false,
+                      userExperience: post.userExperience || null,
+                      experienceTags: post.experienceTags || [],
+                    })}
                       style={{ width: '100%', height: '110px', objectFit: 'cover', cursor: 'pointer', background: '#000' }} />
 
                     <div style={{ padding: '10px', flex: 1 }}>
@@ -3165,41 +3208,29 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
                   justifyContent: 'center'
                 }}>
                   <button
-                    onClick={(e) => {
+                    onClick={async (e) => {
                       e.stopPropagation();
                       const isHugged = viewingPost.hasUserHugged;
 
+                      // 1. 先更新本地状态（立即反馈）
+                      const updates = {
+                        hugs: viewingPost.hugs + (isHugged ? -1 : 1),
+                        hasUserHugged: !isHugged
+                      };
+
                       setPosts(prev => prev.map(p =>
-                        p.id === viewingPost.id
-                          ? { ...p, hugs: p.hugs + (isHugged ? -1 : 1), hasUserHugged: !isHugged }
-                          : p
+                        p.id === viewingPost.id ? { ...p, ...updates } : p
                       ));
 
-                      setViewingPost(vp => ({
-                        ...vp,
-                        hugs: vp.hugs + (isHugged ? -1 : 1),
-                        hasUserHugged: !isHugged
-                      }));
+                      setViewingPost(vp => ({ ...vp, ...updates }));
 
                       showToast(isHugged ? "hugRetracted" : "hugSent");
-                    }}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      background: viewingPost.hasUserHugged
-                        ? 'rgba(211, 47, 47, 0.15)'
-                        : 'rgba(255, 255, 255, 0.05)',
-                      border: `1px solid ${viewingPost.hasUserHugged ? '#d32f2f' : '#333'}`,
-                      borderRadius: '25px',
-                      padding: '12px 30px',
-                      color: viewingPost.hasUserHugged ? '#ff5252' : '#888',
-                      fontSize: '16px',
-                      fontWeight: 'bold',
-                      cursor: 'pointer',
-                      transition: 'all 0.3s ease',
-                      boxShadow: viewingPost.hasUserHugged ? '0 0 15px rgba(211, 47, 47, 0.3)' : 'none',
-                      animation: viewingPost.hasUserHugged ? 'pulse 0.5s ease-in-out' : 'none'
+
+                      // 2. 异步同步到 JSONBin
+                      const updatedPosts = await updatePostInCloud(viewingPost.id, updates);
+                      if (updatedPosts) {
+                        setPosts(updatedPosts);
+                      }
                     }}
                   >
                     <span style={{ fontSize: '20px' }}>
