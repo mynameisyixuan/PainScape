@@ -1,3 +1,13 @@
+# xx xx症状多久 
+# 现病史：为什么起病，起病症状，伴随症状，有没有自己吃药，
+# 什么效果，发展情况，有没有一般检查，有没有家族史，
+# 家族有没有妇产科病史
+# 供您参考：生活习惯整理
+# 自愈建议的分类：
+
+
+
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
