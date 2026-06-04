@@ -2446,105 +2446,101 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
                       </>
                     )}
 
-                    {/* === 医生 tab === */}
+
                     {identity === 'doctor' && (
                       <>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #333', paddingBottom: '10px', marginBottom: '15px' }}>
-                          <h3 style={{ color: '#2196f3', margin: 0 }}>{t('result.doctor.title')}</h3>
-                          <span style={{ color: '#666', fontSize: '10px', background: '#111', padding: '2px 8px', borderRadius: '10px' }}>{t('result.doctor.disclaimer')}</span>
+                        <div style={{ borderBottom: '1px solid #333', marginBottom: '15px' }}>
+                          <h3 style={{ color: '#2196f3' }}>{t('result.doctor.title')}</h3>
+                          <span style={{ color: '#666', fontSize: '10px' }}>{t('result.doctor.disclaimer')}</span>
                         </div>
-                        <div style={{ marginBottom: '15px', whiteSpace: 'pre-wrap' }}>
-                          <h4 style={{ color: '#90caf9', margin: '0 0 5px 0', fontSize: '13px' }}>{t('result.doctor.clinicalAdvice')}</h4>
-                          <EditableBlock fieldKey="med_complaint" defaultValue={content.med_complaint} color="#fff" />
-                        </div>
-                        {/* 针对性检查提醒框 */}
-                        {getExamReminders(content.med).map(exam => (
-                          <div key={exam} style={{ marginTop: '15px', padding: '12px', marginBottom: '12px', background: 'rgba(33, 150, 243, 0.1)', border: '1px solid rgba(33,150,243,0.3)', borderRadius: '10px' }}>
-                            <p style={{ color: '#90caf9', fontSize: '13px', fontWeight: 'bold', margin: '0 0 5px 0' }}>{t('result.doctor.examNotice')}{exam}</p>
-                            <p style={{ color: '#aaa', fontSize: '12px', margin: 0 }}><strong>{t('result.doctor.preparation')}</strong>{EXAM_DATABASE[exam]?.prep || ''}</p>
-                            <p style={{ color: '#888', fontSize: '11px', margin: 0 }}>
-                              <strong>{t('result.doctor.purpose')}</strong>{EXAM_DATABASE[exam]?.purpose || ''}
-                            </p>
-                          </div>
-                        ))}
-                        <div style={{ marginTop: '8px', marginBottom: '12px', padding: '10px', background: 'rgba(33,150,243,0.08)', borderLeft: '3px solid #2196f3', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          <img src={imgUrl} style={{ width: '30px', height: '30px', borderRadius: '4px', objectFit: 'cover' }} alt="thumb" />
-                          <p style={{ color: '#90caf9', fontSize: '12px', margin: 0 }}>{t('result.doctor.attachedMap')}</p>
-                        </div>
-                        <div style={{ padding: '15px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid #333' }}>
-                          <h4 style={{ color: '#e0e0e0', fontSize: '13px', margin: '0 0 10px 0' }}>{t('result.doctor.discussReference')}</h4>
-                          <EditableBlock fieldKey="med_reference" defaultValue={content.med_reference} color="#aaa" />
-                        </div>
-                        <button
-                          onClick={() => handleCopy(
-                            `${t('result.doctor.clinicalAdvice')}：${getEditedOrDefault('med_complaint', content.med_complaint)}\n\n${t('result.doctor.discussReference')}\n${getEditedOrDefault('med_reference', content.med_reference)}`
-                          )}
-                          style={{ marginTop: '15px', width: '100%', padding: '10px', background: 'transparent', border: '1px dashed #2196f3', color: '#90caf9', borderRadius: '8px', cursor: 'pointer' }}
-                        >
-                          {t('result.doctor.copyReport')}
-                        </button>
-                        {/* 医生报告 AI 持续优化区域 */}
-                        <div style={{ marginTop: '25px', paddingTop: '15px', borderTop: '1px solid #333' }}>
-                          <p style={{ color: '#888', fontSize: '12px', margin: '0 0 10px 0' }}>{t('result.refine.prompt')}</p>
 
-                          {/* 目标字段切换器 */}
-                          <div style={{ display: 'flex', gap: '6px', marginBottom: '10px' }}>
-                            <button
-                              onClick={() => setRefineTargetField('med_complaint')}
-                              style={{
-                                flex: 1, padding: '6px', borderRadius: '6px', fontSize: '11px', cursor: 'pointer',
-                                background: refineTargetField === 'med_complaint' ? 'rgba(33, 150, 243, 0.2)' : '#1a1a1a',
-                                color: refineTargetField === 'med_complaint' ? '#90caf9' : '#666',
-                                border: `1px solid ${refineTargetField === 'med_complaint' ? '#2196f3' : '#333'}`
-                              }}
-                            >
-                              {t('result.refine.optimizeComplaint')}
-                            </button>
-                            <button
-                              onClick={() => setRefineTargetField('med_reference')}
-                              style={{
-                                flex: 1, padding: '6px', borderRadius: '6px', fontSize: '11px', cursor: 'pointer',
-                                background: refineTargetField === 'med_reference' ? 'rgba(33, 150, 243, 0.2)' : '#1a1a1a',
-                                color: refineTargetField === 'med_reference' ? '#90caf9' : '#666',
-                                border: `1px solid ${refineTargetField === 'med_reference' ? '#2196f3' : '#333'}`
-                              }}
-                            >
-                              {t('result.refine.optimizeReference')}
-                            </button>
-                          </div>
-                          {/* 指令输入框 */}
-                          <div style={{ display: 'flex', gap: '8px' }}>
-                            <input
-                              list="refine-options-doctor"
-                              placeholder={getRefinePlaceholder('doctor')}
-                              value={refineInput}
-                              onChange={(e) => setRefineInput(e.target.value)}
-                              style={{ flex: 1, background: '#111', border: '1px solid #333', color: '#fff', borderRadius: '8px', padding: '10px', fontSize: '12px' }}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') handleRefine(refineTargetField);
-                              }}
-                            />
-                            <button
-                              onClick={() => handleRefine(refineTargetField)}
-                              disabled={refiningField === refineTargetField}
-                              style={{
-                                background: refiningField === refineTargetField ? '#555' : '#2196f3',
-                                color: '#fff', border: 'none', borderRadius: '8px', padding: '0 15px',
-                                cursor: refiningField === refineTargetField ? 'not-allowed' : 'pointer',
-                                fontSize: '12px', whiteSpace: 'nowrap'
-                              }}
-                            >
-                              {refiningField === refineTargetField ? t('result.refine.optimizing') : t('result.refine.optimize')}
-                            </button>
-                          </div>
-                          {/* 医疗场景专属快捷指令 */}
-                          <datalist id="refine-options-doctor">
-                            <option value="更严肃地描述疼痛严重程度" />
-                            <option value="加上关于月经周期的描述" />
-                            <option value="用更通俗的语言解释专业术语" />
-                            <option value="语气更客观，减少主观色彩" />
-                          </datalist>
+                        {/* 主诉 */}
+                        <div style={{ marginBottom: '12px' }}>
+                          <h4 style={{ color: '#90caf9', fontSize: '13px' }}>📋 主诉</h4>
+                          <EditableBlock fieldKey="chief_complaint" defaultValue={content.chief_complaint} color="#fff" />
                         </div>
+
+                        {/* 现病史 */}
+                        <div style={{ marginBottom: '12px' }}>
+                          <h4 style={{ color: '#90caf9', fontSize: '13px' }}>📝 现病史</h4>
+                          <EditableBlock fieldKey="present_illness" defaultValue={content.present_illness} color="#ccc" />
+                        </div>
+
+                        {/* 疼痛位置分布 */}
+                        {content.pain_location && (
+                          <div style={{ marginBottom: '12px', background: 'rgba(33,150,243,0.05)', padding: '8px', borderRadius: '8px' }}>
+                            <h4 style={{ color: '#90caf9', fontSize: '12px' }}>📍 疼痛分布</h4>
+                            <p style={{ color: '#aaa', fontSize: '12px' }}>{content.pain_location}</p>
+                          </div>
+                        )}
+
+                        {/* 伴随症状 */}
+                        {content.accompanying_symptoms && content.accompanying_symptoms !== "无特殊伴随症状" && (
+                          <div style={{ marginBottom: '12px' }}>
+                            <h4 style={{ color: '#90caf9', fontSize: '12px' }}>⚠️ 伴随症状</h4>
+                            <p style={{ color: '#aaa', fontSize: '12px' }}>{content.accompanying_symptoms}</p>
+                          </div>
+                        )}
+
+                        {/* 既往史 */}
+                        <div style={{ marginBottom: '12px' }}>
+                          <h4 style={{ color: '#90caf9', fontSize: '13px' }}>📂 既往史</h4>
+                          <EditableBlock fieldKey="past_history" defaultValue={content.past_history} color="#ccc" />
+                        </div>
+
+                        {/* 月经史 */}
+                        <div style={{ marginBottom: '12px' }}>
+                          <h4 style={{ color: '#90caf9', fontSize: '13px' }}>🌸 月经史</h4>
+                          <EditableBlock fieldKey="menstrual_history" defaultValue={content.menstrual_history} color="#ccc" />
+                        </div>
+
+                        {/* 临床诊断 */}
+                        <div style={{ marginBottom: '12px', background: 'rgba(211,47,47,0.05)', padding: '10px', borderRadius: '8px' }}>
+                          <h4 style={{ color: '#ef9a9a', fontSize: '13px' }}>🩺 临床诊断</h4>
+                          <EditableBlock fieldKey="clinical_diagnosis" defaultValue={content.clinical_diagnosis} color="#ffcdd2" />
+                        </div>
+
+                        {/* 风险提示 */}
+                        {content.risk_warning && content.risk_warning !== "无特殊用药风险提示" && (
+                          <div style={{ marginBottom: '12px', background: 'rgba(255,152,0,0.1)', padding: '10px', borderRadius: '8px', borderLeft: '3px solid #ff9800' }}>
+                            <h4 style={{ color: '#ff9800', fontSize: '12px' }}>⚠️ 用药警示</h4>
+                            <p style={{ color: '#ffcc80', fontSize: '12px', whiteSpace: 'pre-wrap' }}>{content.risk_warning}</p>
+                          </div>
+                        )}
+
+                        {/* 分诊建议 */}
+                        {content.triage_advice && (
+                          <div style={{ marginBottom: '12px', background: 'rgba(76,175,80,0.1)', padding: '10px', borderRadius: '8px' }}>
+                            <h4 style={{ color: '#4caf50', fontSize: '12px' }}>🏥 分诊建议</h4>
+                            <p style={{ color: '#a5d6a7', fontSize: '13px' }}>{content.triage_advice}</p>
+                          </div>
+                        )}
+
+                        {/* 检查建议 */}
+                        {content.exam_advice && (
+                          <div style={{ marginBottom: '12px', padding: '12px', background: 'rgba(33,150,243,0.08)', borderRadius: '8px' }}>
+                            <h4 style={{ color: '#90caf9', fontSize: '13px' }}>🔬 建议检查</h4>
+                            <p style={{ color: '#fff', fontSize: '13px', fontWeight: 'bold' }}>{content.exam_advice.name}</p>
+                            <p style={{ color: '#aaa', fontSize: '12px', marginTop: '6px' }}>📋 准备：{content.exam_advice.preparation}</p>
+                            <p style={{ color: '#4caf50', fontSize: '12px', marginTop: '4px' }}>{content.exam_advice.note}</p>
+                            {content.exam_advice.alternative && (
+                              <p style={{ color: '#888', fontSize: '11px', marginTop: '4px' }}>💡 {content.exam_advice.alternative}</p>
+                            )}
+                          </div>
+                        )}
+
+                        {/* 临床建议 */}
+                        <div style={{ marginBottom: '12px' }}>
+                          <h4 style={{ color: '#90caf9', fontSize: '13px' }}>💊 临床建议</h4>
+                          <EditableBlock fieldKey="clinical_suggestions" defaultValue={content.clinical_suggestions} color="#ccc" />
+                        </div>
+
+                        {/* 科普链接 */}
+                        {content.health_tips_link && (
+                          <div style={{ marginTop: '15px', padding: '8px', background: 'rgba(156,39,176,0.08)', borderRadius: '8px' }}>
+                            <p style={{ color: '#ce93d8', fontSize: '11px', margin: 0 }}>{content.health_tips_link}</p>
+                          </div>
+                        )}
                       </>
                     )}
 
