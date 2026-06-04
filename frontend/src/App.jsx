@@ -371,7 +371,7 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
     const [llmData, setLlmData] = useState(null); // 【新增】：专门用来存大模型返回的数据
     const [quickPainType, setQuickPainType] = useState('twist');
     const [quickPainScore, setQuickPainScore] = useState(7);
-
+    const [currentReportData, setCurrentReportData] = useState(null);
 
     // 新增状态变量
     const [showGuide, setShowGuide] = useState(false);
@@ -1138,7 +1138,36 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
     };
 
     // === 2.generateContent ===
-    const generateContent = (overrideType, externalLlm = null) => {
+    const generateContent = (overrideType, externalLlm = null, externalReportData = null) => {
+      // 优先使用传入的 reportData
+      const reportData = externalReportData || currentReportData;
+      if (currentReportData && currentReportData.status === 'success') {
+        return {
+          // 基础字段
+          pain: currentReportData.pain || '',
+          analogy: currentReportData.analogy || '',
+          workText: currentReportData.work || '',
+          action: Array.isArray(currentReportData.action) ? currentReportData.action.join('\n\n') : currentReportData.action || '',
+          selfCare: Array.isArray(currentReportData.selfCare) ? currentReportData.selfCare.join('\n\n') : currentReportData.selfCare || '',
+          med_complaint: currentReportData.chief_complaint || currentReportData.med_complaint || '',
+          med_reference: currentReportData.present_illness || currentReportData.med_reference || '',
+          med_profile: currentReportData.past_history || '',
+
+          // 新增模块化字段
+          chief_complaint: currentReportData.chief_complaint || '',
+          present_illness: currentReportData.present_illness || '',
+          past_history: currentReportData.past_history || '',
+          menstrual_history: currentReportData.menstrual_history || '',
+          clinical_diagnosis: currentReportData.clinical_diagnosis || '',
+          clinical_suggestions: currentReportData.clinical_suggestions || '',
+          pain_location: currentReportData.pain_location || '',
+          accompanying_symptoms: currentReportData.accompanying_symptoms || '',
+          risk_warning: currentReportData.risk_warning || '',
+          triage_advice: currentReportData.triage_advice || '',
+          exam_advice: currentReportData.exam_advice || null,
+          health_tips_link: currentReportData.health_tips_link || '',
+        };
+      }
       const activeLlm = externalLlm || llmData;
       const hasLlm = activeLlm?.status === 'success';
       const dominant = overrideType || getDominantPain(); // 痛觉主导类型
@@ -1183,6 +1212,7 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
       }
 
       const allergyValue = medicalBackground.allergies;
+
       if (allergyValue && allergyValue !== '' && allergyValue !== 'none' && allergyValue !== 'unknown') {
         const allergyName = isEn
           ? (allergyValue === 'nsaids' ? 'NSAIDs' : allergyValue)
@@ -1532,7 +1562,7 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
         }
 
         // 4. 生成报告并跳转
-        const finalContent = generateContent(dominant, aiResult);
+        const finalContent = generateContent(dominant, aiResult, currentReportData);
         const newRecord = {
           id: Date.now(),
           date: new Date().toLocaleDateString(),
@@ -1572,10 +1602,11 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
           timeRhythm: calculateTimeRhythm(),
           colorPalette: activeColor,
           bodyMode: bodyMode,
-          medicalBackground: medicalBackground, // 已包含所有新增字段
+          medicalBackground: medicalBackground,
           targetLanguage: targetLanguage,
           tonePreference: tonePreference,
-          cycleDay: cycleDay || t('medical.cycleNotProvided'), // 【新增】：传入周期天数
+          cycleDay: cycleDay || t('medical.cycleNotProvided'),
+          accompanyingSymptoms: [], // 如果有伴随症状数据可以传入
         };
 
         try {
@@ -1592,13 +1623,16 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
           if (response.ok) {
             aiResult = await response.json();
             setLlmData(aiResult);
+            // 【关键】保存完整的报告数据
+            setCurrentReportData(aiResult);
           }
         } catch (err) {
           console.warn("后端不可用，转入本地模式", err);
           setLlmData(null);
+          setCurrentReportData(null);
         }
 
-        // 将 aiResult 正确传入 generateContent
+        // 生成最终内容（会优先使用 currentReportData）
         const finalContent = generateContent(dominant, aiResult);
 
         const newRecord = {
@@ -1614,8 +1648,7 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
             bodyMode,
             colorPalette: activeColor,
             painScore: Object.values(brushCounts.current).reduce((a, b) => a + b, 0),
-            dominantPeriod: calculateTimeRhythm()?.dominantPeriod || 'morning' // 【新增】保存主时段
-
+            dominantPeriod: calculateTimeRhythm()?.dominantPeriod || 'morning'
           }
         };
 
@@ -1630,9 +1663,8 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
         setPage("result");
         particlePositions.current = [];
         speedHistory.current = [];
-        pressureHistory.current = []; // 【新增】：重置压感历史
+        pressureHistory.current = [];
       }
-
     };
     const updateRecordInfo = (recordId, field, value) => {
       const updatedHistory = history.map(r =>
