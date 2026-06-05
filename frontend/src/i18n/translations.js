@@ -6,7 +6,7 @@ const translations = {
     app: {
       name: "PainScape",
       subtitle: "让说不出的痛，换一种方式抵达",
-      loading: "AI 医疗助理转译中...",
+      loading: "AI 助理转译中...",
       loadingSub: "正在基于您的痛觉参数生成多语境报告",
       loadingHint: "首次请求可能需要 30-60 秒唤醒服务器，请耐心等待",
       errorBoundary: "页面出了点小问题，请刷新重试",
@@ -531,7 +531,7 @@ const translations = {
     app: {
       name: "PainScape",
       subtitle: "Let the unspeakable pain find another way to be heard",
-      loading: "AI Medical Assistant translating...",
+      loading: "AI Assistant translating...",
       loadingSub: "Generating multi-context report based on your pain parameters",
       loadingHint:
         "First request may take 30-60 seconds to wake the server, please be patient",
