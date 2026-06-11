@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { createPortal } from 'react-dom'; 
+import { createPortal } from 'react-dom';
 import Sketch from "react-p5";
 import { I18nProvider, useI18n } from "./i18n/i18nContext";
 // 导入翻译文件中的常量和映射（用于动态内容）
@@ -166,7 +166,7 @@ class PainParticle {
       p.fill(255, 255, 255, 60);
       p.ellipse(this.pos.x - this.size * 0.15, this.pos.y - this.size * 0.2, this.size * 0.3, this.size * 0.2);
     }
-     else if (this.type === 'scrape') {
+    else if (this.type === 'scrape') {
       let endX = this.pos.x + this.vel.x; let endY = this.pos.y + this.vel.y;
 
       // 主刮痕：深色粗线
@@ -303,7 +303,7 @@ const CollapsibleMultiSelect = ({ label, options, selectedValues, onChange, plac
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (triggerRef.current && !triggerRef.current.contains(event.target) &&
-          portalRef.current && !portalRef.current.contains(event.target)) {
+        portalRef.current && !portalRef.current.contains(event.target)) {
         handleClose();
       }
     };
@@ -315,7 +315,7 @@ const CollapsibleMultiSelect = ({ label, options, selectedValues, onChange, plac
     };
   }, []);
 
-  const displayText = selectedValues.length === 0 
+  const displayText = selectedValues.length === 0
     ? (placeholder || '请选择（可选）')
     : `已选择 ${selectedValues.length} 项`;
 
@@ -330,21 +330,21 @@ const CollapsibleMultiSelect = ({ label, options, selectedValues, onChange, plac
   };
 
   return (
-    <div style={{ 
-      position: 'relative', 
+    <div style={{
+      position: 'relative',
       marginBottom: '16px',
       width: '100%'
     }}>
-      <label style={{ 
-        color: '#888', 
-        fontSize: '12px', 
-        display: 'block', 
+      <label style={{
+        color: '#888',
+        fontSize: '12px',
+        display: 'block',
         marginBottom: '6px',
         fontWeight: 'normal'
       }}>
         {label}
       </label>
-      <div 
+      <div
         ref={triggerRef}
         onClick={handleOpen}
         style={{
@@ -363,15 +363,15 @@ const CollapsibleMultiSelect = ({ label, options, selectedValues, onChange, plac
           minHeight: '46px'
         }}
       >
-        <span style={{ 
+        <span style={{
           color: selectedValues.length === 0 ? '#888' : '#fff',
           fontSize: '13px'
         }}>{displayText}</span>
         <span style={{ color: '#888', fontSize: '12px' }}>{isOpen ? '▲' : '▼'}</span>
       </div>
-      
+
       {isOpen && createPortal(
-        <div 
+        <div
           ref={portalRef}
           style={{
             position: 'fixed',
@@ -389,12 +389,12 @@ const CollapsibleMultiSelect = ({ label, options, selectedValues, onChange, plac
           }}
         >
           {options.map(option => (
-            <label 
-              key={option.value} 
-              style={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                gap: '10px', 
+            <label
+              key={option.value}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
                 padding: '10px 12px',
                 cursor: 'pointer',
                 transition: 'background 0.2s',
@@ -457,7 +457,7 @@ const CollapsibleSingleSelect = ({ label, options, selectedValue, onChange, plac
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (triggerRef.current && !triggerRef.current.contains(event.target) &&
-          portalRef.current && !portalRef.current.contains(event.target)) {
+        portalRef.current && !portalRef.current.contains(event.target)) {
         handleClose();
       }
     };
@@ -473,21 +473,21 @@ const CollapsibleSingleSelect = ({ label, options, selectedValue, onChange, plac
   const displayText = selectedValue ? selectedLabel : (placeholder || '请选择（可选）');
 
   return (
-    <div style={{ 
-      position: 'relative', 
+    <div style={{
+      position: 'relative',
       marginBottom: '16px',
       width: '100%'
     }}>
-      <label style={{ 
-        color: '#888', 
-        fontSize: '12px', 
-        display: 'block', 
+      <label style={{
+        color: '#888',
+        fontSize: '12px',
+        display: 'block',
         marginBottom: '6px',
         fontWeight: 'normal'
       }}>
         {label}
       </label>
-      <div 
+      <div
         ref={triggerRef}
         onClick={handleOpen}
         style={{
@@ -506,15 +506,15 @@ const CollapsibleSingleSelect = ({ label, options, selectedValue, onChange, plac
           minHeight: '46px'
         }}
       >
-        <span style={{ 
+        <span style={{
           color: !selectedValue ? '#888' : '#fff',
           fontSize: '13px'
         }}>{displayText}</span>
         <span style={{ color: '#888', fontSize: '12px' }}>{isOpen ? '▲' : '▼'}</span>
       </div>
-      
+
       {isOpen && createPortal(
-        <div 
+        <div
           ref={portalRef}
           style={{
             position: 'fixed',
@@ -538,7 +538,7 @@ const CollapsibleSingleSelect = ({ label, options, selectedValue, onChange, plac
                 onChange(option.value);
                 handleClose();
               }}
-              style={{ 
+              style={{
                 padding: '10px 12px',
                 color: selectedValue === option.value ? '#d32f2f' : '#ccc',
                 fontSize: '13px',
@@ -2975,8 +2975,38 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
               <div style={{ pointerEvents: 'auto', position: 'absolute', bottom: '20px', paddingBottom: '8px', left: '50%', transform: 'translateX(-50%)', width: '90%', maxWidth: '380px', maxHeight: '38vh', overflowY: 'visible', background: 'rgba(20,20,20,0.9)', padding: '15px', borderRadius: '24px', backdropFilter: 'blur(10px)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
                   {Object.keys(BRUSHES).map(k => (
-                    <button key={k} style={{ flex: 1, background: activeBrush === k ? '#444' : 'transparent', border: 'none', color: activeBrush === k ? '#fff' : '#888', padding: '8px 0', borderRadius: '10px', fontSize: '12px', display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer' }} onClick={() => setActiveBrush(activeBrush === k ? null : k)}>
-                      <span style={{ fontSize: '20px', marginBottom: '4px' }}>{BRUSHES[k].icon}</span>
+                    <button
+                      key={k}
+                      style={{
+                        flex: 1,
+                        background: activeBrush === k ? '#444' : 'transparent',
+                        border: 'none',
+                        color: activeBrush === k ? '#fff' : '#888',
+                        padding: '8px 0',
+                        borderRadius: '10px',
+                        fontSize: '12px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        cursor: 'pointer'
+                      }}
+                      onClick={() => setActiveBrush(activeBrush === k ? null : k)}
+                    >
+                      {/* 根据 isImage 判断显示图片还是 emoji */}
+                      {BRUSHES[k].isImage ? (
+                        <img
+                          src={BRUSHES[k].icon}
+                          alt={BRUSHES[k].label}
+                          style={{
+                            width: '24px',
+                            height: '24px',
+                            marginBottom: '4px',
+                            opacity: activeBrush === k ? 1 : 0.7
+                          }}
+                        />
+                      ) : (
+                        <span style={{ fontSize: '20px', marginBottom: '4px' }}>{BRUSHES[k].icon}</span>
+                      )}
                       <span>{t(`brushes.${k}.label`).split(" ")[1] || t(`brushes.${k}.label`)}</span>
                     </button>
                   ))}

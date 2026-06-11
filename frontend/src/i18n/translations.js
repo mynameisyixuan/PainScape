@@ -166,7 +166,7 @@ const translations = {
       },
       lifestyleTitle: "生活习惯（可多选）",
       lifestyleOptions: {
-         "": "请选择",
+        "": "请选择",
         sleepDuration: "睡眠时长不足（少于7小时）",
         sleepIrregular: "作息不规律（熬夜/倒班）",
         smoking: "吸烟",
@@ -175,7 +175,7 @@ const translations = {
         diet: "饮食偏好（可多选）",
       },
       dietOptions: {
-         "": "请选择",
+        "": "请选择",
         cold: "喜食生冷/冰饮",
         spicy: "喜食辛辣",
         meat: "偏肉食",
@@ -183,7 +183,7 @@ const translations = {
         weightLoss: "正在减重期",
       },
       familyHistoryLabel: "家族史（可多选）",
-       "": "请选择",
+      "": "请选择",
       familyHistoryOptions: {
         mother: "母亲有痛经史",
         sister: "姐妹有痛经史",
@@ -217,12 +217,12 @@ const translations = {
 
     // ============ 画笔与颜色 ============
     brushes: {
-      twist: { label: "🌀 绞/拧", icon: "🌀" },
-      pierce: { label: "🪡 荆/刺", icon: "🪡" },
-      heavy: { label: "🪨 坠/压", icon: "🪨" },
-      wave: { label: "🫧 胀/扩", icon: "🫧" },
-      scrape: { label: "🪒 刮/撕", icon: "🪒" },
-      eraser: { label: "🧽 橡皮", icon: "🧽" },
+      twist: { label: "绞/拧", icon: " �️" },
+      pierce: { label: "荆/刺", icon: "🪡" },
+      heavy: { label: "坠/压", icon: "🪨" },
+      wave: { label: "胀/扩", icon: "⨀" },
+      scrape: { label: "刮/撕", icon: "🪒" },
+      eraser: { label: "橡皮", icon: "🧽" },
     },
     painNames: {
       twist: "绞痛",
@@ -653,7 +653,7 @@ const translations = {
       optional: "Optional",
       reproductiveHistoryHint: "For medical reference only. Will not be shared. You may skip.",
       cycleLabel: "📅 What day of your period? (Optional)",
-      cycleOptions: ["Premenstrual","Day 1", "Day 2", "Day 3-5", "Ovulation Pain","Aftermenstrual"],
+      cycleOptions: ["Premenstrual", "Day 1", "Day 2", "Day 3-5", "Ovulation Pain", "Aftermenstrual"],
       diagnosisLabel: "Previous Diagnosis (Optional)",
       diagnosisOptions: {
         "": "Previous Diagnosis (Optional)",
