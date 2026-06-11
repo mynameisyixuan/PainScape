@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
+import { createPortal } from 'react-dom'; 
 import Sketch from "react-p5";
 import { I18nProvider, useI18n } from "./i18n/i18nContext";
 // 导入翻译文件中的常量和映射（用于动态内容）
@@ -139,17 +140,33 @@ class PainParticle {
       });
     }
     else if (this.type === 'heavy') {
-      // 绘制沉重的、上尖下宽的动态水滴
-      p.noStroke(); p.fill(this.color[0] * 0.5, this.color[1] * 0.5, this.color[2] * 0.5, 200);
-      // 【修改】：重按水滴更不透明，颜色更深沉
-      p.fill(this.color[0] * 0.5, this.color[1] * 0.5, this.color[2] * 0.5, 120 + (80 * this.pressureScale));
+      // 新设计：有重量的半圆形，模拟"铅块下坠"感
+      p.noStroke();
+
+      // 根据压感调整颜色深度
+      const alphaVal = 160 + (80 * this.pressureScale);
+      p.fill(this.color[0] * 0.6, this.color[1] * 0.4, this.color[2] * 0.4, alphaVal);
+
+      // 绘制有重量的"水滴"形状，底部更宽（铅坠感）
       p.beginShape();
-      p.vertex(this.pos.x, this.pos.y - this.size * 0.8);
-      p.bezierVertex(this.pos.x + this.size, this.pos.y, this.pos.x + this.size, this.pos.y + this.size * 1.5, this.pos.x, this.pos.y + this.size * 1.5);
-      p.bezierVertex(this.pos.x - this.size, this.pos.y + this.size * 1.5, this.pos.x - this.size, this.pos.y, this.pos.x, this.pos.y - this.size * 0.8);
+      p.vertex(this.pos.x, this.pos.y - this.size * 0.6);
+      p.bezierVertex(
+        this.pos.x + this.size * 0.7, this.pos.y - this.size * 0.2,
+        this.pos.x + this.size * 0.5, this.pos.y + this.size * 0.8,
+        this.pos.x, this.pos.y + this.size
+      );
+      p.bezierVertex(
+        this.pos.x - this.size * 0.5, this.pos.y + this.size * 0.8,
+        this.pos.x - this.size * 0.7, this.pos.y - this.size * 0.2,
+        this.pos.x, this.pos.y - this.size * 0.6
+      );
       p.endShape(p.CLOSE);
+
+      // 添加内部高光（模拟重量感）
+      p.fill(255, 255, 255, 60);
+      p.ellipse(this.pos.x - this.size * 0.15, this.pos.y - this.size * 0.2, this.size * 0.3, this.size * 0.2);
     }
-    else if (this.type === 'scrape') {
+     else if (this.type === 'scrape') {
       let endX = this.pos.x + this.vel.x; let endY = this.pos.y + this.vel.y;
 
       // 主刮痕：深色粗线
@@ -244,7 +261,303 @@ const wrapText = (ctx, text, x, y, maxWidth, lineHeight) => {
   ctx.fillText(line, x, currentY);
   return currentY + lineHeight; // 返回最后一行的高度，方便后续排版
 };
+// ========== 可折叠多选下拉框组件 ==========
+const CollapsibleMultiSelect = ({ label, options, selectedValues, onChange, placeholder }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
+  const triggerRef = useRef(null);
+  const portalRef = useRef(null);
 
+  // 计算下拉框位置
+  const updatePosition = () => {
+    if (triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      setDropdownPosition({
+        top: rect.bottom + window.scrollY + 4,
+        left: rect.left + window.scrollX,
+        width: rect.width
+      });
+    }
+  };
+
+  // 打开时计算位置并添加滚动监听
+  const handleOpen = () => {
+    updatePosition();
+    setIsOpen(true);
+    // 监听滚动事件，滚动时关闭下拉框
+    window.addEventListener('scroll', handleScroll, true);
+    window.addEventListener('resize', handleScroll);
+  };
+
+  const handleClose = () => {
+    setIsOpen(false);
+    window.removeEventListener('scroll', handleScroll, true);
+    window.removeEventListener('resize', handleScroll);
+  };
+
+  const handleScroll = () => {
+    handleClose();
+  };
+
+  // 点击外部关闭
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (triggerRef.current && !triggerRef.current.contains(event.target) &&
+          portalRef.current && !portalRef.current.contains(event.target)) {
+        handleClose();
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('scroll', handleScroll, true);
+      window.removeEventListener('resize', handleScroll);
+    };
+  }, []);
+
+  const displayText = selectedValues.length === 0 
+    ? (placeholder || '请选择（可选）')
+    : `已选择 ${selectedValues.length} 项`;
+
+  const toggleOption = (value) => {
+    let newValues;
+    if (selectedValues.includes(value)) {
+      newValues = selectedValues.filter(v => v !== value);
+    } else {
+      newValues = [...selectedValues, value];
+    }
+    onChange(newValues);
+  };
+
+  return (
+    <div style={{ 
+      position: 'relative', 
+      marginBottom: '16px',
+      width: '100%'
+    }}>
+      <label style={{ 
+        color: '#888', 
+        fontSize: '12px', 
+        display: 'block', 
+        marginBottom: '6px',
+        fontWeight: 'normal'
+      }}>
+        {label}
+      </label>
+      <div 
+        ref={triggerRef}
+        onClick={handleOpen}
+        style={{
+          width: '100%',
+          padding: '12px',
+          background: '#111',
+          color: '#fff',
+          border: '1.5px solid #333',
+          borderRadius: '12px',
+          fontSize: '13px',
+          cursor: 'pointer',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          boxSizing: 'border-box',
+          minHeight: '46px'
+        }}
+      >
+        <span style={{ 
+          color: selectedValues.length === 0 ? '#888' : '#fff',
+          fontSize: '13px'
+        }}>{displayText}</span>
+        <span style={{ color: '#888', fontSize: '12px' }}>{isOpen ? '▲' : '▼'}</span>
+      </div>
+      
+      {isOpen && createPortal(
+        <div 
+          ref={portalRef}
+          style={{
+            position: 'fixed',
+            top: dropdownPosition.top,
+            left: dropdownPosition.left,
+            width: dropdownPosition.width,
+            background: '#1a1a1a',
+            border: '1.5px solid #444',
+            borderRadius: '12px',
+            padding: '8px 0',
+            maxHeight: '220px',
+            overflowY: 'auto',
+            zIndex: 10000,
+            boxShadow: '0 4px 20px rgba(0,0,0,0.5)'
+          }}
+        >
+          {options.map(option => (
+            <label 
+              key={option.value} 
+              style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '10px', 
+                padding: '10px 12px',
+                cursor: 'pointer',
+                transition: 'background 0.2s',
+                margin: 0
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = '#252525'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+            >
+              <input
+                type="checkbox"
+                checked={selectedValues.includes(option.value)}
+                onChange={() => toggleOption(option.value)}
+                style={{ width: '16px', height: '16px', cursor: 'pointer', margin: 0 }}
+              />
+              <span style={{ color: '#ccc', fontSize: '13px' }}>{option.label}</span>
+            </label>
+          ))}
+        </div>,
+        document.body
+      )}
+    </div>
+  );
+};
+
+// ========== 可折叠单选下拉框组件 ==========
+const CollapsibleSingleSelect = ({ label, options, selectedValue, onChange, placeholder }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
+  const triggerRef = useRef(null);
+  const portalRef = useRef(null);
+
+  const updatePosition = () => {
+    if (triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      setDropdownPosition({
+        top: rect.bottom + window.scrollY + 4,
+        left: rect.left + window.scrollX,
+        width: rect.width
+      });
+    }
+  };
+
+  const handleOpen = () => {
+    updatePosition();
+    setIsOpen(true);
+    window.addEventListener('scroll', handleScroll, true);
+    window.addEventListener('resize', handleScroll);
+  };
+
+  const handleClose = () => {
+    setIsOpen(false);
+    window.removeEventListener('scroll', handleScroll, true);
+    window.removeEventListener('resize', handleScroll);
+  };
+
+  const handleScroll = () => {
+    handleClose();
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (triggerRef.current && !triggerRef.current.contains(event.target) &&
+          portalRef.current && !portalRef.current.contains(event.target)) {
+        handleClose();
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('scroll', handleScroll, true);
+      window.removeEventListener('resize', handleScroll);
+    };
+  }, []);
+
+  const selectedLabel = options.find(opt => opt.value === selectedValue)?.label || '';
+  const displayText = selectedValue ? selectedLabel : (placeholder || '请选择（可选）');
+
+  return (
+    <div style={{ 
+      position: 'relative', 
+      marginBottom: '16px',
+      width: '100%'
+    }}>
+      <label style={{ 
+        color: '#888', 
+        fontSize: '12px', 
+        display: 'block', 
+        marginBottom: '6px',
+        fontWeight: 'normal'
+      }}>
+        {label}
+      </label>
+      <div 
+        ref={triggerRef}
+        onClick={handleOpen}
+        style={{
+          width: '100%',
+          padding: '12px',
+          background: '#111',
+          color: '#fff',
+          border: '1.5px solid #333',
+          borderRadius: '12px',
+          fontSize: '13px',
+          cursor: 'pointer',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          boxSizing: 'border-box',
+          minHeight: '46px'
+        }}
+      >
+        <span style={{ 
+          color: !selectedValue ? '#888' : '#fff',
+          fontSize: '13px'
+        }}>{displayText}</span>
+        <span style={{ color: '#888', fontSize: '12px' }}>{isOpen ? '▲' : '▼'}</span>
+      </div>
+      
+      {isOpen && createPortal(
+        <div 
+          ref={portalRef}
+          style={{
+            position: 'fixed',
+            top: dropdownPosition.top,
+            left: dropdownPosition.left,
+            width: dropdownPosition.width,
+            background: '#1a1a1a',
+            border: '1.5px solid #444',
+            borderRadius: '12px',
+            padding: '8px 0',
+            maxHeight: '220px',
+            overflowY: 'auto',
+            zIndex: 10000,
+            boxShadow: '0 4px 20px rgba(0,0,0,0.5)'
+          }}
+        >
+          {options.map(option => (
+            <div
+              key={option.value}
+              onClick={() => {
+                onChange(option.value);
+                handleClose();
+              }}
+              style={{ 
+                padding: '10px 12px',
+                color: selectedValue === option.value ? '#d32f2f' : '#ccc',
+                fontSize: '13px',
+                cursor: 'pointer',
+                transition: 'background 0.2s',
+                backgroundColor: selectedValue === option.value ? 'rgba(211,47,47,0.1)' : 'transparent'
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = '#252525'}
+              onMouseLeave={e => e.currentTarget.style.background = selectedValue === option.value ? 'rgba(211,47,47,0.1)' : 'transparent'}
+            >
+              {option.label}
+            </div>
+          ))}
+        </div>,
+        document.body
+      )}
+    </div>
+  );
+};
 function AppContent({ targetLanguage, setTargetLanguage }) {
   console.log("AppContent rendering start");
   const isEn = targetLanguage === 'en';
@@ -271,7 +584,8 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
     }
   };
 
-  // 发布新帖到 JSONBin
+  const [showHealingModal, setShowHealingModal] = useState(false);
+  const [healingTipType, setHealingTipType] = useState('breathing');
   const publishToCommunity = async (newPost) => {
     try {
       const posts = await loadCommunityPosts();
@@ -389,8 +703,6 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
       familyHistory: '',
       psychosocial: '',
       reproductiveHistory: '',
-
-      // 新增字段
       height: '',
       weight: '',
       otherDiagnosis: '',
@@ -398,6 +710,13 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
       surgicalHistory: '',
       menarcheAge: '',
       cycleRegular: '',
+
+      // 新增字段
+      periodDuration: '',        // 经期持续时间
+      lastPeriod: '',            // 上次月经日期
+      familyHistoryArr: [],      // 家族史（多选数组）
+      lifestyleArr: [],
+      reproductiveHistoryArr: [], // 生育史（多选数组）
     });
     const [showCompare, setShowCompare] = useState(false);
 
@@ -621,7 +940,92 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
         setIsLoading(false);
       }
     };
+    // 添加日历相关状态
+    const [calendarDate, setCalendarDate] = useState(new Date());
+    const [selectedDate, setSelectedDate] = useState(null);
+    const [menstrualDates, setMenstrualDates] = useState([]); // 经期标记
 
+    // 计算月份的天数
+    const getDaysInMonth = (year, month) => {
+      return new Date(year, month + 1, 0).getDate();
+    };
+
+    // 获取当月第一天是星期几
+    const getFirstDayOfMonth = (year, month) => {
+      return new Date(year, month, 1).getDay();
+    };
+
+    // 渲染日历
+    const renderCalendar = () => {
+      const year = calendarDate.getFullYear();
+      const month = calendarDate.getMonth();
+      const daysInMonth = getDaysInMonth(year, month);
+      const firstDay = getFirstDayOfMonth(year, month);
+      const today = new Date();
+
+      const days = [];
+      // 填充空白
+      for (let i = 0; i < firstDay; i++) {
+        days.push(<div key={`empty-${i}`} style={{ width: '14.28%', padding: '8px' }} />);
+      }
+
+      // 填充日期
+      for (let d = 1; d <= daysInMonth; d++) {
+        const date = new Date(year, month, d);
+        const dateKey = `${year}-${month + 1}-${d}`;
+        const hasRecord = history.some(h => h.date === `${year}/${month + 1}/${d}`);
+        const isMenstrual = menstrualDates.includes(dateKey);
+        const isSelected = selectedDate === dateKey;
+
+        days.push(
+          <div
+            key={d}
+            onClick={() => {
+              setSelectedDate(dateKey);
+              // 加载该日期的记录
+              const dayRecords = history.filter(h => h.date === `${year}/${month + 1}/${d}`);
+              setSelectedDateRecords(dayRecords);
+            }}
+            style={{
+              width: '14.28%',
+              padding: '8px',
+              textAlign: 'center',
+              cursor: 'pointer',
+              position: 'relative'
+            }}
+          >
+            <div style={{
+              width: '36px',
+              height: '36px',
+              margin: '0 auto',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: '50%',
+              background: isSelected ? '#d32f2f' : 'transparent',
+              color: isSelected ? '#fff' : (isMenstrual ? '#ffcdd2' : '#888'),
+              fontWeight: isSelected ? 'bold' : 'normal'
+            }}>
+              {d}
+            </div>
+            {hasRecord && !isSelected && (
+              <div style={{
+                position: 'absolute',
+                bottom: '4px',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                width: '4px',
+                height: '4px',
+                borderRadius: '50%',
+                background: '#d32f2f'
+              }} />
+            )}
+          </div>
+        );
+      }
+
+      return days;
+    };
     // 新增 ref
     const particlePositions = useRef([]);
     const speedHistory = useRef([]);
@@ -728,10 +1132,29 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
     const setup = (p5, canvasParentRef) => {
       p5Ref.current = p5;
       p5.createCanvas(window.innerWidth, window.innerHeight).parent(canvasParentRef);
+
+      // 【新增】禁用默认的触摸滚动行为
+      const canvas = p5.canvas;
+      canvas.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 1 && activeBrush !== null) {
+          e.preventDefault(); // 单指绘画时阻止页面滚动
+        }
+      }, { passive: false });
+
+      canvas.addEventListener('touchmove', (e) => {
+        if (e.touches.length === 1 && activeBrush !== null) {
+          e.preventDefault(); // 绘画时阻止页面滚动
+        }
+      }, { passive: false });
+
       pgFrontRef.current = p5.createGraphics(window.innerWidth * 2, window.innerHeight * 2);
       pgBackRef.current = p5.createGraphics(window.innerWidth * 2, window.innerHeight * 2);
-      camRef.current.x = 0; camRef.current.y = 0;
-      if (!hasSavedInitial.current) { undoStackRef.current.push(captureState()); hasSavedInitial.current = true; }
+      camRef.current.x = 0;
+      camRef.current.y = 0;
+      if (!hasSavedInitial.current) {
+        undoStackRef.current.push(captureState());
+        hasSavedInitial.current = true;
+      }
     };
 
     const isSafeToDraw = (p5) => {
@@ -809,44 +1232,65 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
       if (!isInteracting) { pressTimer.current = 0; isLongPressing.current = false; }
       else { if (speed < 1) pressTimer.current++; else pressTimer.current = 0; if (pressTimer.current > 20) isLongPressing.current = true; }
 
-      let isPanning = (activeBrush === null) || isLongPressing.current || p5.mouseButton === p5.RIGHT || p5.touches.length >= 2;
+      let isPanning = false;
+      if (activeBrush === null) {
+        isPanning = true;
+      } else if (p5.mouseButton === p5.RIGHT) {
+        isPanning = true;
+      } else if (p5.touches.length >= 2) {
+        isPanning = true;
+      } else if (isLongPressing.current) {
+        isPanning = true;
+      }
+
+
       let currentPg = bodyMode === 'back' ? pgBackRef.current : pgFrontRef.current;
 
       if (isInteracting) {
         if (isPanning) {
-          camRef.current.x += p5.mouseX - p5.pmouseX; camRef.current.y += p5.mouseY - p5.pmouseY;
-        } else if (activeBrush === 'eraser') {
-          currentPg.erase(); currentPg.ellipse(realX, realY, 40 / zoom, 40 / zoom); currentPg.noErase();
-          dynamicParticles.current = dynamicParticles.current.filter(p => p.bodyMode !== bodyMode || p5.dist(p.pos.x, p.pos.y, realX, realY) > 20);
-        } else {
+          // 拖拽模式：移动相机
+          camRef.current.x += p5.mouseX - p5.pmouseX;
+          camRef.current.y += p5.mouseY - p5.pmouseY;
+        }
+        else if (activeBrush === 'eraser') {
+          // 橡皮擦模式
+          currentPg.erase();
+          currentPg.ellipse(realX, realY, 40 / zoom, 40 / zoom);
+          currentPg.noErase();
+          dynamicParticles.current = dynamicParticles.current.filter(p =>
+            p.bodyMode !== bodyMode || p5.dist(p.pos.x, p.pos.y, realX, realY) > 20
+          );
+        }
+        else if (activeBrush !== null) {
+          // 【绘画模式】单指 + 有画笔 + 非长按 → 正常绘画，相机不移动
           brushCounts.current[activeBrush] += 1;
           let spawnRate = (activeBrush === 'wave' || activeBrush === 'twist' || activeBrush === 'heavy') ? 6 : 2;
           if (p5.frameCount % spawnRate === 0 || speed > 10) {
-            // 【新增】：获取压感 (0.0 - 1.0)
-            let pressure = 0.5; // 默认中等力度（适配无压感的鼠标）
+            // 获取压感
+            let pressure = 0.5;
             if (p5.touches.length > 0) {
-              // 触屏设备：使用 pointer force，如果没有则回退到 0.5
               pressure = p5.touches[0].force ?? 0.5;
             } else if (typeof p5.mouseX === 'number' && p5._curElement) {
-              // p5 内部挂载了 pointer 对象，可以读取原生压感 (Apple Pencil 等)
               pressure = p5._curElement?.pointer?.pressure ?? 0.5;
             }
             pressure = Math.max(0.2, pressure);
-            // 将 pressure 传入构造函数
+
             let pObj = new PainParticle(p5, realX, realY, activeBrush, PALETTES[activeColor].color, speed, heading, bodyMode, pressure);
-            // === 新增：记录粒子位置和速度 ===
+
             particlePositions.current.push({ x: realX, y: realY, bodyMode });
             speedHistory.current.push(speed);
-            pressureHistory.current.push(pressure); // 【新增】：记录压感
+            pressureHistory.current.push(pressure);
+
             if (speedHistory.current.length > 200) speedHistory.current.shift();
             if (pressureHistory.current.length > 200) pressureHistory.current.shift();
+
             if (pObj.isDynamic) {
               dynamicParticles.current.push(pObj);
               if (dynamicParticles.current.length > 500) dynamicParticles.current.shift();
+            } else {
+              staticParticles.current.push(pObj);
             }
-            else { staticParticles.current.push(pObj); }
           }
-          // 【新增】：成功生成粒子时，播放对应笔触的音效
           playBrushSound(activeBrush);
         }
       }
@@ -1000,7 +1444,6 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
         setIsLoading(false);
       }
     };
-
     // ── 辅助函数 ──
     const roundRect = (ctx, x, y, w, h, r) => {
       ctx.beginPath();
@@ -1778,15 +2221,19 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
               pointerEvents: 'auto',
               background: '#0a0a0a',
               width: '100%',
-              minHeight: '100vh',
+              height: '100vh',           // 改为固定高度
+              overflowY: 'auto',        // 确保可以滚动
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
-              justifyContent: 'center',
+              justifyContent: 'flex-start', // 改为从顶部开始
               padding: '20px',
+              paddingBottom: '100px',   // 增加底部内边距
               boxSizing: 'border-box',
-              overflowY: 'auto', // 确保内容过长时可以滚动
-              paddingBottom: '120px' // 增加底部留白，防止被遮挡
+              maxWidth: '500px',
+              margin: '0 auto',
+              marginBottom: '30px',  // 增加底部间距
+              flexShrink: 0,         // 防止被压缩
             }}>
               {/* 快速指南问号按钮 */}
               <div style={{ position: 'absolute', top: '15px', right: '15px', zIndex: 10 }}>
@@ -1926,22 +2373,39 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
                         </select>
                       </div>
 
-                      {/* 生活习惯 + 心理因素 - 两列 */}
+                      {/* 生活习惯（多选） + 心理因素 - 两列 */}
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                        <div>
-                          <label style={{ color: '#888', fontSize: '11px', display: 'block', marginBottom: '6px' }}>{t('onboarding.lifestyleLabel')}</label>
-                          <select value={medicalBackground.lifestyle} onChange={(e) => setMedicalBackground({ ...medicalBackground, lifestyle: e.target.value })}
-                            style={{ width: '100%', padding: '12px', background: '#111', color: '#fff', border: '1.5px solid #333', borderRadius: '12px', fontSize: '13px' }}>
-                            {Object.entries(t('onboarding.lifestyleOptions')).map(([value, label]) => (<option key={value} value={value}>{label}</option>))}
-                          </select>
-                        </div>
-                        <div>
-                          <label style={{ color: '#888', fontSize: '11px', display: 'block', marginBottom: '6px' }}>{t('onboarding.psychosocialLabel')}</label>
-                          <select value={medicalBackground.psychosocial} onChange={(e) => setMedicalBackground({ ...medicalBackground, psychosocial: e.target.value })}
-                            style={{ width: '100%', padding: '12px', background: '#111', color: '#fff', border: '1.5px solid #333', borderRadius: '12px', fontSize: '13px' }}>
-                            {Object.entries(t('onboarding.psychosocialOptions')).map(([value, label]) => (<option key={value} value={value}>{label}</option>))}
-                          </select>
-                        </div>
+
+                        {/* 左侧：生活习惯 - 多选 */}
+                        <CollapsibleMultiSelect
+                          label={t('onboarding.lifestyleTitle') || '生活习惯（可多选）'}
+                          options={[
+                            { value: 'sleepShort', label: '睡眠时长不足（少于7小时）' },
+                            { value: 'sleepIrregular', label: '作息不规律（熬夜/倒班）' },
+                            { value: 'smoking', label: '吸烟' },
+                            { value: 'alcohol', label: '饮酒' },
+                            { value: 'caffeine', label: '常喝咖啡/浓茶' },
+                            { value: 'coldFood', label: '喜食生冷/冰饮' },
+                            { value: 'spicy', label: '喜食辛辣' },
+                            { value: 'weightLoss', label: '正在减重期' }
+                          ]}
+                          selectedValues={medicalBackground.lifestyleArr || []}
+                          onChange={(newValues) => setMedicalBackground({ ...medicalBackground, lifestyleArr: newValues })}
+                          placeholder={t('onboarding.pleaseSelect') || '请选择（可选）'}
+                        />
+                        {/* 右侧：心理社会因素 - 下拉选择 */}
+                        <CollapsibleSingleSelect
+                          label={t('onboarding.psychosocialLabel')}
+                          options={[
+                            { value: 'lowStress', label: '压力较小' },
+                            { value: 'moderateStress', label: '适度压力' },
+                            { value: 'highStress', label: '压力大/焦虑' },
+                            { value: 'trauma', label: '有创伤经历' }
+                          ]}
+                          selectedValue={medicalBackground.psychosocial}
+                          onChange={(value) => setMedicalBackground({ ...medicalBackground, psychosocial: value })}
+                          placeholder={t('onboarding.pleaseSelect') || '请选择（可选）'}
+                        />
                       </div>
                     </div>
                   </div>
@@ -1954,108 +2418,289 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
                     borderRadius: '20px',
                     padding: '20px',
                     border: '1px solid #333',
-                    minHeight: '400px',
+                    minHeight: '500px',
+                    maxHeight: '65vh',
+                    overflowY: 'auto',
                     display: 'flex',
                     flexDirection: 'column'
                   }}>
                     <div style={{ textAlign: 'center', marginBottom: '16px' }}>
+                      <span style={{ fontSize: '28px' }}>🩺</span>
                       <h3 style={{ color: '#fff', fontSize: '16px', margin: '8px 0 4px 0', fontWeight: '500' }}>{t('onboarding.medicalTitle')}</h3>
                       <p style={{ color: '#888', fontSize: '11px', margin: 0 }}>{t('onboarding.medicalHint')}</p>
                     </div>
 
-                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                      {/* 初潮年龄 + 周期规律 - 两列 */}
-                      <div style={{ display: 'flex', gap: '12px' }}>
-                        <div style={{ flex: 1 }}>
-                          <label style={{ color: '#888', fontSize: '11px', display: 'block', marginBottom: '6px' }}>{t('onboarding.menarcheAgeLabel')}</label>
-                          <input type="number" min="8" max="20" placeholder={t('onboarding.menarcheAgePlaceholder')} value={medicalBackground.menarcheAge}
-                            onChange={(e) => setMedicalBackground({ ...medicalBackground, menarcheAge: e.target.value })}
-                            style={{ width: '100%', padding: '10px', background: '#111', color: '#fff', border: '1.5px solid #333', borderRadius: '12px', fontSize: '12px', boxSizing: 'border-box' }} />
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '16px' }}>
+
+                      {/* ===== 月经史区块 ===== */}
+                      <div style={{ background: 'rgba(156,39,176,0.05)', borderRadius: '16px', padding: '12px', border: '1px solid rgba(156,39,176,0.2)' }}>
+                        <h4 style={{ color: '#ce93d8', margin: '0 0 12px 0', fontSize: '13px' }}>{t('onboarding.menstrualHistoryTitle')}</h4>
+
+                        {/* 初潮年龄 + 周期规律 - 两列 */}
+                        <div style={{ display: 'flex', gap: '12px', marginBottom: '12px' }}>
+                          <div style={{ flex: 1 }}>
+                            <label style={{ color: '#888', fontSize: '11px', display: 'block', marginBottom: '6px' }}>
+                              {t('onboarding.menarcheAgeLabel')}
+                            </label>
+                            <input
+                              type="number"
+                              min="8"
+                              max="20"
+                              placeholder={t('onboarding.menarcheAgePlaceholder')}
+                              value={medicalBackground.menarcheAge}
+                              onChange={(e) => setMedicalBackground({ ...medicalBackground, menarcheAge: e.target.value })}
+                              style={{
+                                width: '100%',
+                                padding: '10px',
+                                background: '#111',
+                                color: '#fff',
+                                border: '1.5px solid #333',
+                                borderRadius: '12px',
+                                fontSize: '12px',
+                                boxSizing: 'border-box'
+                              }}
+                            />
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <label style={{ color: '#888', fontSize: '11px', display: 'block', marginBottom: '6px' }}>
+                              {t('onboarding.cycleRegularLabel')}
+                              <span style={{ fontSize: '10px', color: '#666', marginLeft: '4px' }}>{t('onboarding.cycleRegularDefinition')}</span>
+                            </label>
+                            <select
+                              value={medicalBackground.cycleRegular}
+                              onChange={(e) => setMedicalBackground({ ...medicalBackground, cycleRegular: e.target.value })}
+                              style={{
+                                width: '100%',
+                                padding: '10px',
+                                background: '#111',
+                                color: '#fff',
+                                border: '1.5px solid #333',
+                                borderRadius: '12px',
+                                fontSize: '12px',
+                                boxSizing: 'border-box'
+                              }}
+                            >
+                              <option value="">{t('onboarding.cycleRegularOptions')[''] || '请选择'}</option>
+                              <option value="regular">{t('onboarding.cycleRegularOptions').regular}</option>
+                              <option value="irregular">{t('onboarding.cycleRegularOptions').irregular}</option>
+                              <option value="unsure">{t('onboarding.cycleRegularOptions').unsure}</option>
+                            </select>
+                          </div>
                         </div>
-                        <div style={{ flex: 1 }}>
-                          <label style={{ color: '#888', fontSize: '11px', display: 'block', marginBottom: '6px' }}>{t('onboarding.cycleRegularLabel')}</label>
-                          <select value={medicalBackground.cycleRegular} onChange={(e) => setMedicalBackground({ ...medicalBackground, cycleRegular: e.target.value })}
-                            style={{ width: '100%', padding: '10px', background: '#111', color: '#fff', border: '1.5px solid #333', borderRadius: '12px', fontSize: '12px', boxSizing: 'border-box' }}>
-                            {Object.entries(t('onboarding.cycleRegularOptions')).map(([value, label]) => (<option key={value} value={value}>{label}</option>))}
+
+                        {/* 经期持续时间 */}
+                        <div style={{ marginBottom: '12px' }}>
+                          <label style={{ color: '#888', fontSize: '11px', display: 'block', marginBottom: '6px' }}>
+                            {t('onboarding.periodDurationLabel')}
+                          </label>
+                          <select
+                            value={medicalBackground.periodDuration || ''}
+                            onChange={(e) => setMedicalBackground({ ...medicalBackground, periodDuration: e.target.value })}
+                            style={{
+                              width: '100%',
+                              padding: '10px',
+                              background: '#111',
+                              color: '#fff',
+                              border: '1.5px solid #333',
+                              borderRadius: '12px',
+                              fontSize: '12px'
+                            }}
+                          >
+                            {Object.entries(t('onboarding.periodDurationOptions')).map(([value, label]) => (
+                              <option key={value} value={value}>{label}</option>
+                            ))}
                           </select>
                         </div>
-                      </div>
-                      {/* 周期阶段 - 按钮组 */}
-                      <div>
-                        <label style={{ color: '#888', fontSize: '11px', display: 'block', marginBottom: '8px' }}>{t('onboarding.cycleLabel')}</label>
-                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                          {t('onboarding.cycleOptions').map(item => (
-                            <button key={item} onClick={() => setCycleDay(cycleDay === item ? '' : item)}
-                              style={{
-                                padding: '6px 14px', borderRadius: '20px', fontSize: '12px', cursor: 'pointer',
-                                background: cycleDay === item ? '#d32f2f' : '#111',
-                                color: cycleDay === item ? '#fff' : '#888',
-                                border: cycleDay === item ? 'none' : '1.5px solid #333'
-                              }}>
-                              {item}
-                            </button>
-                          ))}
+
+                        {/* 上次月经日期 */}
+                        <div style={{ marginBottom: '12px' }}>
+                          <label style={{ color: '#888', fontSize: '11px', display: 'block', marginBottom: '6px' }}>
+                            {t('onboarding.lastPeriodLabel')}
+                          </label>
+                          <input
+                            type="date"
+                            value={medicalBackground.lastPeriod || ''}
+                            onChange={(e) => setMedicalBackground({ ...medicalBackground, lastPeriod: e.target.value })}
+                            style={{
+                              width: '100%',
+                              padding: '10px',
+                              background: '#111',
+                              color: '#fff',
+                              border: '1.5px solid #333',
+                              borderRadius: '12px',
+                              fontSize: '12px'
+                            }}
+                          />
+                        </div>
+
+                        {/* 周期阶段 - 按钮组 */}
+                        <div>
+                          <label style={{ color: '#888', fontSize: '11px', display: 'block', marginBottom: '8px' }}>
+                            {t('onboarding.cycleLabel')}
+                          </label>
+                          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                            {t('onboarding.cycleOptions').map(item => (
+                              <button
+                                key={item}
+                                onClick={() => setCycleDay(cycleDay === item ? '' : item)}
+                                style={{
+                                  padding: '6px 14px',
+                                  borderRadius: '20px',
+                                  fontSize: '12px',
+                                  cursor: 'pointer',
+                                  background: cycleDay === item ? '#d32f2f' : '#111',
+                                  color: cycleDay === item ? '#fff' : '#888',
+                                  border: cycleDay === item ? 'none' : '1.5px solid #333'
+                                }}
+                              >
+                                {item}
+                              </button>
+                            ))}
+                          </div>
                         </div>
                       </div>
 
-                      {/* 既往诊断 */}
+                      {/* ===== 既往诊断 ===== */}
                       <div>
-                        <label style={{ color: '#888', fontSize: '11px', display: 'block', marginBottom: '6px' }}>{t('onboarding.diagnosisLabel')}</label>
-                        <select value={medicalBackground.diagnosed} onChange={(e) => setMedicalBackground({ ...medicalBackground, diagnosed: e.target.value })}
-                          style={{ width: '100%', padding: '10px', background: '#111', color: '#fff', border: '1.5px solid #333', borderRadius: '12px', fontSize: '12px' }}>
-                          {Object.entries(t('onboarding.diagnosisOptions')).map(([value, label]) => (<option key={value} value={value}>{label}</option>))}
+                        <label style={{ color: '#888', fontSize: '11px', display: 'block', marginBottom: '6px' }}>
+                          {t('onboarding.diagnosisLabel')}
+                        </label>
+                        <select
+                          value={medicalBackground.diagnosed}
+                          onChange={(e) => setMedicalBackground({ ...medicalBackground, diagnosed: e.target.value })}
+                          style={{
+                            width: '100%',
+                            padding: '10px',
+                            background: '#111',
+                            color: '#fff',
+                            border: '1.5px solid #333',
+                            borderRadius: '12px',
+                            fontSize: '12px'
+                          }}
+                        >
+                          {Object.entries(t('onboarding.diagnosisOptions')).map(([value, label]) => (
+                            <option key={value} value={value}>{label}</option>
+                          ))}
                         </select>
                         {medicalBackground.diagnosed === 'other' && (
-                          <input type="text" placeholder={t('onboarding.otherDiagnosisPlaceholder')} value={medicalBackground.otherDiagnosis || ''}
+                          <input
+                            type="text"
+                            placeholder={t('onboarding.otherDiagnosisPlaceholder')}
+                            value={medicalBackground.otherDiagnosis || ''}
                             onChange={(e) => setMedicalBackground({ ...medicalBackground, otherDiagnosis: e.target.value })}
-                            style={{ width: '100%', marginTop: '8px', padding: '10px', background: '#111', color: '#fff', border: '1.5px solid #333', borderRadius: '12px', fontSize: '12px' }} />
+                            style={{
+                              width: '100%',
+                              marginTop: '8px',
+                              padding: '10px',
+                              background: '#111',
+                              color: '#fff',
+                              border: '1.5px solid #333',
+                              borderRadius: '12px',
+                              fontSize: '12px'
+                            }}
+                          />
                         )}
                       </div>
 
-                      {/* 药物过敏史 */}
+                      {/* ===== 药物过敏史 ===== */}
                       <div>
-                        <label style={{ color: '#888', fontSize: '11px', display: 'block', marginBottom: '6px' }}>{t('onboarding.allergyLabel')}</label>
-                        <select value={medicalBackground.allergies} onChange={(e) => setMedicalBackground({ ...medicalBackground, allergies: e.target.value })}
-                          style={{ width: '100%', padding: '10px', background: '#111', color: '#fff', border: '1.5px solid #333', borderRadius: '12px', fontSize: '12px' }}>
-                          {Object.entries(t('onboarding.allergyOptions')).map(([value, label]) => (<option key={value} value={value}>{label}</option>))}
+                        <label style={{ color: '#888', fontSize: '11px', display: 'block', marginBottom: '6px' }}>
+                          {t('onboarding.allergyLabel')}
+                        </label>
+                        <select
+                          value={medicalBackground.allergies}
+                          onChange={(e) => setMedicalBackground({ ...medicalBackground, allergies: e.target.value })}
+                          style={{
+                            width: '100%',
+                            padding: '10px',
+                            background: '#111',
+                            color: '#fff',
+                            border: '1.5px solid #333',
+                            borderRadius: '12px',
+                            fontSize: '12px'
+                          }}
+                        >
+                          {Object.entries(t('onboarding.allergyOptions')).map(([value, label]) => (
+                            <option key={value} value={value}>{label}</option>
+                          ))}
                         </select>
                         {medicalBackground.allergies === 'other' && (
-                          <input type="text" placeholder={t('onboarding.otherAllergiesPlaceholder')} value={medicalBackground.otherAllergies || ''}
+                          <input
+                            type="text"
+                            placeholder={t('onboarding.otherAllergiesPlaceholder')}
+                            value={medicalBackground.otherAllergies || ''}
                             onChange={(e) => setMedicalBackground({ ...medicalBackground, otherAllergies: e.target.value })}
-                            style={{ width: '100%', marginTop: '8px', padding: '10px', background: '#111', color: '#fff', border: '1.5px solid #333', borderRadius: '12px', fontSize: '12px' }} />
+                            style={{
+                              width: '100%',
+                              marginTop: '8px',
+                              padding: '10px',
+                              background: '#111',
+                              color: '#fff',
+                              border: '1.5px solid #333',
+                              borderRadius: '12px',
+                              fontSize: '12px'
+                            }}
+                          />
                         )}
                       </div>
 
-                      {/* 手术史 + 家族史 - 两列 */}
+                      {/* ===== 手术史 + 家族史（多选） ===== */}
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                        {/* 手术史 */}
                         <div>
-                          <label style={{ color: '#888', fontSize: '11px', display: 'block', marginBottom: '6px' }}>{t('onboarding.surgicalHistoryLabel')}</label>
-                          <select value={medicalBackground.surgicalHistory} onChange={(e) => setMedicalBackground({ ...medicalBackground, surgicalHistory: e.target.value })}
-                            style={{ width: '100%', padding: '10px', background: '#111', color: '#fff', border: '1.5px solid #333', borderRadius: '12px', fontSize: '12px' }}>
-                            {Object.entries(t('onboarding.surgicalHistoryOptions')).map(([value, label]) => (<option key={value} value={value}>{label}</option>))}
+                          <label style={{ color: '#888', fontSize: '11px', display: 'block', marginBottom: '6px' }}>
+                            {t('onboarding.surgicalHistoryLabel')}
+                          </label>
+                          <select
+                            value={medicalBackground.surgicalHistory}
+                            onChange={(e) => setMedicalBackground({ ...medicalBackground, surgicalHistory: e.target.value })}
+                            style={{
+                              width: '100%',
+                              padding: '10px',
+                              background: '#111',
+                              color: '#fff',
+                              border: '1.5px solid #333',
+                              borderRadius: '12px',
+                              fontSize: '12px'
+                            }}
+                          >
+                            {Object.entries(t('onboarding.surgicalHistoryOptions')).map(([value, label]) => (
+                              <option key={value} value={value}>{label}</option>
+                            ))}
                           </select>
                         </div>
-                        <div>
-                          <label style={{ color: '#888', fontSize: '11px', display: 'block', marginBottom: '6px' }}>{t('onboarding.familyHistoryLabel')}</label>
-                          <select value={medicalBackground.familyHistory} onChange={(e) => setMedicalBackground({ ...medicalBackground, familyHistory: e.target.value })}
-                            style={{ width: '100%', padding: '10px', background: '#111', color: '#fff', border: '1.5px solid #333', borderRadius: '12px', fontSize: '12px' }}>
-                            {Object.entries(t('onboarding.familyHistoryOptions')).map(([value, label]) => (<option key={value} value={value}>{label}</option>))}
-                          </select>
-                        </div>
+
+                        {/* 家族史 - 多选 */}
+                        <CollapsibleMultiSelect
+                          label={t('onboarding.familyHistoryMulti')}
+                          options={[
+                            { value: 'mother', label: t('onboarding.motherHistory') || '母亲有痛经史' },
+                            { value: 'sister', label: t('onboarding.sisterHistory') || '姐妹有痛经史' },
+                            { value: 'grandmother', label: t('onboarding.grandmotherHistory') || '祖母/外祖母有痛经史' },
+                            { value: 'none', label: '无' },
+                            { value: 'unknown', label: '不清楚' }
+                          ]}
+                          selectedValues={medicalBackground.familyHistoryArr || []}
+                          onChange={(newValues) => setMedicalBackground({ ...medicalBackground, familyHistoryArr: newValues })}
+                          placeholder={t('onboarding.pleaseSelect') || '请选择（可选）'}
+                        />
                       </div>
 
-                      {/* 生育史 */}
-                      <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: '12px', padding: '10px', border: '1px dashed #333' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                          <label style={{ color: '#888', fontSize: '11px', margin: 0 }}>{t('onboarding.reproductiveHistoryLabel')}</label>
-                          <span style={{ color: '#666', fontSize: '10px' }}>{t('onboarding.optional')}</span>
-                        </div>
-                        <select value={medicalBackground.reproductiveHistory} onChange={(e) => setMedicalBackground({ ...medicalBackground, reproductiveHistory: e.target.value })}
-                          style={{ width: '100%', padding: '10px', background: '#111', color: '#fff', border: '1.5px solid #333', borderRadius: '12px', fontSize: '12px' }}>
-                          {Object.entries(t('onboarding.reproductiveHistoryOptions')).map(([value, label]) => (<option key={value} value={value}>{label}</option>))}
-                        </select>
-                        <p style={{ color: '#555', fontSize: '10px', margin: '6px 0 0 0' }}>{t('onboarding.reproductiveHistoryHint')}</p>
-                      </div>
+                      {/* ===== 生育史 - 多选 ===== */}
+                      <CollapsibleMultiSelect
+                        label={t('onboarding.reproductiveHistoryMulti')}
+                        options={[
+                          { value: 'nulliparous', label: t('onboarding.nulliparous') || '未生育' },
+                          { value: 'pregnant', label: t('onboarding.pregnant') || '已孕（未生产）' },
+                          { value: 'parous', label: t('onboarding.parous') || '已生育' },
+                          { value: 'spontaneousAbortion', label: t('onboarding.spontaneousAbortion') || '有过自然流产' },
+                          { value: 'inducedAbortion', label: t('onboarding.inducedAbortion') || '有过人工/药物终止妊娠' },
+                          { value: 'multiple', label: t('onboarding.multiple') || '多次生育' }
+                        ]}
+                        selectedValues={medicalBackground.reproductiveHistoryArr || []}
+                        onChange={(newValues) => setMedicalBackground({ ...medicalBackground, reproductiveHistoryArr: newValues })}
+                        placeholder={t('onboarding.pleaseSelect') || '请选择（可选）'}
+                      />
                     </div>
                   </div>
                 )}
@@ -2353,7 +2998,6 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
               </div>
             </div>
           )}
-
           {/* === Result 结果页面 === */}
           {page === "result" && (() => {
             try {
@@ -2580,47 +3224,135 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
                     {identity === 'self' && (
                       <>
                         <h3 style={{ color: '#9c27b0', margin: '0 0 15px 0' }}>{t('result.self.title')}</h3>
-                        <p style={{ color: '#ccc', fontSize: '13px', lineHeight: '1.6', marginBottom: '15px' }}> {t('result.self.comfort')} </p>
-                        <div style={{ background: 'rgba(156,39,176,0.1)', padding: '12px', borderRadius: '8px', borderLeft: '3px solid #9c27b0' }}>
-                          {/* 关键修复：添加 whiteSpace 属性 */}
-                          <div style={{ color: '#e1bee7', fontSize: '13px', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>
-                            {getEditedOrDefault('selfCare', content.selfCare)}
-                          </div>
+                        <p style={{ color: '#ccc', fontSize: '13px', lineHeight: '1.6', marginBottom: '15px' }}>
+                          {t('result.self.comfort')}
+                        </p>
+
+                        {/* 可点击的自愈建议卡片列表 */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                          {[
+                            { key: 'breathing', icon: '🌬️', title: '疗愈呼吸法', subtitle: '4-7-8呼吸法，缓解紧张', color: '#4caf50' },
+                            { key: 'heatPack', icon: '🔥', title: '热敷疗法', subtitle: '温暖小腹，缓解痉挛', color: '#ff9800' },
+                            { key: 'meditation', icon: '🧘', title: '正念冥想', subtitle: '接纳疼痛，平静内心', color: '#9c27b0' },
+                            { key: 'warmDrink', icon: '🍵', title: '温暖饮品', subtitle: '红糖姜茶，温暖身心', color: '#f44336' }
+                          ].map((tip, index) => (
+                            <div
+                              key={index}
+                              onClick={() => {
+                                setHealingTipType(tip.key);
+                                setShowHealingModal(true);
+                              }}
+                              style={{
+                                background: 'rgba(156,39,176,0.1)',
+                                padding: '14px 16px',
+                                borderRadius: '12px',
+                                borderLeft: `3px solid ${tip.color}`,
+                                cursor: 'pointer',
+                                transition: 'transform 0.2s, background 0.2s'
+                              }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                <span style={{ fontSize: '24px' }}>{tip.icon}</span>
+                                <div>
+                                  <div style={{ color: '#fff', fontWeight: 'bold', fontSize: '14px' }}>{tip.title}</div>
+                                  <div style={{ color: '#ccc', fontSize: '12px', marginTop: '4px' }}>{tip.subtitle}</div>
+                                </div>
+                                <span style={{ marginLeft: 'auto', color: '#666' }}>›</span>
+                              </div>
+                            </div>
+                          ))}
                         </div>
+
                         <button
                           onClick={() => handleCopy(getEditedOrDefault('selfCare', content.selfCare))}
-                          style={{ marginTop: '15px', width: '100%', padding: '10px', background: 'transparent', border: '1px dashed #9c27b0', color: '#e1bee7', borderRadius: '8px', cursor: 'pointer' }}
+                          style={{ marginTop: '20px', width: '100%', padding: '10px', background: 'transparent', border: '1px dashed #9c27b0', color: '#e1bee7', borderRadius: '8px', cursor: 'pointer' }}
                         >
                           {t('result.self.copyAdvice')}
                         </button>
-                        {/* AI 继续优化区域 */}
-                        <div style={{ marginTop: '25px', paddingTop: '15px', borderTop: '1px solid #333' }}>
-                          <p style={{ color: '#888', fontSize: '12px', margin: '0 0 10px 0' }}>{t('result.refine.prompt')}</p>
-                          <div style={{ display: 'flex', gap: '8px' }}>
-                            <input
-                              placeholder={getRefinePlaceholder('self')}
-                              value={refineInput}
-                              onChange={(e) => setRefineInput(e.target.value)}
-                              style={{ flex: 1, background: '#111', border: '1px solid #333', color: '#fff', borderRadius: '8px', padding: '10px', fontSize: '12px' }}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') handleRefine('selfcare');
-                              }}
-                            />
+                      </>
+                    )}
+                    {/* === 内联 HealingModal === */}
+                    {showHealingModal && (() => {
+                      const healingContentMap = {
+                        breathing: {
+                          title: "🌬️ 疗愈呼吸法",
+                          description: "通过深长的腹式呼吸，帮助身体放松，缓解疼痛带来的紧张感。",
+                          steps: "① 找一个安静舒适的地方坐下或躺下\n② 将一只手放在腹部，感受呼吸时腹部的起伏\n③ 吸气4秒，感受腹部像气球一样鼓起\n④ 屏息4秒，让氧气充分进入血液\n⑤ 呼气6秒，感受腹部回落\n⑥ 重复10-15次，感受身体的放松"
+                        },
+                        heatPack: {
+                          title: "🔥 热敷疗法",
+                          description: "温热能够促进局部血液循环，缓解肌肉痉挛，是缓解痛经最有效的方法之一。",
+                          steps: "① 准备热水袋或电热宝（40-45°C为宜）\n② 用毛巾包裹，避免直接接触皮肤烫伤\n③ 敷在小腹或后腰部位\n④ 每次15-20分钟\n⑤ 每天可敷3-4次\n⑥ 注意多喝水，避免脱水"
+                        },
+                        meditation: {
+                          title: "🧘 正念冥想",
+                          description: "将注意力从疼痛中转移，接受当下的感受而不加评判，减轻疼痛带来的心理负担。",
+                          steps: "① 找个安静的地方，舒适地坐下\n② 闭上眼睛，专注于呼吸\n③ 当注意力飘走时，温柔地带回呼吸\n④ 感受疼痛但不评判它\n⑤ 想象疼痛像云一样飘过\n⑥ 每次5-10分钟，慢慢增加时间"
+                        },
+                        warmDrink: {
+                          title: "🍵 温暖饮品",
+                          description: "温热的饮品不仅能温暖身体，还能安抚情绪，是自愈的重要一环。",
+                          steps: "① 红糖姜茶：生姜3片+红糖1勺+热水\n② 桂圆红枣茶：桂圆5颗+红枣3颗\n③ 温牛奶加蜂蜜\n④ 避免冷饮和咖啡因\n⑤ 小口慢饮，感受温暖\n⑥ 每天喝2-3杯"
+                        }
+                      };
+                      const healingContent = healingContentMap[healingTipType];
+                      if (!healingContent) return null;
+
+                      return (
+                        <div style={{
+                          position: 'fixed',
+                          zIndex: 1001,
+                          top: 0, left: 0,
+                          width: '100vw', height: '100vh',
+                          background: 'rgba(0,0,0,0.95)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          padding: '20px',
+                          boxSizing: 'border-box'
+                        }} onClick={() => setShowHealingModal(false)}>
+                          <div style={{
+                            background: '#1a1a1a',
+                            borderRadius: '24px',
+                            maxWidth: '400px',
+                            width: '100%',
+                            maxHeight: '80vh',
+                            overflowY: 'auto',
+                            padding: '24px',
+                            boxSizing: 'border-box'
+                          }} onClick={e => e.stopPropagation()}>
+                            <h3 style={{ color: '#fff', marginBottom: '16px', fontSize: '20px' }}>{healingContent.title}</h3>
+                            <p style={{ color: '#ccc', lineHeight: '1.6', fontSize: '14px' }}>{healingContent.description}</p>
+
+                            <div style={{ marginTop: '20px' }}>
+                              <h4 style={{ color: '#4caf50', marginBottom: '12px', fontSize: '14px' }}>📋 详细步骤</h4>
+                              <div style={{ color: '#aaa', lineHeight: '1.8', fontSize: '13px' }}>
+                                {healingContent.steps.split('\n').map((step, i) => (
+                                  <div key={i} style={{ marginBottom: '10px' }}>{step}</div>
+                                ))}
+                              </div>
+                            </div>
+
                             <button
-                              onClick={() => handleRefine('selfcare')}
-                              disabled={refiningField === 'selfcare'}
+                              onClick={() => setShowHealingModal(false)}
                               style={{
-                                background: refiningField === 'selfcare' ? '#555' : '#d32f2f',
-                                color: '#fff', border: 'none', borderRadius: '8px', padding: '0 15px',
-                                cursor: refiningField === 'selfcare' ? 'not-allowed' : 'pointer',
-                                fontSize: '12px', whiteSpace: 'nowrap'
-                              }}>
-                              {refiningField === 'selfcare' ? t('result.refine.optimizing') : t('result.refine.optimize')}
+                                width: '100%',
+                                padding: '12px',
+                                marginTop: '12px',
+                                background: 'transparent',
+                                border: '1px solid #444',
+                                borderRadius: '30px',
+                                color: '#888',
+                                cursor: 'pointer',
+                                fontSize: '14px'
+                              }}
+                            >
+                              关闭
                             </button>
                           </div>
                         </div>
-                      </>
-                    )}
+                      );
+                    })()}
                   </div>
 
                   <div style={{ display: 'flex', gap: '10px', width: '100%', maxWidth: '350px', marginTop: '30px', marginBottom: '40px' }}>
@@ -2869,98 +3601,455 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
           )}
 
           {/* --- History (疼痛日记：分类折叠) --- */}
-          {page === "history" && (
-            <div style={{
-              pointerEvents: 'auto',
-              background: '#0a0a0a',
-              width: '100vw',
-              height: '100vh',
-              overflowY: 'auto',
-              padding: '20px',
-              boxSizing: 'border-box',
-              WebkitOverflowScrolling: 'touch'
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', position: 'sticky', top: 0, background: '#0a0a0a', zIndex: 10, paddingBottom: '10px' }}>
-                <h2 style={{ color: '#fff', margin: 0 }}>{t('history.title')}</h2>
-                <button
-                  style={{
-                    margin: 0,
-                    padding: '4px 10px',
-                    width: 'auto',
-                    background: '#d32f2f',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: '12px',  // 柔和圆角
-                    fontSize: '11px',      // 更小字体
-                    cursor: 'pointer',
-                    lineHeight: '1.2'
-                  }}
-                  onClick={exportHistoryPDF}
-                >
-                  {t('history.export')}
-                </button>
-                <button className="retry-btn" style={{ margin: 0, padding: '6px 15px', width: 'auto', fontSize: '11px' }} onClick={() => setPage('onboarding')}>
-                  {t('history.back')}
-                </button>
-              </div>
+          {page === "history" && (() => {
+            // ========== 日历相关状态和函数 ==========
+            const [calendarDate, setCalendarDate] = useState(new Date());
+            const [selectedDate, setSelectedDate] = useState(null);
+            const [selectedDateRecords, setSelectedDateRecords] = useState([]);
+            const [showGroupedView, setShowGroupedView] = useState(false);
+            const [menstrualDates, setMenstrualDates] = useState([]); // 可以后续从用户数据中获取经期标记
 
-              {/* 趋势概览 */}
-              <TrendSummary history={history} />
+            // 获取月份的天数
+            const getDaysInMonth = (year, month) => {
+              return new Date(year, month + 1, 0).getDate();
+            };
 
-              {history.length === 0 ? (
-                <div style={{ textAlign: 'center', color: '#666', marginTop: '100px' }}>
-                  {t('history.empty')}
-                </div>
-              ) : (
-                Object.entries(groupedHistory).map(([month, records]) => (
-                  <div key={month} style={{ marginBottom: '20px' }}>
-                    {/* 月份标题头 - 点击切换折叠 */}
-                    <div
-                      onClick={() => toggleMonth(month)}
+            // 获取当月第一天是星期几
+            const getFirstDayOfMonth = (year, month) => {
+              return new Date(year, month, 1).getDay();
+            };
+
+            // 格式化日期为 YYYY-MM-DD
+            const formatDateKey = (year, month, day) => {
+              return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            };
+
+            // 检查某天是否有记录
+            const hasRecordOnDate = (year, month, day) => {
+              const dateStr = `${year}/${month + 1}/${day}`;
+              return history.some(h => h.date === dateStr);
+            };
+
+            // 获取某天的记录
+            const getRecordsOnDate = (year, month, day) => {
+              const dateStr = `${year}/${month + 1}/${day}`;
+              return history.filter(h => h.date === dateStr);
+            };
+
+            // 渲染日历
+            const renderCalendar = () => {
+              const year = calendarDate.getFullYear();
+              const month = calendarDate.getMonth();
+              const daysInMonth = getDaysInMonth(year, month);
+              const firstDay = getFirstDayOfMonth(year, month);
+              const today = new Date();
+              const todayStr = `${today.getFullYear()}/${today.getMonth() + 1}/${today.getDate()}`;
+
+              const days = [];
+
+              // 填充空白格子
+              for (let i = 0; i < firstDay; i++) {
+                days.push(
+                  <div key={`empty-${i}`} style={{
+                    width: '14.28%',
+                    padding: '8px',
+                    boxSizing: 'border-box'
+                  }} />
+                );
+              }
+
+              // 填充日期
+              for (let d = 1; d <= daysInMonth; d++) {
+                const dateKey = formatDateKey(year, month, d);
+                const hasRecord = hasRecordOnDate(year, month, d);
+                const isSelected = selectedDate === dateKey;
+                const isToday = `${year}/${month + 1}/${d}` === todayStr;
+                const isMenstrual = menstrualDates.includes(dateKey);
+
+                days.push(
+                  <div
+                    key={d}
+                    onClick={() => {
+                      setSelectedDate(dateKey);
+                      const records = getRecordsOnDate(year, month, d);
+                      setSelectedDateRecords(records);
+                    }}
+                    style={{
+                      width: '14.28%',
+                      padding: '8px',
+                      textAlign: 'center',
+                      cursor: 'pointer',
+                      position: 'relative',
+                      boxSizing: 'border-box'
+                    }}
+                  >
+                    <div style={{
+                      width: '36px',
+                      height: '36px',
+                      margin: '0 auto',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      borderRadius: '50%',
+                      background: isSelected ? '#d32f2f' : (isToday ? 'rgba(211, 47, 47, 0.3)' : 'transparent'),
+                      color: isSelected ? '#fff' : (isMenstrual ? '#ffcdd2' : (isToday ? '#d32f2f' : '#888')),
+                      fontWeight: isSelected ? 'bold' : (isToday ? 'bold' : 'normal'),
+                      fontSize: '14px'
+                    }}>
+                      {d}
+                    </div>
+                    {hasRecord && !isSelected && (
+                      <div style={{
+                        position: 'absolute',
+                        bottom: '4px',
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                        width: '5px',
+                        height: '5px',
+                        borderRadius: '50%',
+                        background: '#d32f2f'
+                      }} />
+                    )}
+                  </div>
+                );
+              }
+
+              return days;
+            };
+
+            // 按年月分组历史记录（用于分组视图）
+            const groupedHistory = history.reduce((acc, item) => {
+              const dateParts = item.date.split('/');
+              const monthKey = `${dateParts[0]}年${dateParts[1]}月`;
+              if (!acc[monthKey]) acc[monthKey] = [];
+              acc[monthKey].push(item);
+              return acc;
+            }, {});
+
+            // 月份折叠状态
+            const [collapsedMonths, setCollapsedMonths] = useState({});
+
+            const toggleMonth = (month) => {
+              setCollapsedMonths(prev => ({
+                ...prev,
+                [month]: !prev[month]
+              }));
+            };
+
+            return (
+              <div style={{
+                pointerEvents: 'auto',
+                background: '#0a0a0a',
+                width: '100vw',
+                minHeight: '100vh',
+                overflowY: 'auto',
+                padding: '20px',
+                paddingBottom: '100px',
+                boxSizing: 'border-box'
+              }}>
+                {/* 头部 */}
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginBottom: '20px',
+                  position: 'sticky',
+                  top: 0,
+                  background: '#0a0a0a',
+                  zIndex: 10,
+                  paddingBottom: '10px'
+                }}>
+                  <h2 style={{ color: '#fff', margin: 0, fontSize: '1.2rem' }}>{t('history.title')}</h2>
+                  <div style={{ display: 'flex', gap: '12px' }}>
+                    <button
+                      onClick={exportHistoryPDF}
                       style={{
-                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                        padding: '12px 15px', background: '#1a1a1a', borderRadius: '10px',
-                        borderLeft: '4px solid #d32f2f', cursor: 'pointer', marginBottom: '10px'
+                        padding: '6px 12px',
+                        background: '#d32f2f',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '20px',
+                        fontSize: '12px',
+                        cursor: 'pointer'
                       }}
                     >
-                      <span style={{ color: '#fff', fontWeight: 'bold' }}>{month}</span>
-                      <span style={{ color: '#666', fontSize: '12px' }}>
-                        {t('history.records', { count: records.length })} {collapsedMonths[month] ? '▼' : '▲'}
-                      </span>
-                    </div>
+                      {t('history.export')}
+                    </button>
+                    <button
+                      onClick={() => setPage('onboarding')}
+                      style={{
+                        padding: '6px 12px',
+                        background: '#333',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '20px',
+                        fontSize: '12px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {t('history.back')}
+                    </button>
+                  </div>
+                </div>
 
-                    {/* 记录列表内容 - 受折叠状态控制 */}
-                    {!collapsedMonths[month] && (
+                {/* 趋势概览 */}
+                <TrendSummary history={history} />
+
+                {/* 日历 */}
+                <div style={{
+                  background: '#1a1a1a',
+                  borderRadius: '20px',
+                  padding: '16px',
+                  marginBottom: '20px'
+                }}>
+                  {/* 月份导航 */}
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    marginBottom: '20px'
+                  }}>
+                    <button
+                      onClick={() => setCalendarDate(new Date(calendarDate.getFullYear(), calendarDate.getMonth() - 1, 1))}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#fff',
+                        fontSize: '24px',
+                        cursor: 'pointer',
+                        padding: '0 12px'
+                      }}
+                    >
+                      ‹
+                    </button>
+                    <span style={{ color: '#fff', fontWeight: 'bold', fontSize: '16px' }}>
+                      {calendarDate.getFullYear()}年 {calendarDate.getMonth() + 1}月
+                    </span>
+                    <button
+                      onClick={() => setCalendarDate(new Date(calendarDate.getFullYear(), calendarDate.getMonth() + 1, 1))}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#fff',
+                        fontSize: '24px',
+                        cursor: 'pointer',
+                        padding: '0 12px'
+                      }}
+                    >
+                      ›
+                    </button>
+                  </div>
+
+                  {/* 星期行 */}
+                  <div style={{ display: 'flex', marginBottom: '12px' }}>
+                    {['日', '一', '二', '三', '四', '五', '六'].map(day => (
+                      <div key={day} style={{
+                        width: '14.28%',
+                        textAlign: 'center',
+                        color: day === '日' || day === '六' ? '#d32f2f' : '#666',
+                        fontSize: '12px',
+                        fontWeight: day === '日' || day === '六' ? 'bold' : 'normal'
+                      }}>
+                        {day}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* 日期网格 */}
+                  <div style={{ display: 'flex', flexWrap: 'wrap' }}>
+                    {renderCalendar()}
+                  </div>
+                </div>
+
+                {/* 选中日期的记录列表 */}
+                {selectedDate && (
+                  <div style={{ marginTop: '20px' }}>
+                    <h3 style={{ color: '#fff', fontSize: '14px', marginBottom: '12px' }}>
+                      📅 {selectedDate} 的记录
+                    </h3>
+                    {selectedDateRecords.length === 0 ? (
+                      <div style={{
+                        background: '#1c1c1c',
+                        padding: '30px 20px',
+                        borderRadius: '12px',
+                        textAlign: 'center',
+                        color: '#666',
+                        fontSize: '13px'
+                      }}>
+                        🌱 {t('history.noRecordThisDay')}
+                      </div>
+                    ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                        {records.map(h => (
+                        {selectedDateRecords.map(record => (
                           <div
-                            key={h.id}
-                            onClick={() => setViewingDiary(h)}
+                            key={record.id}
+                            onClick={() => setViewingDiary(record)}
                             style={{
-                              display: 'flex', alignItems: 'center', background: '#1c1c1c',
-                              padding: '12px', borderRadius: '12px', border: '1px solid #333',
-                              transition: 'transform 0.1s'
+                              display: 'flex',
+                              alignItems: 'center',
+                              background: '#1c1c1c',
+                              padding: '12px',
+                              borderRadius: '12px',
+                              cursor: 'pointer',
+                              transition: 'transform 0.1s, background 0.2s',
+                              border: '1px solid #333'
                             }}
+                            onMouseEnter={e => e.currentTarget.style.background = '#252525'}
+                            onMouseLeave={e => e.currentTarget.style.background = '#1c1c1c'}
                           >
-                            <img src={h.img} style={{ width: '55px', height: '55px', borderRadius: '8px', background: '#000', objectFit: 'cover' }} />
-                            <div style={{ marginLeft: '15px', flex: 1 }}>
-                              <div style={{ color: '#fff', fontSize: '14px', fontWeight: 'bold' }}>{h.date}</div>
-                              <div style={{ fontSize: '12px', color: '#888', marginTop: '4px' }}>
-                                {t(`brushes.${h.type}.label`)}
+                            <img
+                              src={record.img}
+                              style={{
+                                width: '50px',
+                                height: '50px',
+                                borderRadius: '8px',
+                                objectFit: 'cover',
+                                background: '#000'
+                              }}
+                              alt="pain map"
+                            />
+                            <div style={{ marginLeft: '12px', flex: 1 }}>
+                              <div style={{ color: '#fff', fontWeight: 'bold', fontSize: '14px' }}>
+                                {record.painName}
+                              </div>
+                              <div style={{ color: '#888', fontSize: '12px', marginTop: '4px' }}>
+                                {record.time}
                               </div>
                             </div>
-                            <span style={{ color: '#444' }}>›</span>
+                            <span style={{ color: '#666', fontSize: '18px' }}>›</span>
                           </div>
                         ))}
                       </div>
                     )}
                   </div>
-                ))
-              )}
-              {/* 留白底部，防止被遮挡 */}
-              <div style={{ height: '100px' }}></div>
-            </div>
-          )}
+                )}
+
+                {/* 全部记录（分组折叠视图） */}
+                {history.length > 0 && (
+                  <div style={{ marginTop: '30px' }}>
+                    <div style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      marginBottom: '12px',
+                      borderTop: '1px solid #222',
+                      paddingTop: '20px'
+                    }}>
+                      <h3 style={{ color: '#fff', fontSize: '14px', margin: 0 }}>
+                        📋 {t('history.allRecords')}
+                      </h3>
+                      <button
+                        onClick={() => setShowGroupedView(!showGroupedView)}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: '#4caf50',
+                          fontSize: '12px',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px'
+                        }}
+                      >
+                        {showGroupedView ? '▲ 收起' : '▼ 展开'}
+                      </button>
+                    </div>
+
+                    {showGroupedView && Object.entries(groupedHistory).map(([month, records]) => (
+                      <div key={month} style={{ marginBottom: '16px' }}>
+                        {/* 月份标题头 - 点击切换折叠 */}
+                        <div
+                          onClick={() => toggleMonth(month)}
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            padding: '10px 12px',
+                            background: '#151515',
+                            borderRadius: '10px',
+                            borderLeft: `3px solid ${collapsedMonths[month] ? '#666' : '#d32f2f'}`,
+                            cursor: 'pointer',
+                            marginBottom: '8px'
+                          }}
+                        >
+                          <span style={{ color: '#fff', fontSize: '13px', fontWeight: '500' }}>{month}</span>
+                          <span style={{ color: '#888', fontSize: '11px' }}>
+                            {records.length}条 {collapsedMonths[month] ? '▶' : '▼'}
+                          </span>
+                        </div>
+
+                        {/* 记录列表 - 受折叠状态控制 */}
+                        {!collapsedMonths[month] && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginLeft: '8px' }}>
+                            {records.map(record => (
+                              <div
+                                key={record.id}
+                                onClick={() => setViewingDiary(record)}
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  background: '#1c1c1c',
+                                  padding: '10px',
+                                  borderRadius: '10px',
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                <img
+                                  src={record.img}
+                                  style={{
+                                    width: '40px',
+                                    height: '40px',
+                                    borderRadius: '6px',
+                                    objectFit: 'cover',
+                                    background: '#000'
+                                  }}
+                                  alt=""
+                                />
+                                <div style={{ marginLeft: '12px', flex: 1 }}>
+                                  <div style={{ color: '#fff', fontSize: '13px', fontWeight: '500' }}>{record.date}</div>
+                                  <div style={{ fontSize: '11px', color: '#888', marginTop: '2px' }}>
+                                    {record.painName} · {record.time}
+                                  </div>
+                                </div>
+                                <span style={{ color: '#555' }}>›</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* 空状态 */}
+                {history.length === 0 && (
+                  <div style={{
+                    textAlign: 'center',
+                    color: '#666',
+                    marginTop: '60px',
+                    padding: '40px 20px'
+                  }}>
+                    <div style={{ fontSize: '48px', marginBottom: '16px' }}>📭</div>
+                    <p>{t('history.empty')}</p>
+                    <button
+                      onClick={() => setPage('canvas')}
+                      style={{
+                        marginTop: '20px',
+                        padding: '10px 24px',
+                        background: '#d32f2f',
+                        border: 'none',
+                        borderRadius: '30px',
+                        color: '#fff',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      🎨 去绘制第一张痛感图
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
           {/* 查看日记详情弹窗*/}
           {viewingDiary && (
             <div

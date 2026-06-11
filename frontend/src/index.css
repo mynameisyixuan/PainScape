@@ -84,7 +84,17 @@ body {
   max-width: 350px;
   margin-bottom: 40px;
 }
-
+.medical-label {
+    color: #888;
+    font-size: 12px;
+    display: block;
+    margin-bottom: 6px;
+    font-weight: normal;
+  }
+  .medical-value {
+    color: #fff;
+    font-size: 13px;
+  }
 .action-btn {
   flex: 1;
   padding: 14px;

@@ -69,7 +69,7 @@ const translations = {
       optional: "选填",
       reproductiveHistoryHint: "仅用于医疗参考，不会公开。可跳过。",
       cycleLabel: "📅 今天是月经第几天？（可选）",
-      cycleOptions: ["第1天", "第2天", "第3-5天", "排卵期痛"],
+      cycleOptions: ["经前", "第1天", "第2天", "第3-5天", "经后一周内"],
       diagnosisLabel: "既往诊断（可选）",
       diagnosisOptions: {
         "": "既往诊断（可选）",
@@ -125,13 +125,38 @@ const translations = {
       currentHistory: "现病史（选填）",
       menarcheAgeLabel: "初次月经年龄",
       menarcheAgePlaceholder: "如：13",
-      cycleRegularLabel: "月经周期是否规律",
-      cycleRegularOptions: {
-        "": "请选择（可选）",
-        regular: "规律（21-35天）",
-        irregular: "不规律（周期不稳定）",
-        unknown: "不清楚",
+      periodDurationLabel: "月经一般持续几天",
+      periodDurationOptions: {
+        "": "请选择",
+        "3": "3天",
+        "4": "4天",
+        "5": "5天",
+        "6": "6天",
+        "7": "7天",
+        "over7": "超过7天"
       },
+      cycleRegularOptions: {
+        "": "请选择",
+        regular: "规律（21-35天，周期稳定）",
+        irregular: "不规律（周期波动大）",
+        unsure: "不太确定"
+      },
+      lastPeriodLabel: "上一次月经是哪一天",
+      lastPeriodPlaceholder: "例如：2026-06-01",
+      cycleRegularDefinition: "规律：每次月经间隔天数相差不超过3-5天",
+      familyHistoryMulti: "家族史（可多选）",
+      motherHistory: "母亲有痛经史",
+      sisterHistory: "姐妹有痛经史",
+      grandmotherHistory: "祖母/外祖母有痛经史",
+      reproductiveHistoryMulti: "生育史（可多选）",
+      nulliparous: "未生育",
+      pregnant: "已孕（未生产）",
+      parous: "已生育",
+      spontaneousAbortion: "有过自然流产",
+      inducedAbortion: "有过人工/药物终止妊娠",
+      multiple: "多次生育",
+      menstrualHistoryTitle: "🌸 月经史",
+
       activityLabel: "体力活动量（选填）",
       activityOptions: {
         "": "请选择（可选）",
@@ -140,22 +165,30 @@ const translations = {
         moderate: "中等强度（规律运动）",
         active: "高强度（频繁运动）",
       },
-      lifestyleLabel: "生活习惯（选填）",
+      lifestyleTitle: "生活习惯（可多选）",
       lifestyleOptions: {
-        "": "请选择（可选）",
-        regular: "作息规律，饮食正常",
-        irregular: "作息不规律，常熬夜",
-        smoking: "有吸烟习惯",
-        alcohol: "常饮酒",
-        coldPref: "喜食生冷",
+         "": "请选择",
+        sleepDuration: "睡眠时长不足（少于7小时）",
+        sleepIrregular: "作息不规律（熬夜/倒班）",
+        smoking: "吸烟",
+        alcohol: "饮酒",
+        caffeine: "常喝咖啡/浓茶",
+        diet: "饮食偏好（可多选）",
       },
-      familyHistoryLabel: "家族史（选填）",
+      dietOptions: {
+         "": "请选择",
+        cold: "喜食生冷/冰饮",
+        spicy: "喜食辛辣",
+        meat: "偏肉食",
+        vegetarian: "素食",
+        weightLoss: "正在减重期",
+      },
+      familyHistoryLabel: "家族史（可多选）",
+       "": "请选择",
       familyHistoryOptions: {
-        "": "请选择（可选）",
-        none: "无家族痛经史",
-        mother: "母亲有严重痛经",
-        sister: "姐妹有严重痛经",
-        both: "多位女性亲属有痛经",
+        mother: "母亲有痛经史",
+        sister: "姐妹有痛经史",
+        none: "无",
         unknown: "不清楚",
       },
       psychosocialLabel: "心理社会因素（选填）",
@@ -165,14 +198,6 @@ const translations = {
         moderateStress: "适度压力",
         highStress: "压力大/焦虑",
         trauma: "有创伤经历",
-      },
-      reproductiveHistoryLabel: "生育史（选填）",
-      reproductiveHistoryOptions: {
-        "": "请选择（可选）",
-        nulliparous: "未生育",
-        parous: "已生育",
-        miscarriage: "有流产史",
-        multiple: "多次生育",
       },
       toneDescription: "生成结果将采用此语气",
       toneGentle: "🌿 温和",
@@ -193,7 +218,7 @@ const translations = {
 
     // ============ 画笔与颜色 ============
     brushes: {
-      twist: { label: "🌪️ 绞/拧", icon: "🌪️" },
+      twist: { label: "🌀 绞/拧", icon: "🌀" },
       pierce: { label: "⚡️ 荆/刺", icon: "⚡️" },
       heavy: { label: "🪨 坠/压", icon: "🪨" },
       wave: { label: "〰️ 胀/扩", icon: "〰️" },
@@ -328,6 +353,11 @@ const translations = {
     // ============ 日记详情 ============
     diary: {
       close: "关闭",
+      recordsOfDate: "{{date}} 的记录",
+      noRecordThisDay: "这一天没有疼痛记录",
+      allRecords: "全部记录",
+      showGrouped: "显示分组",
+      hideGrouped: "隐藏分组",
       recordFeelings: "📝 记录你的感受",
       feelingHint: "「语言在痛苦面前总是匮乏的，但每一种描述都是真实的。」",
       brushCount: "涂抹 {{count}} 次",
@@ -465,6 +495,35 @@ const translations = {
           "✨ 这是最耗费体力的痛感，优先静卧休息\n✨ 绝对避免腹部按摩，减少任何体位变化\n✨ 口服温蜂蜜水补充能量（勿空腹服药）\n✨ 用温和声音和自己对话：'我听见了，我在陪你'\n✨ 疼痛稍缓后，记录下这次发作的细节",
       },
     },
+    healing: {
+      breathing: {
+        title: "🌬️ 疗愈呼吸法",
+        description: "通过深长的腹式呼吸，帮助身体放松，缓解疼痛带来的紧张感。",
+        steps: "① 找一个安静舒适的地方坐下或躺下\n② 将一只手放在腹部，感受呼吸时腹部的起伏\n③ 吸气4秒，感受腹部像气球一样鼓起\n④ 屏息4秒，让氧气充分进入血液\n⑤ 呼气6秒，感受腹部回落\n⑥ 重复10-15次，感受身体的放松"
+      },
+      heatPack: {
+        title: "🔥 热敷疗法",
+        description: "温热能够促进局部血液循环，缓解肌肉痉挛，是缓解痛经最有效的方法之一。",
+        steps: "① 准备热水袋或电热宝（40-45°C为宜）\n② 用毛巾包裹，避免直接接触皮肤烫伤\n③ 敷在小腹或后腰部位\n④ 每次15-20分钟\n⑤ 每天可敷3-4次\n⑥ 注意多喝水，避免脱水"
+      },
+      meditation: {
+        title: "🧘 正念冥想",
+        description: "将注意力从疼痛中转移，接受当下的感受而不加评判，减轻疼痛带来的心理负担。",
+        steps: "① 找个安静的地方，舒适地坐下\n② 闭上眼睛，专注于呼吸\n③ 当注意力飘走时，温柔地带回呼吸\n④ 感受疼痛但不评判它\n⑤ 想象疼痛像云一样飘过\n⑥ 每次5-10分钟，慢慢增加时间"
+      },
+      warmDrink: {
+        title: "🍵 温暖饮品",
+        description: "温热的饮品不仅能温暖身体，还能安抚情绪，是自愈的重要一环。",
+        steps: "① 红糖姜茶：生姜3片+红糖1勺+热水\n② 桂圆红枣茶：桂圆5颗+红枣3颗\n③ 温牛奶加蜂蜜\n④ 避免冷饮和咖啡因\n⑤ 小口慢饮，感受温暖\n⑥ 每天喝2-3杯"
+      },
+      steps: "详细步骤",
+      close: "关闭",
+    },
+    hearing: {
+      playing: "播放中...",
+      startGuide: "开始语音引导",
+      stopGuide: "停止引导"
+    },
 
     // ============ AI 模板 - 伴侣行动 ============
     partnerActions: {
@@ -595,7 +654,7 @@ const translations = {
       optional: "Optional",
       reproductiveHistoryHint: "For medical reference only. Will not be shared. You may skip.",
       cycleLabel: "📅 What day of your period? (Optional)",
-      cycleOptions: ["Day 1", "Day 2", "Day 3-5", "Ovulation Pain"],
+      cycleOptions: ["Premenstrual","Day 1", "Day 2", "Day 3-5", "Ovulation Pain","Aftermenstrual"],
       diagnosisLabel: "Previous Diagnosis (Optional)",
       diagnosisOptions: {
         "": "Previous Diagnosis (Optional)",
@@ -668,12 +727,12 @@ const translations = {
       },
       lifestyleLabel: "Lifestyle & Habits (Optional)",
       lifestyleOptions: {
-        "": "Select...",
-        regular: "Regular sleep/diet",
-        irregular: "Irregular schedule",
+        sleepDuration: "Insufficient sleep (less than 7 hours)",
+        sleepIrregular: "Irregular sleep schedule",
         smoking: "Smoking",
         alcohol: "Alcohol consumption",
-        coldPref: "Cold food/drink preference",
+        caffeine: "Regular coffee/tea consumption",
+        diet: "Dietary Preferences",
       },
       familyHistoryLabel: "Family History (Optional)",
       familyHistoryOptions: {
@@ -684,6 +743,31 @@ const translations = {
         both: "Multiple family members",
         unknown: "Unknown",
       },
+      periodDurationLabel: "How many days does your period usually last?",
+      periodDurationOptions: {
+        "": "Select",
+        "3": "3 days",
+        "4": "4 days",
+        "5": "5 days",
+        "6": "6 days",
+        "7": "7 days",
+        "over7": "Over 7 days"
+      },
+      lastPeriodLabel: "When was your last period?",
+      lastPeriodPlaceholder: "e.g., 2026-06-01",
+      cycleRegularDefinition: "Regular: cycle length varies by ≤5 days",
+      familyHistoryMulti: "Family History (select all that apply)",
+      motherHistory: "Mother has history of dysmenorrhea",
+      sisterHistory: "Sister has history of dysmenorrhea",
+      grandmotherHistory: "Grandmother has history of dysmenorrhea",
+      reproductiveHistoryMulti: "Reproductive History (select all that apply)",
+      nulliparous: "Never given birth",
+      pregnant: "Pregnant (not yet given birth)",
+      parous: "Has given birth",
+      spontaneousAbortion: "History of spontaneous abortion/miscarriage",
+      inducedAbortion: "History of induced abortion/termination",
+      multiple: "Multiple births",
+      menstrualHistoryTitle: "🌸 Menstrual History",
       psychosocialLabel: "Psychosocial Factors (Optional)",
       psychosocialOptions: {
         "": "Select...",
@@ -720,7 +804,7 @@ const translations = {
     },
 
     brushes: {
-      twist: { label: "🌪️ Cramp", icon: "🌪️" },
+      twist: { label: "� Cramp", icon: "�" },
       pierce: { label: "⚡️ Stab", icon: "⚡️" },
       heavy: { label: "🪨 Sink", icon: "🪨" },
       wave: { label: "〰️ Fullness", icon: "〰️" },
@@ -856,6 +940,11 @@ const translations = {
 
     diary: {
       close: "Close",
+      recordsOfDate: "Records for {{date}}",
+      noRecordThisDay: "No pain records for this day",
+      allRecords: "All Records",
+      showGrouped: "Show Grouped",
+      hideGrouped: "Hide Grouped",
       brushCount: "{{count}} brush strokes",
       bodyFront: "Abdomen (Front)",
       bodyBack: "Lower Back",
@@ -993,6 +1082,30 @@ const translations = {
         selfCare:
           "✨ This is the most draining type of pain—prioritize absolute rest\n✨ Absolutely no abdominal massage, minimize any position changes\n✨ Sip warm honey water for energy (don't take meds on empty stomach)\n✨ Talk to yourself gently: 'I hear you, I'm here with you'\n✨ Once pain eases, jot down details of this episode",
       },
+    },
+    healing: {
+      breathing: {
+        title: "🌬️ Breathing Therapy",
+        description: "Deep abdominal breathing helps the body relax and relieves tension caused by pain.",
+        steps: "① Find a quiet, comfortable place to sit or lie down\n② Place one hand on your abdomen to feel its movement\n③ Inhale for 4 seconds, feeling your abdomen rise like a balloon\n④ Hold for 4 seconds to allow oxygen into your bloodstream\n⑤ Exhale for 6 seconds, feeling your abdomen fall\n⑥ Repeat 10-15 times, feeling your body relax"
+      },
+      heatPack: {
+        title: "🔥 Heat Therapy",
+        description: "Warmth promotes local circulation and relieves muscle spasms, one of the most effective remedies for dysmenorrhea.",
+        steps: "① Prepare a hot water bottle or heating pad (40-45°C)\n② Wrap with a towel to avoid direct skin contact\n③ Apply to lower abdomen or lower back\n④ 15-20 minutes per session\n⑤ Can be applied 3-4 times daily\n⑥ Stay hydrated, drink water"
+      },
+      meditation: {
+        title: "🧘 Mindfulness Meditation",
+        description: "Shift attention away from pain, accept present feelings without judgment, reducing the psychological burden of pain.",
+        steps: "① Find a quiet place and sit comfortably\n② Close your eyes and focus on breathing\n③ When mind wanders, gently bring it back to breath\n④ Feel the pain without judging it\n⑤ Imagine pain passing like clouds\n⑥ Start with 5-10 minutes, gradually increase"
+      },
+      warmDrink: {
+        title: "🍵 Warm Beverages",
+        description: "Warm drinks not only warm the body but also soothe the mind, an important part of self-care.",
+        steps: "① Ginger brown sugar tea: 3 slices ginger + 1 spoon brown sugar + hot water\n② Longan red date tea: 5 longans + 3 red dates\n③ Warm milk with honey\n④ Avoid cold drinks and caffeine\n⑤ Sip slowly, feel the warmth\n⑥ Drink 2-3 cups daily"
+      },
+      steps: "Steps",
+      close: "Close",
     },
 
     partnerActions: {
