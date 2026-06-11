@@ -217,12 +217,12 @@ const translations = {
 
     // ============ 画笔与颜色 ============
     brushes: {
-      twist: { label: "绞/拧", icon: " �️" },
-      pierce: { label: "荆/刺", icon: "🪡" },
-      heavy: { label: "坠/压", icon: "🪨" },
-      wave: { label: "胀/扩", icon: "⨀" },
-      scrape: { label: "刮/撕", icon: "🪒" },
-      eraser: { label: "橡皮", icon: "🧽" },
+      twist: { label: "绞/拧" },
+      pierce: { label: "荆/刺" },
+      heavy: { label: "坠/压"},
+      wave: { label: "胀/扩" },
+      scrape: { label: "刮/撕" },
+      eraser: { label: "橡皮"},
     },
     painNames: {
       twist: "绞痛",

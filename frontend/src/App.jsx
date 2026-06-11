@@ -3035,7 +3035,7 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
               const getRefinePlaceholder = (tabIdentity) => {
                 const isEn = targetLanguage === 'en';
                 switch (tabIdentity) {
-                  case 'partner': return isEn ? "e.g., Make it sound more urgent..." : "例如：语气更强烈一点，让他意识到严重性...";
+                  case 'partner': return isEn ? "e.g., Make it sound more urgent..." : "例如：语气更强烈一点，让Ta意识到严重性...";
                   case 'work': return isEn ? "e.g., Make it brief and extremely professional..." : "例如：语气更委婉客观，只说突发急病...";
                   case 'doctor': return isEn ? "e.g., Mention that Ibuprofen doesn't work..." : "例如：补充说明吃布洛芬没有任何缓解...";
                   case 'self': return isEn ? "e.g., Comfort me, I feel guilty for not working..." : "例如：给我一点心理安慰，我因为请假很内疚...";
@@ -3595,10 +3595,27 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
                       background: quickPainType === key ? '#d32f2f' : '#1e1e1e',
                       color: quickPainType === key ? '#fff' : '#888',
                       border: quickPainType === key ? '2px solid #d32f2f' : '1px solid #444',
-                      fontSize: '14px'
+                      fontSize: '14px',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '8px'
                     }}
                   >
-                    {BRUSHES[key].icon} {t(`painNames.${key}`)}
+                    {/* 根据 isImage 判断显示图片还是 emoji */}
+                    {BRUSHES[key].isImage ? (
+                      <img
+                        src={BRUSHES[key].icon}
+                        alt={BRUSHES[key].label}
+                        style={{
+                          width: '20px',
+                          height: '20px',
+                          verticalAlign: 'middle'
+                        }}
+                      />
+                    ) : (
+                      <span style={{ fontSize: '16px' }}>{BRUSHES[key].icon}</span>
+                    )}
+                    <span>{t(`painNames.${key}`)}</span>
                   </button>
                 ))}
               </div>
