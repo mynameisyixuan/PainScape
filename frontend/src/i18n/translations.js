@@ -141,13 +141,12 @@ const translations = {
         irregular: "不规律（周期波动大）",
         unsure: "不太确定"
       },
-      lastPeriodLabel: "上一次月经是哪一天",
+      lastPeriodLabel: "上一次月经开始是哪一天",
       lastPeriodPlaceholder: "例如：2026-06-01",
       cycleRegularDefinition: "规律：每次月经间隔天数相差不超过3-5天",
       familyHistoryMulti: "家族史（可多选）",
       motherHistory: "母亲有痛经史",
       sisterHistory: "姐妹有痛经史",
-      grandmotherHistory: "祖母/外祖母有痛经史",
       reproductiveHistoryMulti: "生育史（可多选）",
       nulliparous: "未生育",
       pregnant: "已孕（未生产）",
@@ -155,7 +154,7 @@ const translations = {
       spontaneousAbortion: "有过自然流产",
       inducedAbortion: "有过人工/药物终止妊娠",
       multiple: "多次生育",
-      menstrualHistoryTitle: "🌸 月经史",
+      menstrualHistoryTitle: "月经史",
 
       activityLabel: "体力活动量（选填）",
       activityOptions: {
