@@ -220,7 +220,7 @@ const translations = {
       twist: { label: "🌀 绞/拧", icon: "🌀" },
       pierce: { label: "🪡 荆/刺", icon: "🪡" },
       heavy: { label: "🪨 坠/压", icon: "🪨" },
-      wave: { label: "〰️ 胀/扩", icon: "〰️" },
+      wave: { label: "🫧 胀/扩", icon: "🫧" },
       scrape: { label: "🪒 刮/撕", icon: "🪒" },
       eraser: { label: "🧽 橡皮", icon: "🧽" },
     },
