@@ -36,7 +36,30 @@ const translations = {
         "这不是矫情，这是一场真切的生理型灾难。",
       ],
     },
-
+    modeSelection: {
+      title: "选择您的记录目的",
+      medicalTab: "🏥 就诊协助",
+      generalTab: "日常自愈",
+      confirmBtn: "确认并进入画布",
+      // 只展示画勾的特有功能
+      medicalFeatures: [
+        "📋 标准妇科门诊病理采集",
+        "🔬 智能生成现病史与报告",
+        "📍 人体腹部/腰骶精准解剖定位"
+      ],
+      generalFeatures: [
+        "👁️ 沉浸式盲画情绪发泄",
+        "🌿 经期自愈与呼吸干预指导",
+        "✉️ 伴侣通感说明书与请假模板"
+      ],
+      // 共同包含的底层支撑功能
+      commonFeatures: [
+        "📓 疼痛记录",
+        "📊 日历趋势",
+        "🌍 社群分享",
+        "💬 多语境转译"
+      ]
+    },
     // ============ Onboarding 页 ============
     onboarding: {
       languageLabel: "🌐 目标语言：",
@@ -196,7 +219,6 @@ const translations = {
         lowStress: "压力较小",
         moderateStress: "适度压力",
         highStress: "压力大/焦虑",
-        trauma: "有创伤经历",
       },
       toneDescription: "生成结果将采用此语气",
       toneGentle: "🌿 温和",
@@ -219,10 +241,10 @@ const translations = {
     brushes: {
       twist: { label: "绞/拧" },
       pierce: { label: "荆/刺" },
-      heavy: { label: "坠/压"},
+      heavy: { label: "坠/压" },
       wave: { label: "胀/扩" },
       scrape: { label: "刮/撕" },
-      eraser: { label: "橡皮"},
+      eraser: { label: "橡皮" },
     },
     painNames: {
       twist: "绞痛",
@@ -621,7 +643,28 @@ const translations = {
         "This is not melodrama; this is a genuine physiological catastrophe.",
       ],
     },
-
+    modeSelection: {
+      title: "Select Your Purpose",
+      medicalTab: "🏥 Medical Assist",
+      generalTab: "🎨 Self-Care",
+      confirmBtn: "Confirm & Enter Canvas",
+      medicalFeatures: [
+        "📋 Standard Gynecology History Intake",
+        "🔬 Auto Structured Case Reports",
+        "📍 Accurate Anatomical Mapping"
+      ],
+      generalFeatures: [
+        "👁️ Immersive Blind Draw Mode",
+        "🌿 Period Self-Care Coaching",
+        "✉️ Leave Request & Partner Guides"
+      ],
+      commonFeatures: [
+        "📓 Pain Log",
+        "📊 Calendar Trends",
+        "🌍 Community Share",
+        "💬 Translation Cards"
+      ]
+    },
     onboarding: {
       languageLabel: "🌐 Target Language:",
       chinese: "简体中文",
