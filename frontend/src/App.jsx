@@ -30,19 +30,23 @@ class PainParticle {
     const now = new Date();
     this.drawnAt = now.getTime();
     this.minuteOfDay = now.getHours() * 60 + now.getMinutes();
-
     if (type === 'pierce') {
-      let angle = heading + p5.random(-0.1, 0.1);
-      this.vel = p5.createVector(p5.cos(angle), p5.sin(angle));
-      this.vel.mult(p5.random(6, 18) * (0.5 + pressure));
-      this.size = p5.random(2, 5);
-      this.thorns = [];
-      let numThorns = p5.floor(p5.random(2, 5));
-      for (let i = 0; i < numThorns; i++) {
-        this.thorns.push({
-          distRatio: p5.random(0.3, 0.8),
-          angleOffset: p5.random([p5.random(0.4, 0.8), p5.random(-0.8, -0.4)]),
-          len: p5.random(8, 18)
+      let angle = heading + p5.random(-0.15, 0.15);
+      let thrust = p5.random(18, 36) * (0.6 + pressure); // 适当调整扎入深度，防止在屏幕上显得过大
+
+      this.pierceVec = p5.createVector(p5.cos(angle) * thrust, p5.sin(angle) * thrust);
+      this.vel = this.pierceVec.copy();
+
+      // === 【微调】：大幅减小基础宽度，使利刃变为针刺般纤细 ===
+      this.size = p5.random(1.8, 3.8);
+
+      // 稍微精简放射裂纹
+      this.fissures = [];
+      let numFissures = p5.floor(p5.random(3, 5));
+      for (let i = 0; i < numFissures; i++) {
+        this.fissures.push({
+          angle: angle + p5.random(-p5.PI * 0.7, p5.PI * 0.7),
+          len: p5.random(6, 16) * pressure // 略微收窄裂纹长度
         });
       }
     }
@@ -98,40 +102,60 @@ class PainParticle {
     }
 
     if (this.type === 'pierce') {
-      let endX = this.pos.x + this.vel.x; let endY = this.pos.y + this.vel.y;
+      let endX = this.pos.x + (this.pierceVec ? this.pierceVec.x : this.vel.x);
+      let endY = this.pos.y + (this.pierceVec ? this.pierceVec.y : this.vel.y);
+      let headingAngle = this.pierceVec ? this.pierceVec.heading() : this.vel.heading();
 
+      // === 【核心修改】：显式彻底关闭发光阴影，还原利刃无摩擦、干脆冷冽的物理切缘 ===
+      p.drawingContext.shadowBlur = 0;
+
+      // === 1. 细长针形主体（极度纤细，直击深处的刺穿感） ===
       p.noStroke();
-      p.fill(
-        Math.min(255, this.color[0] + 100),
-        Math.min(255, this.color[1] + 100),
-        Math.min(255, this.color[2] + 100),
-        220
-      );
+      // 使用更高对比度的亮冷色，边缘带有一丝暗红
+      p.fill(Math.min(255, this.color[0] + 160), Math.min(255, this.color[1] + 130), Math.min(255, this.color[2] + 130), 250);
       p.beginShape();
-      let perpAngle = this.vel.heading() + p.PI / 2;
-      let halfW = this.size / 2;
-      p.vertex(this.pos.x + p.cos(perpAngle) * halfW, this.pos.y + p.sin(perpAngle) * halfW);
-      p.vertex(this.pos.x - p.cos(perpAngle) * halfW, this.pos.y - p.sin(perpAngle) * halfW);
-      p.vertex(endX, endY);
+      let perpAngle = headingAngle + p.PI / 2;
+
+      // 宽度大幅压缩，使其更加钢针化
+      let bladeW = this.size * (0.25 + this.pressureScale * 0.3);
+
+      p.vertex(this.pos.x - p.cos(headingAngle) * 3, this.pos.y - p.sin(headingAngle) * 3);
+      p.vertex(this.pos.x + p.cos(perpAngle) * bladeW, this.pos.y + p.sin(perpAngle) * bladeW);
+      p.vertex(endX, endY); // 极其尖锐、冰冷的穿透终点
+      p.vertex(this.pos.x - p.cos(perpAngle) * bladeW, this.pos.y - p.sin(perpAngle) * bladeW);
       p.endShape(p.CLOSE);
 
-      p.fill(
-        this.color[0] * 0.7,
-        this.color[1] * 0.3,
-        this.color[2] * 0.3,
-        150 + (105 * this.pressureScale)
-      );
-      this.thorns.forEach(thorn => {
-        let rootX = this.pos.x + this.vel.x * thorn.distRatio;
-        let rootY = this.pos.y + this.vel.y * thorn.distRatio;
-        let thornEndX = rootX + p.cos(this.vel.heading() + thorn.angleOffset) * thorn.len;
-        let thornEndY = rootY + p.sin(this.vel.heading() + thorn.angleOffset) * thorn.len;
-        p.beginShape();
-        p.vertex(rootX + p.cos(perpAngle) * 1, rootY + p.sin(perpAngle) * 1);
-        p.vertex(rootX - p.cos(perpAngle) * 1, rootY - p.sin(perpAngle) * 1);
-        p.vertex(thornEndX, thornEndY);
-        p.endShape(p.CLOSE);
-      });
+      // === 2. 局部细密应激裂纹 ===
+      p.stroke(this.color[0] * 0.6, 0, 0, 180);
+      p.strokeWeight(0.8 * this.pressureScale);
+      p.noFill();
+      if (this.fissures) {
+        this.fissures.forEach(fis => {
+          let fEndX = this.pos.x + p.cos(fis.angle) * fis.len;
+          let fEndY = this.pos.y + p.sin(fis.angle) * fis.len;
+          p.beginShape();
+          p.vertex(this.pos.x, this.pos.y);
+          p.vertex(p.lerp(this.pos.x, fEndX, 0.5) + p.random(-1.5, 1.5), p.lerp(this.pos.y, fEndY, 0.5) + p.random(-1.5, 1.5));
+          p.vertex(fEndX, fEndY);
+          p.endShape();
+        });
+      }
+
+      // === 3. 极细微的组织溅点 ===
+      p.noStroke();
+      const numSplatters = Math.floor(3 + this.pressureScale * 4);
+      for (let sp = 0; sp < numSplatters; sp++) {
+        let spT = p.random(0.2, 1.0);
+        let baseX = p.lerp(this.pos.x, endX, spT);
+        let baseY = p.lerp(this.pos.y, endY, spT);
+        let spX = baseX + p.random(-8, 8) * this.pressureScale;
+        let spY = baseY + p.random(-8, 8) * this.pressureScale;
+
+        p.fill(this.color[0] * 0.8, 10, 10, 200 + p.random(-30, 30));
+        // 缩小血滴尺寸，避免杂乱
+        let splatSize = p.random(0.8, 2.2);
+        p.ellipse(spX, spY, splatSize, splatSize);
+      }
     }
 
     else if (this.type === 'heavy') {
@@ -1145,18 +1169,35 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
   const draw = (p5) => {
     p5.background(0);
     if (page !== 'canvas') return;
+
+    // === 检测点击是否来自于 Canvas，拦截 HTML 控件点击 ===
+    let isClickingCanvas = true;
+    if (p5.mouseEvent && p5.mouseEvent.target) {
+      isClickingCanvas = p5.mouseEvent.target.tagName === 'CANVAS';
+    }
+    if (p5.touchEvent && p5.touches.length > 0 && p5.touchEvent.target) {
+      isClickingCanvas = p5.touchEvent.target.tagName === 'CANVAS';
+    }
+
     let { x, y, zoom } = camRef.current;
-    let isInteracting = (p5.mouseIsPressed || p5.touches.length > 0) && isSafeToDraw(p5);
+
+    let isInteracting = (p5.mouseIsPressed || p5.touches.length > 0) && isSafeToDraw(p5) && isClickingCanvas;
 
     let realX = (p5.mouseX - x) / zoom, realY = (p5.mouseY - y) / zoom;
     let realPx = (p5.pmouseX - x) / zoom, realPy = (p5.pmouseY - y) / zoom;
     let speed = p5.dist(realX, realY, realPx, realPy);
-    let heading = (speed < 1) ? p5.PI / 2 : p5.atan2(realY - realPy, realX - realPx);
-    if (speedHistory.current.length > 200) speedHistory.current.shift();
-    speedHistory.current.push(speed);
-    if (!isInteracting) { pressTimer.current = 0; isLongPressing.current = false; }
-    else { if (speed < 1) pressTimer.current++; else pressTimer.current = 0; if (pressTimer.current > 20) isLongPressing.current = true; }
 
+    let heading = (speed < 1) ? p5.PI / 2 : p5.atan2(realY - realPy, realX - realPx);
+
+    if (!isInteracting) {
+      pressTimer.current = 0;
+      isLongPressing.current = false;
+    } else {
+      if (speed < 1) pressTimer.current++; else pressTimer.current = 0;
+      if (pressTimer.current > 20) isLongPressing.current = true;
+    }
+
+    // === 双指或无画笔状态才可移动底图 ===
     let isPanning = false;
     if (activeBrush === null) {
       isPanning = true;
@@ -1164,7 +1205,7 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
       isPanning = true;
     } else if (p5.touches.length >= 2) {
       isPanning = true;
-    } else if (isLongPressing.current) {
+    } else if (isLongPressing.current && p5.touches.length === 0) {
       isPanning = true;
     }
 
@@ -1183,8 +1224,13 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
           p.bodyMode !== bodyMode || p5.dist(p.pos.x, p.pos.y, realX, realY) > 20
         );
       }
-      else if (activeBrush !== null && activeBrush !== 'eraser') {
+      else if (activeBrush !== null) {
         brushCounts.current[activeBrush] += 1;
+
+        // === 只有非橡皮擦的真实绘图行为才注入速度轨迹 ===
+        if (speedHistory.current.length > 200) speedHistory.current.shift();
+        speedHistory.current.push(speed);
+
         let spawnRate = (activeBrush === 'wave' || activeBrush === 'twist' || activeBrush === 'heavy') ? 6 : 2;
         if (p5.frameCount % spawnRate === 0 || speed > 10) {
           let pressure = 0.5;
@@ -1195,6 +1241,7 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
           }
           pressure = Math.max(0.2, pressure);
 
+          // 此时 heading 已声明，此处不会再抛出引用错误
           let pObj = new PainParticle(p5, realX, realY, activeBrush, PALETTES[activeColor].color, speed, heading, bodyMode, pressure);
 
           particlePositions.current.push({ x: realX, y: realY, bodyMode });
@@ -1227,12 +1274,11 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
     let activeImg = bodyMode === 'front' ? bgFrontRef.current : (bodyMode === 'back' ? bgBackRef.current : null);
     if (activeImg) {
       p5.imageMode(p5.CENTER); p5.tint(255, 40);
-      // === 通过 bgScaleRef 独立控制底图缩放比例，不影响笔迹层 ===
       let currentBgScale = bgScaleRef.current || 1.0;
       let imgScale = ((p5.height * 0.8) / activeImg.height) * currentBgScale;
-
       p5.image(activeImg, p5.width / 2, p5.height / 2, activeImg.width * imgScale, activeImg.height * imgScale);
     }
+
     p5.noTint(); p5.imageMode(p5.CORNER); p5.image(currentPg, 0, 0);
 
     for (let i = dynamicParticles.current.length - 1; i >= 0; i--) {
@@ -1243,7 +1289,6 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
     }
     p5.pop();
   };
-
   const [showSharePreview, setShowSharePreview] = useState(false);
   const [shareContent, setShareContent] = useState(null);
 
