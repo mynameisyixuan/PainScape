@@ -220,6 +220,15 @@ const translations = {
         moderateStress: "适度压力",
         highStress: "压力大/焦虑",
       },
+      accompanyingLabel: "伴随症状（可多选）",
+      accompanyingOptions: {
+        headache: "头痛",
+        breast: "乳房胀痛",
+        lumbosacral: "腰骶酸痛",
+        nausea: "恶心呕吐",
+        diarrhea: "经期腹泻",
+        fatigue: "疲惫乏力"
+      },
       toneDescription: "生成结果将采用此语气",
       toneGentle: "🌿 温和",
       toneDirect: "💬 直接",
@@ -273,6 +282,8 @@ const translations = {
       bodyNone: "沉浸盲画",
       emotionLoad: "负荷",
       generate: "生成",
+      frontTip: "正面：绘制胸腹腿等部位不适感",
+      backTip: "背面：绘制腰骶臀等部位不适感",
     },
 
     // ============ 结果页 ============
@@ -295,9 +306,9 @@ const translations = {
         copyTemplate: "📋 复制请假模板",
       },
       doctor: {
-        title: "医疗辅助报告",
-        disclaimer: "算法生成 · 仅供参考",
-        clinicalAdvice: "🩺 临床诊断建议",
+        title: "医疗就诊沟通辅助单",
+        disclaimer: "⚠️ 声明：本报告由 AI 基于您的主诉与具身绘图生成，不能代替执业医生的诊断。具体病症及治疗方案必须由妇科医生进行专业临床检查后确诊。",
+        clinicalAdvice: "🩺 患者主诉参考",
         examNotice: "💡 患者检查须知：",
         preparation: "准备：",
         purpose: "目的：",
@@ -309,6 +320,21 @@ const translations = {
         title: "自愈与社群互助",
         comfort: "亲爱的，你画出了你的风暴。痛不是你的错，允许自己今天做一个废物，好好休息吧。",
         copyAdvice: "📋 复制建议保存",
+      },
+      science: {
+        selfCare: [
+          { title: "🌸 辟谣：没有性生活不能用棉条吗？", desc: "完全可以。处女膜并不是一整片封闭的薄膜，而是一个富有弹性的环状肌肉组织（天然孔径约 2-3 厘米）。普通规格棉条直径仅约 1 厘米，只要使用得当、动作轻柔，完全不会造成任何物理性损伤。" },
+          { title: "🍵 辟谣：痛经喝红糖水包治百病？", desc: "红糖中 99% 的成分都是蔗糖，多喝不仅无法缓解前列腺素引起的子宫收缩，高糖分摄入反而会加速体内的炎性反应。温热的水分摄入和保暖才是舒缓盆腔平滑肌血管紧张度的关键。" },
+          { title: "📊 周期生活指南：如何根据周期排期？", desc: "卵泡期（月经后一周）是身体雌激素上升的黄金期，适合高强度运动和重要汇报；而黄体期（经前一周）孕酮升高，应降低运动强度，多进行保暖、拉伸与平静冥想。" },
+          { title: "🔬 痛经级别健康自测", desc: "若经期血量超过 80ml（每两小时更换一次满溢卫生巾）、伴随有大量大硬血块、或常规口服止痛药（布洛芬）完全无效，可能是继发性病理痛经的警报，建议去医院做妇科超声排查子宫内膜异位症。" },
+          { title: "🍍 饮食指南：经期适合吃什么？", desc: "推荐多补充富含抗炎类营养素的食物，如镁元素（坚果、深绿蔬菜）和 omega-3（深海鱼、亚麻籽），这能有效减缓子宫平滑肌过度收缩，达到自然舒缓阵痛的效果。" }
+        ],
+        partner: [
+          { title: "月经不是憋出来的", desc: "月经是子宫内膜自发脱落流出体外的生理现象。它不受任何括约肌的控制，无法像尿液一样“憋住”。这是不受主观控制的自发流出，请给予她无条件的接纳与关怀。" },
+          { title: "避忌寒性食物", desc: "痛经发作期应尽量避免让她食用生冷瓜果（西瓜、哈密瓜、螃蟹等）。寒凉刺激会导致盆腔血管骤然收缩，加重子宫缺血，引发更剧烈的绞痛。" },
+          { title: "🔴 就诊警告指征", desc: "若她出现面色煞白、浑身冷汗、剧烈呕吐无法服药，甚至痛到晕厥休克，千万不要盲目等待，这极有可能是卵巢囊肿扭转或破裂等急腹症，必须立刻送医急诊。" },
+          { title: "痛经不仅是‘情绪化’", desc: "严重痛经发作时，体内前列腺素水平甚至是常人的数倍，其引起的肌肉痉挛感等同于轻度分娩痛。这并非矫情，而是货真切实的生理型灾难，此时最需要您的陪伴与分担。" }
+        ]
       },
       refine: {
         prompt: "🤖 对当前内容不满意？让 AI 帮你调调语气：",
@@ -344,6 +370,9 @@ const translations = {
       weeklyStats: '🌸 本周共 {{count}} 位 女性分享了她们的 {{pain}} 经历',
       statsSub: "她们中的许多人,也在这里留下了自己的缓解方法 ↓",
       sentResonance: "共鸣已发送",
+      weeklyStats: "🌸 治愈广场共有 {{count}} 个具身痛觉档案正在守望互助，最集中的痛感是「{{pain}}」",
+      topTipsTitle: "💡 自愈锦囊 · 亲测有用 Top 5",
+      topTipsEmpty: "还没有同伴在这个分类下留下经验，去发布画卷，做第一个分享者吧 🍀",
     },
 
     // ============ 快速记录 ============
@@ -475,6 +504,8 @@ const translations = {
       shareSaved: "已为您保存分享卡片！",
       shareFailed: "生成分享卡片失败，可能是图片加载超时。请尝试直接截图分享。",
       reportError: "报告生成遇到问题",
+      helpfulAdded: "感谢您的认可！这将帮助更多同路人",
+      helpfulRemoved: "已取消对该经验的认可",
       publishSuccess: "你的经历已发布 🌸\n\n目前有 {{count}} 位和你一样经历着\"{{pain}}\"的人。\n\n你的分享,可能正是她们一直在找的答案。",
     },
 
@@ -826,6 +857,15 @@ const translations = {
         miscarriage: "History of miscarriage",
         multiple: "Multiple births",
       },
+      accompanyingLabel: "Accompanying symptoms (multiple selections allowed)",
+      accompanyingOptions: {
+        headache: "Headache",
+        breast: "Breast tenderness",
+        lumbosacral: "Lumbosacral pain",
+        nausea: "Nausea and vomiting",
+        diarrhoea: "Menstrual diarrhoea",
+        fatigue: "Fatigue"
+      },
       toneDescription: "Generated content will use this tone",
       toneGentle: "🌿 Gentle",
       toneDirect: "💬 Direct",
@@ -918,6 +958,19 @@ const translations = {
           "Dear one, you've drawn your storm. Pain is not your fault. You're allowed to be unproductive today—rest well.",
         copyAdvice: "📋 Copy Self-care Tips",
       },
+      science: {
+        selfCare: [
+          { title: "🌸 Misconception: Can I use tampons without sexual experience?", desc: "Absolutely. The hymen is a flexible, ring-like muscular tissue, not a sealed barrier. Standard tampons are much narrower (approx. 1cm) and will not cause damage if used gently with proper instructions." },
+          { title: "🍵 Misconception: Does brown sugar cure cramps?", desc: "Brown sugar is 99% sucrose. High sugar intake can actually promote inflammatory responses and exacerbate cramps. Warm hydration and physical heat are the true keys to relaxing pelvic smooth muscles." },
+          { title: "📊 Menstrual Phase Living Guide", desc: "The follicular phase (week after period) is your high-energy gold mine, perfect for strenuous workouts and major presentations. The luteal phase (premenstrual week) requires low-intensity exercises, warmth, and mindfulness." },
+          { title: "🔬 Secondary Dysmenorrhea Self-Assessment", desc: "If menstrual flow exceeds 80ml (soaking through a pad every 2 hours), includes massive blood clots, or regular pain relievers (ibuprofen) fail entirely, please schedule a pelvic ultrasound to rule out conditions like endometriosis." }
+        ],
+        partner: [
+          { title: "A period cannot be 'held'", desc: "Menstrual flow is an involuntary shedding of the uterine lining. Unlike urination, it cannot be controlled by sphincters. Please give her unconditional support and compassion." },
+          { title: "Avoid Cold Foods", desc: "During cramping episodes, ensure she avoids extremely cold beverages or cooling foods (like watermelon or crab). Cold stimuli cause sudden vascular contraction in the pelvis, worsening ischemic pain." },
+          { title: "🔴 Red Flag Emergency Signs", desc: "If she exhibits cold sweats, paleness, fainting, vomiting, or acute persistent pain, do not wait. These are potential indicators of acute gynecological emergencies like cyst torsion, and require immediate transport to an ER." }
+        ]
+      },
       refine: {
         prompt: "🤖 Not satisfied? Let AI adjust the tone:",
         placeholder: "e.g.: too formal / make it gentler / add heat pad advice",
@@ -955,6 +1008,9 @@ const translations = {
         "🌸 This week {{count}} women shared their {{pain}} experience",
       statsSub: "Many of them also left their relief methods here ↓",
       sentResonance: "Resonance sent",
+      weeklyStats: "🌸 {{count}} embodied pain profiles in this sanctuary supporting each other. The most prominent pain is {{pain}}.",
+      topTipsTitle: "💡 Wisdom Shelf · Top 5 Relief Tips",
+      topTipsEmpty: "No tips left under this category yet. Be the first to share your comfort recipe 🍀",
     },
 
     quickLog: {
@@ -1085,6 +1141,8 @@ const translations = {
       shareFailed:
         "Failed to generate share card. Please try taking a screenshot instead.",
       reportError: "Report generation encountered an issue",
+      helpfulAdded: "Thank you! Your upvote helps fellow sisters find comfort",
+      helpfulRemoved: "Upvote removed",
       publishSuccess: "Your experience has been shared 🌸\n\nThere are currently {{count}} others also experiencing \"{{pain}}\".\n\nYour sharing may be exactly the answer they've been searching for.",
     },
 

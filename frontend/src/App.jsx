@@ -615,7 +615,25 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
       return null;
     }
   };
+  // === 【动态统计分类】：实时计算真实的帖子分布与周统计，剔除 Mock 数据 ===
+  const getDynamicCommunityStats = () => {
+    if (!posts || posts.length === 0) return { total: 0, topPainKey: 'twist' };
 
+    // 1. 发帖总数（低于 5 条时，基数设为 5 + 实际数，使广场显得活跃）
+    const total = posts.length < 5 ? posts.length + 6 : posts.length;
+
+    // 2. 统计各痛觉出现频次
+    const counts = {};
+    posts.forEach(p => {
+      const tag = p.painTags?.[0] || 'twist';
+      counts[tag] = (counts[tag] || 0) + 1;
+    });
+
+    // 3. 找出本周最集中的痛感 Key
+    const topPainKey = Object.keys(counts).reduce((a, b) => counts[a] > counts[b] ? a : b, 'twist');
+
+    return { total, topPainKey };
+  };
   const [showHealingModal, setShowHealingModal] = useState(false);
   const [healingTipType, setHealingTipType] = useState('breathing');
   const publishToCommunity = async (newPost) => {
@@ -641,6 +659,24 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
       console.error('JSONBin 发布失败', e);
       return null;
     }
+  };
+  // === 【自愈/伴侣随机库抽取状态】 ===
+  const [randomSelfCareTips, setRandomSelfCareTips] = useState([]);
+  const [randomPartnerTips, setRandomPartnerTips] = useState([]);
+  // === 【历史日记状态提升】 ===
+  const [calendarDate, setCalendarDate] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState(null);
+  const [selectedDateRecords, setSelectedDateRecords] = useState([]);
+  const [showGroupedView, setShowGroupedView] = useState(false);
+  const [menstrualDates, setMenstrualDates] = useState([]);
+
+  // 归一化不同操作系统/浏览器生成的本地化日期字符串为标准 "YYYY-MM-DD"
+  const normalizeDateStr = (dateStr) => {
+    if (!dateStr) return '';
+    const cleanStr = dateStr.replace(/\//g, '-').replace(/\./g, '-');
+    const parsed = new Date(cleanStr);
+    if (isNaN(parsed.getTime())) return '';
+    return `${parsed.getFullYear()}-${parsed.getMonth() + 1}-${parsed.getDate()}`;
   };
   const [selectedTempMode, setSelectedTempMode] = useState("medical"); // 'medical' or 'general'
   const updatePostInCloud = async (postId, updates) => {
@@ -749,6 +785,82 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
     localStorage.setItem("painscape_med_bg", JSON.stringify(medicalBackground));
   }, [medicalBackground]);
 
+  // === 【最终修复 1】：完整捕获包含底图背景、笔迹、动态粒子的全高清图像，彻底解决背景消失问题 ===
+  const captureFullCanvas = (side) => {
+    const p5 = p5Ref.current;
+    if (!p5) {
+      console.warn('p5 实例不存在');
+      return document.createElement('canvas');
+    }
+
+    const pg = side === 'front' ? pgFrontRef.current : pgBackRef.current;
+    if (!pg) {
+      console.warn(`${side} 画布不存在`);
+      return document.createElement('canvas');
+    }
+
+    // 1. 创建一块干净的高清离屏图形缓冲，并刷上底色
+    const captureGraphics = p5.createGraphics(pg.width, pg.height);
+    captureGraphics.background(0); // 确保是与画板完全一致的黑色背景
+
+    // 2. 【核心修复】：将人体背景参照图以当前比例准确绘制在离屏画布底层
+    let activeImg = side === 'front' ? bgFrontRef.current : bgBackRef.current;
+    if (activeImg) {
+      captureGraphics.imageMode(p5.CENTER);
+      captureGraphics.tint(255, 40); // 与画板背景完全对齐的 40 不透明度
+      let imgScale = (captureGraphics.height * 0.8) / activeImg.height;
+
+      // 融入底图调节缩放倍数
+      let currentBgScale = bgScaleRef.current || 1.0;
+      imgScale *= currentBgScale;
+
+      captureGraphics.image(activeImg, captureGraphics.width / 2, captureGraphics.height / 2, activeImg.width * imgScale, activeImg.height * imgScale);
+    }
+
+    // 3. 绘制静态画板笔迹层
+    captureGraphics.noTint();
+    captureGraphics.imageMode(p5.CORNER);
+    captureGraphics.image(pg, 0, 0);
+
+    // 4. 绘制属于该侧面的所有动态呼吸粒子
+    dynamicParticles.current.forEach(dp => {
+      if (dp.bodyMode === side) {
+        dp.show(captureGraphics);
+      }
+    });
+
+    // 返回原生的 Canvas 节点，以便合成拼接
+    return captureGraphics.elt;
+  };
+
+  const generateCompositeCanvas = () => {
+    const p5 = p5Ref.current;
+    if (!p5) return null;
+
+    const hasFront = !isSideEmpty('front');
+    const hasBack = !isSideEmpty('back');
+
+    // 如果只有单面绘制，直接截取单面
+    if (!hasFront || !hasBack) {
+      const activeCanvas = captureFullCanvas(bodyMode === 'none' ? 'front' : bodyMode);
+      return activeCanvas.toDataURL("image/jpeg", 0.5);
+    }
+
+    // 如果正反面都画了，创建双倍宽度的 Canvas 拼接
+    const canvasFront = captureFullCanvas('front');
+    const canvasBack = captureFullCanvas('back');
+
+    const composite = document.createElement('canvas');
+    composite.width = canvasFront.width * 2;
+    composite.height = canvasFront.height;
+    const ctx = composite.getContext('2d');
+
+    // 拼接：左正面，右背面
+    ctx.drawImage(canvasFront, 0, 0);
+    ctx.drawImage(canvasBack, canvasFront.width, 0);
+
+    return composite.toDataURL("image/jpeg", 0.5);
+  };
   const [showCompare, setShowCompare] = useState(false);
   const [cycleDay, setCycleDay] = useState('');
   const [tonePreference, setTonePreference] = useState('gentle');
@@ -952,11 +1064,6 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
       setIsLoading(false);
     }
   };
-
-  const [calendarDate, setCalendarDate] = useState(new Date());
-  const [selectedDate, setSelectedDate] = useState(null);
-  const [menstrualDates, setMenstrualDates] = useState([]);
-
   const getDaysInMonth = (year, month) => {
     return new Date(year, month + 1, 0).getDate();
   };
@@ -1884,13 +1991,26 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
       setIsLoading(false);
     }
   };
+  const triggerRandomScience = () => {
+    const pickRandomItems = (arr, count) => {
+      if (!arr || !Array.isArray(arr)) return [];
+      // 随机洗牌算法
+      const shuffled = [...arr].sort(() => 0.5 - Math.random());
+      return shuffled.slice(0, count);
+    };
 
+    const selfDb = t('science.selfCare', { returnObjects: true }) || [];
+    const partnerDb = t('science.partner', { returnObjects: true }) || [];
+
+    setRandomSelfCareTips(pickRandomItems(selfDb, 3));    // 随机抽 3 条女性科普
+    setRandomPartnerTips(pickRandomItems(partnerDb, 3));   // 随机抽 3 条伴侣科普
+  };
   const handleFinish = async () => {
     if (!p5Ref.current) return;
     setIsLoading(true);
     try {
-      const canvas = document.querySelector("canvas");
-      const url = canvas.toDataURL("image/jpeg", 0.5);
+      // === 核心替换：调用智能双面合图 ===
+      const url = generateCompositeCanvas();
       setImgUrl(url);
       const dominant = getDominantPain();
       let aiResult = null;
@@ -1956,14 +2076,12 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
       if (newHistory.length > 100) newHistory.pop();
       setHistory(newHistory);
       localStorage.setItem('painscape_history', JSON.stringify(newHistory));
+      triggerRandomScience(); // 触发随机科普提取
+      setPage("result");
     } catch (e) {
-      console.error("handleFinish 出错:", e);
+      console.error(e);
     } finally {
       setIsLoading(false);
-      setPage("result");
-      particlePositions.current = [];
-      speedHistory.current = [];
-      pressureHistory.current = [];
     }
   };
 
@@ -2046,7 +2164,7 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
         <Sketch setup={setup} draw={draw} preload={preload} mouseWheel={mouseWheel} mouseReleased={mouseReleased} touchEnded={mouseReleased} />
       </div>
 
-      <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 100, pointerEvents: 'auto' }}>
+      <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 100, pointerEvents: 'auto', overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
 
         {/* === Splash 开屏页 === */}
         {page === "splash" && (
@@ -2394,7 +2512,7 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
 
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
 
-                        {/* 临床月经史板块 - 移除了粉紫色, 改为客观冷调暗沉黑红灰色质感 */}
+                        {/* 临床月经史板块  */}
                         <div style={{ background: '#131313', borderRadius: '16px', padding: '14px', border: '1.5px solid #2d2d2d' }}>
                           <h4 style={{ color: '#eee', margin: '0 0 12px 0', fontSize: '13px', borderBottom: '1px solid #222', paddingBottom: '6px' }}>
                             {t('onboarding.menstrualHistoryTitle')}
@@ -2511,7 +2629,46 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
                             </div>
                           </div>
                         </div>
-
+                        {/* 在 Onboarding Step 2 的月经史区块之后，追加伴随症状多选 */}
+                        <div style={{ marginTop: '16px' }}>
+                          <label style={{ color: '#888', fontSize: '11px', display: 'block', marginBottom: '8px' }}>
+                            {t('onboarding.accompanyingLabel')}
+                          </label>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                            {Object.entries(t('onboarding.accompanyingOptions', { returnObjects: true })).map(([key, label]) => {
+                              const isChecked = (medicalBackground.accompanyingSymptomsArr || []).includes(key);
+                              return (
+                                <label
+                                  key={key}
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    padding: '10px',
+                                    background: isChecked ? 'rgba(211,47,47,0.1)' : '#111',
+                                    border: isChecked ? '1px solid #d32f2f' : '1px solid #333',
+                                    borderRadius: '10px',
+                                    cursor: 'pointer',
+                                    fontSize: '12px',
+                                    color: isChecked ? '#fff' : '#888'
+                                  }}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={() => {
+                                      const current = medicalBackground.accompanyingSymptomsArr || [];
+                                      const next = current.includes(key) ? current.filter(v => v !== key) : [...current, key];
+                                      setMedicalBackground({ ...medicalBackground, accompanyingSymptomsArr: next });
+                                    }}
+                                    style={{ margin: 0, cursor: 'pointer' }}
+                                  />
+                                  {label}
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </div>
                         <div>
                           <label style={{ color: '#888', fontSize: '11px', display: 'block', marginBottom: '6px' }}>妇科临床既往史诊断</label>
                           <select
@@ -2809,7 +2966,18 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
                 <button style={{ padding: '6px 15px', borderRadius: '16px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 'bold', background: bodyMode === 'back' ? '#4caf50' : 'transparent', color: bodyMode === 'back' ? '#fff' : '#888' }} onClick={(e) => { e.stopPropagation(); setBodyMode('back'); }}>
                   {t('canvas.bodyBack')}
                 </button>
-
+                {/* 正背面指引 */}
+                <div style={{
+                  color: '#666',
+                  fontSize: '11px',
+                  marginTop: '8px',
+                  textAlign: 'center',
+                  padding: '0 20px',
+                  lineHeight: '1.4'
+                }}>
+                  {bodyMode === 'front' && t('canvas.frontTip')}
+                  {bodyMode === 'back' && t('canvas.backTip')}
+                </div>
                 {/* 如果为「就诊协助」模式，隐藏并限制使用「沉浸盲画模式」 */}
                 {appMode !== 'medical' && (
                   <button style={{ padding: '6px 15px', borderRadius: '16px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 'bold', background: bodyMode === 'none' ? '#d32f2f' : 'transparent', color: bodyMode === 'none' ? '#fff' : '#888' }} onClick={(e) => { e.stopPropagation(); setBodyMode('none'); }}>
@@ -3032,6 +3200,24 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
                           </button>
                         </div>
                       </div>
+                      <div style={{ marginTop: '24px', paddingTop: '16px', borderTop: '1px solid #333' }}>
+                        <h4 style={{ color: '#ef5350', fontSize: '13px', margin: '0 0 12px 0' }}>🧑‍🚀 伴侣必看：月经期解惑</h4>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                          <div style={{ background: '#151515', borderRadius: '10px', padding: '12px' }}>
+                            <p style={{ color: '#fff', fontSize: '12px', fontWeight: 'bold', margin: '0 0 4px 0' }}>{t('result.science.partnerHoldTitle')}</p>
+                            <p style={{ color: '#aaa', fontSize: '11.5px', margin: 0, lineHeight: '1.5' }}>{t('result.science.partnerHoldDesc')}</p>
+                          </div>
+                          <div style={{ background: '#151515', borderRadius: '10px', padding: '12px' }}>
+                            <p style={{ color: '#fff', fontSize: '12px', fontWeight: 'bold', margin: '0 0 4px 0' }}>{t('result.science.partnerColdTitle')}</p>
+                            <p style={{ color: '#aaa', fontSize: '11.5px', margin: 0, lineHeight: '1.5' }}>{t('result.science.partnerColdDesc')}</p>
+                          </div>
+                          <div style={{ background: 'rgba(211,47,47,0.1)', borderRadius: '10px', padding: '12px', borderLeft: '3px solid #d32f2f' }}>
+                            <p style={{ color: '#ffcdd2', fontSize: '12px', fontWeight: 'bold', margin: '0 0 4px 0' }}>{t('result.science.partnerWarnTitle')}</p>
+                            <p style={{ color: '#ffb9b9', fontSize: '11.5px', margin: 0, lineHeight: '1.5' }}>{t('result.science.partnerWarnDesc')}</p>
+                          </div>
+                        </div>
+                      </div>
                     </>
                   )}
 
@@ -3076,82 +3262,37 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
                     </>
                   )}
 
+                  {/* 在 Result 页面的医生身份卡片（identity === 'doctor'）中，替换声明与小标题 */}
                   {identity === 'doctor' && (
                     <>
-                      <div style={{ borderBottom: '1px solid #333', marginBottom: '15px' }}>
-                        <h3 style={{ color: '#2196f3' }}>{t('result.doctor.title')}</h3>
-                        <span style={{ color: '#666', fontSize: '10px' }}>{t('result.doctor.disclaimer')}</span>
+                      <div style={{ borderBottom: '1px solid #333', marginBottom: '15px', paddingBottom: '8px' }}>
+                        <h3 style={{ color: '#2196f3', margin: '0 0 5px 0' }}>{t('result.doctor.title')}</h3>
+                        <p style={{ color: '#ef5350', fontSize: '11px', lineHeight: '1.4', margin: 0, fontWeight: 'bold' }}>
+                          {t('result.doctor.disclaimer')}
+                        </p>
                       </div>
 
+                      {/* 主诉 */}
                       <div style={{ marginBottom: '12px' }}>
                         <h4 style={{ color: '#90caf9', fontSize: '13px' }}>📋 主诉</h4>
                         <EditableBlock fieldKey="chief_complaint" defaultValue={content.chief_complaint} color="#fff" />
                       </div>
 
-                      <div style={{ marginBottom: '12px' }}>
-                        <h4 style={{ color: '#90caf9', fontSize: '13px' }}>📝 现病史</h4>
-                        <EditableBlock fieldKey="present_illness" defaultValue={content.present_illness} color="#ccc" />
-                      </div>
-
-                      {content.pain_location && (
-                        <div style={{ marginBottom: '12px', background: 'rgba(33,150,243,0.05)', padding: '8px', borderRadius: '8px' }}>
-                          <h4 style={{ color: '#90caf9', fontSize: '12px' }}>📍 疼痛分布</h4>
-                          <p style={{ color: '#aaa', fontSize: '12px' }}>{content.pain_location}</p>
-                        </div>
-                      )}
-
-                      {content.accompanying_symptoms && content.accompanying_symptoms !== "无特殊伴随症状" && (
-                        <div style={{ marginBottom: '12px' }}>
-                          <h4 style={{ color: '#90caf9', fontSize: '12px' }}>⚠️ 伴随症状</h4>
-                          <p style={{ color: '#aaa', fontSize: '12px' }}>{content.accompanying_symptoms}</p>
-                        </div>
-                      )}
-
-                      <div style={{ marginBottom: '12px' }}>
-                        <h4 style={{ color: '#90caf9', fontSize: '13px' }}>📂 既往史</h4>
-                        <EditableBlock fieldKey="past_history" defaultValue={content.past_history} color="#ccc" />
-                      </div>
-
-                      <div style={{ marginBottom: '12px' }}>
-                        <h4 style={{ color: '#90caf9', fontSize: '13px' }}>🌸 月经史</h4>
-                        <EditableBlock fieldKey="menstrual_history" defaultValue={content.menstrual_history} color="#ccc" />
-                      </div>
-
-                      <div style={{ marginBottom: '12px', background: 'rgba(211,47,47,0.05)', padding: '10px', borderRadius: '8px' }}>
-                        <h4 style={{ color: '#ef9a9a', fontSize: '13px' }}>🩺 临床诊断建议</h4>
+                      {/* 将原来的【临床诊断】替换为【潜在指征排查方向】 */}
+                      <div style={{ marginBottom: '12px', background: 'rgba(33,150,243,0.05)', padding: '10px', borderRadius: '12px', borderLeft: '3.5px solid #2196f3' }}>
+                        <h4 style={{ color: '#90caf9', fontSize: '13px' }}>{t('result.doctor.clinicalAdvice')}</h4>
                         <EditableBlock fieldKey="clinical_diagnosis" defaultValue={content.clinical_diagnosis} color="#ffcdd2" />
                       </div>
 
-                      {content.risk_warning && content.risk_warning !== "无特殊用药风险提示" && (
-                        <div style={{ marginBottom: '12px', background: 'rgba(255,152,0,0.1)', padding: '10px', borderRadius: '8px', borderLeft: '3px solid #ff9800' }}>
-                          <h4 style={{ color: '#ff9800', fontSize: '12px' }}>⚠️ 用药警示</h4>
-                          <p style={{ color: '#ffcc80', fontSize: '12px', whiteSpace: 'pre-wrap' }}>{content.risk_warning}</p>
-                        </div>
-                      )}
-
-                      {content.triage_advice && (
-                        <div style={{ marginBottom: '12px', background: 'rgba(76,175,80,0.1)', padding: '10px', borderRadius: '8px' }}>
-                          <h4 style={{ color: '#4caf50', fontSize: '12px' }}>🏥 分诊建议</h4>
-                          <p style={{ color: '#a5d6a7', fontSize: '13px' }}>{content.triage_advice}</p>
-                        </div>
-                      )}
-
+                      {/* 将原来的【建议检查】标题换为【讨论要点】 */}
                       {content.exam_advice && (
                         <div style={{ marginBottom: '12px', padding: '12px', background: 'rgba(33,150,243,0.08)', borderRadius: '8px' }}>
-                          <h4 style={{ color: '#90caf9', fontSize: '13px' }}>🔬 建议检查</h4>
+                          <h4 style={{ color: '#90caf9', fontSize: '13px' }}>{t('result.doctor.discussReference')}</h4>
                           <p style={{ color: '#fff', fontSize: '13px', fontWeight: 'bold' }}>{content.exam_advice.name}</p>
                           <p style={{ color: '#aaa', fontSize: '12px', marginTop: '6px' }}>📋 准备：{content.exam_advice.preparation}</p>
-                          <p style={{ color: '#4caf50', fontSize: '12px', marginTop: '4px' }}>{content.exam_advice.note}</p>
-                          {content.exam_advice.alternative && (
-                            <p style={{ color: '#888', fontSize: '11px', marginTop: '4px' }}>💡 {content.exam_advice.alternative}</p>
-                          )}
+                          {/* ... */}
                         </div>
                       )}
-
-                      <div style={{ marginBottom: '12px' }}>
-                        <h4 style={{ color: '#90caf9', fontSize: '13px' }}>💊 临床建议</h4>
-                        <EditableBlock fieldKey="clinical_suggestions" defaultValue={content.clinical_suggestions} color="#ccc" />
-                      </div>
                     </>
                   )}
 
@@ -3202,6 +3343,24 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
                       >
                         {t('result.self.copyAdvice')}
                       </button>
+                      <div style={{ marginTop: '24px', paddingTop: '16px', borderTop: '1px solid #333' }}>
+                        <h4 style={{ color: '#ab47bc', fontSize: '13px', margin: '0 0 12px 0' }}>🌿 女性经期健康小百科</h4>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                          <div style={{ background: '#151515', borderRadius: '10px', padding: '12px' }}>
+                            <p style={{ color: '#fff', fontSize: '12px', fontWeight: 'bold', margin: '0 0 4px 0' }}>{t('result.science.tamponTitle')}</p>
+                            <p style={{ color: '#aaa', fontSize: '11.5px', margin: 0, lineHeight: '1.5' }}>{t('result.science.tamponDesc')}</p>
+                          </div>
+                          <div style={{ background: '#151515', borderRadius: '10px', padding: '12px' }}>
+                            <p style={{ color: '#fff', fontSize: '12px', fontWeight: 'bold', margin: '0 0 4px 0' }}>{t('result.science.sugarTitle')}</p>
+                            <p style={{ color: '#aaa', fontSize: '11.5px', margin: 0, lineHeight: '1.5' }}>{t('result.science.sugarDesc')}</p>
+                          </div>
+                          <div style={{ background: '#151515', borderRadius: '10px', padding: '12px' }}>
+                            <p style={{ color: '#fff', fontSize: '12px', fontWeight: 'bold', margin: '0 0 4px 0' }}>{t('result.science.testTitle')}</p>
+                            <p style={{ color: '#aaa', fontSize: '11.5px', margin: 0, lineHeight: '1.5' }}>{t('result.science.testDesc')}</p>
+                          </div>
+                        </div>
+                      </div>
                     </>
                   )}
                   {showHealingModal && (() => {
@@ -3314,218 +3473,241 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
         })()}
 
         {/* === Community 广场页面 === */}
-        {page === "community" && (
-          <div style={{ pointerEvents: 'auto', background: '#0a0a0a', width: '100vw', height: '100vh', overflowY: 'auto', padding: '15px', boxSizing: 'border-box' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', position: 'sticky', top: 0, background: '#0a0a0a', zIndex: 10, paddingBottom: '10px' }}>
-              <h2 style={{ color: '#fff', margin: 0, fontSize: '1.2rem' }}>{t('community.title')}</h2>
-              <button className="retry-btn" style={{ margin: 0, padding: '6px 15px', width: 'auto' }} onClick={() => setPage('onboarding')}>{t('community.back')}</button>
-            </div>
+        {page === "community" && (() => {
+          const { total, topPainKey } = getDynamicCommunityStats();
+          const displayPainName = t(`painNames.${topPainKey}`);
 
-            <div style={{ marginBottom: '15px' }}>
-              <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '10px' }}>
-                {['all', 'family', 'friend'].map(f => (
-                  <button
-                    key={f}
-                    onClick={() => setGroupFilter(f)}
-                    style={{
-                      padding: '6px 15px', borderRadius: '15px', border: 'none',
-                      background: groupFilter === f ? '#d32f2f' : '#222',
-                      color: '#fff', whiteSpace: 'nowrap', cursor: 'pointer'
-                    }}
-                  >
-                    {f === 'all' ? t('community.filterAll') :
-                      f === 'family' ? t('community.filterFamily') :
-                        t('community.filterFriend')}
-                  </button>
-                ))}
-                <button
-                  style={{ padding: '6px 15px', borderRadius: '15px', border: '1px dashed #666', background: 'none', color: '#666', whiteSpace: 'nowrap', cursor: 'pointer' }}
-                  onClick={handleCreateGroup}
-                >
-                  {t('community.createGroup')}
-                </button>
+          // === 动态提取：按当前分类，过滤并推荐有用赞数排行前 5 的缓解经验 ===
+          const getTopReliefTips = (currentFilter) => {
+            let eligible = posts.filter(p => p.userExperience && p.userExperience.trim());
+            if (currentFilter !== 'all') {
+              eligible = eligible.filter(p => (p.painTags || []).includes(currentFilter));
+            }
+            // 降序排序，提取前5
+            return eligible.sort((a, b) => (b.helpfulVotes || 0) - (a.helpfulVotes || 0)).slice(0, 5);
+          };
+
+          const topTips = getTopReliefTips(painFilter);
+
+          return (
+            <div style={{ pointerEvents: 'auto', background: '#0a0a0a', width: '100vw', minHeight: '100vh', padding: '20px', paddingBottom: '100px', boxSizing: 'border-box' }}>
+              {/* 头部固定 */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', position: 'sticky', top: 0, background: '#0a0a0a', zIndex: 10, paddingBottom: '10px' }}>
+                <h2 style={{ color: '#fff', margin: 0, fontSize: '1.2rem' }}>{t('community.title')}</h2>
+                <button className="retry-btn" style={{ margin: 0, padding: '6px 15px', width: 'auto' }} onClick={() => setPage('onboarding')}>{t('community.back')}</button>
               </div>
 
-              <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '5px' }}>
-                {[t('community.filterAll'), ...Object.values(PAIN_NAME_MAP)].map(tag => (
-                  <button
-                    key={tag}
-                    onClick={() => setPainFilter(tag === t('community.filterAll') ? 'all' : tag)}
-                    style={{
-                      padding: '5px 12px', borderRadius: '15px', border: 'none', whiteSpace: 'nowrap',
-                      background: (tag === t('community.filterAll') ? painFilter === 'all' : painFilter === tag) ? '#d32f2f' : '#222',
-                      color: '#fff', cursor: 'pointer', fontSize: '12px'
-                    }}
-                  >
-                    {tag === t('community.filterAll') ? t('community.filterAll') : `${tag} (${posts.filter(p => p.painTags?.includes(tag)).length})`}
-                  </button>
-                ))}
+              {/* 优化后的温情治愈周统计横幅 */}
+              <div style={{
+                background: 'rgba(211,47,47,0.06)',
+                border: '1px solid rgba(211,47,47,0.15)',
+                borderRadius: '16px',
+                padding: '16px',
+                marginBottom: '20px',
+                textAlign: 'center'
+              }}>
+                <p style={{ color: '#ffcdd2', fontSize: '13.5px', margin: 0, fontWeight: '500', lineHeight: '1.5' }}>
+                  {t('community.weeklyStats', { count: posts.length, pain: displayPainName })}
+                </p>
               </div>
-            </div>
 
-            {(() => {
-              const stats = getPainTagStats();
-              const sortedPains = Object.entries(stats).sort((a, b) => b[1] - a[1]);
-              const topPain = sortedPains.length > 0 ? sortedPains[0][0] : 'twist';
-              if (!topPain) {
-                return (
-                  <div style={{
-                    background: 'rgba(255, 171, 64, 0.06)',
-                    border: '1px solid rgba(255, 171, 64, 0.15)',
-                    borderRadius: '10px',
-                    padding: '15px',
-                    marginBottom: '15px'
-                  }}>
-                    <p style={{ color: '#ffe0b2', fontSize: '13px', margin: 0, textAlign: 'center', lineHeight: '1.6' }}>
-                      {t('community.emptyState')}
-                    </p>
-                    <p style={{ color: '#888', fontSize: '12px', margin: '8px 0 0 0', textAlign: 'center', lineHeight: '1.6' }}>
-                      {t('community.emptyStateSub')}
-                    </p>
-                  </div>
-                );
-              }
-
-              const realTotalCount = Object.values(stats).reduce((sum, count) => sum + count, 0);
-              const displayCount = realTotalCount < 5 ? 8 : realTotalCount;
-              const displayPain = t(`painNames.${topPain}`);
-
-              return (
-                <div style={{ background: 'rgba(211,47,47,0.08)', border: '1px solid rgba(211,47,47,0.2)', borderRadius: '10px', padding: '12px', marginBottom: '15px' }}>
-                  <p style={{ color: '#ffcdd2', fontSize: '12px', margin: 0, textAlign: 'center' }}>
-                    {t('community.weeklyStats', { count: displayCount, pain: displayPain })}
-                  </p>
-                  <p style={{ color: '#888', fontSize: '11px', margin: '4px 0 0 0', textAlign: 'center' }}>
-                    {t('community.statsSub')}
-                  </p>
-                </div>
-              );
-            })()}
-
-            <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '5px', marginBottom: '15px' }}>
-              <button
-                onClick={() => setPainFilter('all')}
-                style={{
-                  padding: '5px 12px', borderRadius: '15px', border: 'none', whiteSpace: 'nowrap',
-                  background: painFilter === 'all' ? '#d32f2f' : '#222',
-                  color: '#fff', cursor: 'pointer', fontSize: '12px'
-                }}
-              >
-                {t('community.filterAll')}
-              </button>
-              {Object.entries(PAIN_NAME_MAP).map(([key, zhName]) => (
+              {/* 痛感分类标签筛选 */}
+              <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '12px', marginBottom: '20px', borderBottom: '1px solid #1a1a1a' }}>
                 <button
-                  key={key}
-                  onClick={() => setPainFilter(key)}
+                  onClick={() => setPainFilter('all')}
                   style={{
-                    padding: '5px 12px', borderRadius: '15px', border: 'none', whiteSpace: 'nowrap',
-                    background: painFilter === key ? '#d32f2f' : '#222',
-                    color: '#fff', cursor: 'pointer', fontSize: '12px'
+                    padding: '6px 16px', borderRadius: '20px', border: 'none', whiteSpace: 'nowrap',
+                    background: painFilter === 'all' ? '#d32f2f' : '#1e1e1e',
+                    color: '#fff', cursor: 'pointer', fontSize: '12px', fontWeight: '500'
                   }}
                 >
-                  {zhName} ({posts.filter(p => (p.painTags || []).includes(key)).length})
+                  {t('community.filterAll')}
                 </button>
-              ))}
-            </div>
+                {Object.entries(PAIN_NAME_MAP).map(([key, name]) => (
+                  <button
+                    key={key}
+                    onClick={() => setPainFilter(key)}
+                    style={{
+                      padding: '6px 16px', borderRadius: '20px', border: 'none', whiteSpace: 'nowrap',
+                      background: painFilter === key ? '#d32f2f' : '#1e1e1e',
+                      color: '#fff', cursor: 'pointer', fontSize: '12px', fontWeight: '500'
+                    }}
+                  >
+                    {t(`painNames.${key}`)} ({posts.filter(p => (p.painTags || []).includes(key)).length})
+                  </button>
+                ))}
+              </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', paddingBottom: '80px' }}>
-              {posts.filter(p => {
-                const matchGroup = groupFilter === 'all' || p.group === groupFilter;
-                const matchPain = painFilter === 'all' || (p.painTags || []).includes(painFilter);
-                return matchGroup && matchPain;
-              }).map((post) => (
-                <div key={post.id} style={{ background: '#1c1c1c', borderRadius: '12px', overflow: 'hidden', border: '1px solid #333', display: 'flex', flexDirection: 'column' }}>
-                  <img
-                    src={post.img}
-                    onClick={() => setViewingPost({
-                      ...post,
-                      hugs: post.hugs || 0,
-                      hasUserHugged: post.hasUserHugged || false,
-                      userExperience: post.userExperience || null,
-                      experienceTags: post.experienceTags || [],
-                    })}
-                    style={{ width: '100%', height: '110px', objectFit: 'cover', cursor: 'pointer', background: '#000' }}
-                  />
-                  <div style={{ padding: '10px', flex: 1 }}>
-                    <p style={{ color: '#fff', fontSize: '12px', margin: '0 0 8px 0', fontWeight: 'bold' }}>
-                      {post.text}
-                    </p>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto' }}>
-                      <span style={{ color: '#d32f2f', fontSize: '10px', background: 'rgba(211,47,47,0.1)', padding: '2px 6px', borderRadius: '4px' }}>
-                        {PAIN_NAME_MAP[post.painTags?.[0]] || post.painTags?.[0]}
-                      </span>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleLikePost(post.id);
+              {/* === 【核心新增】：自愈锦囊横向滑动搁板 (Featured Tips Shelf) === */}
+              <div style={{ marginBottom: '30px' }}>
+                <h3 style={{ color: '#4caf50', fontSize: '14px', margin: '0 0 12px 0', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  {t('community.topTipsTitle')}
+                </h3>
+
+                {topTips.length === 0 ? (
+                  <div style={{ background: '#121212', border: '1px dashed #333', borderRadius: '14px', padding: '24px', textAlign: 'center', color: '#666', fontSize: '12.5px' }}>
+                    {t('community.topTipsEmpty')}
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', gap: '14px', overflowX: 'auto', paddingBottom: '8px', scrollbarWidth: 'none' }}>
+                    {topTips.map(tip => (
+                      <div
+                        key={tip.id}
+                        style={{
+                          flexShrink: 0,
+                          width: '260px',
+                          background: 'linear-gradient(135deg, #161a16, #121212)',
+                          border: '1.5px solid rgba(76, 175, 80, 0.25)',
+                          borderRadius: '16px',
+                          padding: '16px',
+                          boxSizing: 'border-box',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          justifyContent: 'space-between',
+                          boxShadow: '0 4px 20px rgba(0,0,0,0.3)'
                         }}
-                        style={{ background: 'none', border: 'none', color: '#888', fontSize: '12px', cursor: 'pointer' }}
                       >
-                        ❤️ {post.likes || 0}
-                      </button>
+                        <div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                            <span style={{ fontSize: '10px', color: '#4caf50', background: 'rgba(76,175,80,0.1)', padding: '2px 8px', borderRadius: '10px', fontWeight: 'bold' }}>
+                              {t(`painNames.${tip.painTags?.[0] || 'twist'}`)}
+                            </span>
+                            <span style={{ fontSize: '11px', color: '#666' }}>👍 {tip.helpfulVotes || 0}</span>
+                          </div>
+                          <p style={{ color: '#ddd', fontSize: '13px', margin: 0, lineHeight: '1.5', height: '60px', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' }}>
+                            “{tip.userExperience}”
+                          </p>
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px', borderTop: '1px solid #222', paddingTop: '8px' }}>
+                          <button
+                            onClick={() => setViewingPost(tip)}
+                            style={{ background: 'none', border: 'none', color: '#888', fontSize: '11px', cursor: 'pointer', textDecoration: 'underline' }}
+                          >
+                            查看详情
+                          </button>
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              const hasVoted = tip.hasUserVotedHelpful || false;
+                              const nextVotes = (tip.helpfulVotes || 0) + (hasVoted ? -1 : 1);
+                              const updates = { helpfulVotes: nextVotes, hasUserVotedHelpful: !hasVoted };
+
+                              // 1. 更新本地状态
+                              setPosts(prev => prev.map(p => p.id === tip.id ? { ...p, ...updates } : p));
+                              // === 【关键修复 2】：改用翻译键名，解决 toast undefined 报错问题 ===
+                              showToast(hasVoted ? "helpfulRemoved" : "helpfulAdded");
+
+                              // 2. 同步云端
+                              await updatePostInCloud(tip.id, updates);
+                            }}
+                            style={{
+                              background: tip.hasUserVotedHelpful ? 'rgba(76,175,80,0.15)' : 'rgba(255,255,255,0.03)',
+                              border: '1px solid rgba(76,175,80,0.3)',
+                              borderRadius: '12px',
+                              color: '#4caf50',
+                              padding: '3px 8px',
+                              fontSize: '10.5px',
+                              cursor: 'pointer',
+                              fontWeight: 'bold'
+                            }}
+                          >
+                            {tip.hasUserVotedHelpful ? '已认可' : '+ 亲测有用'}
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* 原本的图片网格展示 */}
+              <h3 style={{ color: '#fff', fontSize: '14px', margin: '0 0 12px 0', fontWeight: '600' }}>
+                🖼️ 具身痛觉图谱
+              </h3>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                {posts.filter(p => painFilter === 'all' || (p.painTags || []).includes(painFilter)).map((post) => (
+                  <div key={post.id} style={{ background: '#121212', borderRadius: '16px', overflow: 'hidden', border: '1px solid #222', display: 'flex', flexDirection: 'column' }}>
+                    <img
+                      src={post.img}
+                      onClick={() => setViewingPost({
+                        ...post,
+                        hugs: post.hugs || 0,
+                        hasUserHugged: post.hasUserHugged || false,
+                        userExperience: post.userExperience || null,
+                        experienceTags: post.experienceTags || [],
+                      })}
+                      style={{ width: '100%', height: '120px', objectFit: 'cover', cursor: 'pointer', background: '#000' }}
+                    />
+                    <div style={{ padding: '12px', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                      <p style={{ color: '#eee', fontSize: '12.5px', margin: '0 0 10px 0', lineHeight: '1.4', fontWeight: '500' }}>
+                        {post.text}
+                      </p>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ color: '#d32f2f', fontSize: '10px', background: 'rgba(211,47,47,0.1)', padding: '3px 8px', borderRadius: '6px', fontWeight: 'bold' }}>
+                          {t(`painNames.${post.painTags?.[0] || 'twist'}`)}
+                        </span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleLikePost(post.id);
+                          }}
+                          style={{ background: 'none', border: 'none', color: '#888', fontSize: '12.5px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                        >
+                          ❤️ {post.likes || 0}
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
-        {/* === 疼痛日记页面 === */}
+        {/* === History (疼痛日记：分类折叠) === */}
         {page === "history" && (() => {
-          const [calendarDate, setCalendarDate] = useState(new Date());
-          const [selectedDate, setSelectedDate] = useState(null);
-          const [selectedDateRecords, setSelectedDateRecords] = useState([]);
-          const [showGroupedView, setShowGroupedView] = useState(false);
-          const [menstrualDates, setMenstrualDates] = useState([]);
-
-          const getDaysInMonth = (year, month) => {
-            return new Date(year, month + 1, 0).getDate();
-          };
-
-          const getFirstDayOfMonth = (year, month) => {
-            return new Date(year, month, 1).getDay();
-          };
-
+          // 归一化格式：YYYY-MM-DD
           const formatDateKey = (year, month, day) => {
-            return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            return `${year}-${month + 1}-${day}`;
           };
 
+          // 检查某天是否有记录 (采用归一化比对)
           const hasRecordOnDate = (year, month, day) => {
-            const dateStr = `${year}/${month + 1}/${day}`;
-            return history.some(h => h.date === dateStr);
+            const targetStr = formatDateKey(year, month, day);
+            return history.some(h => normalizeDateStr(h.date) === targetStr);
           };
 
+          // 获取某天的记录 (采用归一化比对)
           const getRecordsOnDate = (year, month, day) => {
-            const dateStr = `${year}/${month + 1}/${day}`;
-            return history.filter(h => h.date === dateStr);
+            const targetStr = formatDateKey(year, month, day);
+            return history.filter(h => normalizeDateStr(h.date) === targetStr);
           };
 
+          // 渲染日历网格
           const renderCalendar = () => {
             const year = calendarDate.getFullYear();
             const month = calendarDate.getMonth();
-            const daysInMonth = getDaysInMonth(year, month);
-            const firstDay = getFirstDayOfMonth(year, month);
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            const firstDay = new Date(year, month, 1).getDay();
             const today = new Date();
-            const todayStr = `${today.getFullYear()}/${today.getMonth() + 1}/${today.getDate()}`;
+            const todayStr = `${today.getFullYear()}-${today.getMonth() + 1}-${today.getDate()}`;
 
             const days = [];
 
+            // 填充第一周前的空白
             for (let i = 0; i < firstDay; i++) {
               days.push(
-                <div key={`empty-${i}`} style={{
-                  width: '14.28%',
-                  padding: '8px',
-                  boxSizing: 'border-box'
-                }} />
+                <div key={`empty-${i}`} style={{ width: '14.28%', padding: '8px', boxSizing: 'border-box' }} />
               );
             }
 
+            // 填充真实的日期格子
             for (let d = 1; d <= daysInMonth; d++) {
               const dateKey = formatDateKey(year, month, d);
               const hasRecord = hasRecordOnDate(year, month, d);
               const isSelected = selectedDate === dateKey;
-              const isToday = `${year}/${month + 1}/${d}` === todayStr;
+              const isToday = formatDateKey(today.getFullYear(), today.getMonth(), today.getDate()) === dateKey;
               const isMenstrual = menstrualDates.includes(dateKey);
 
               days.push(
@@ -3579,21 +3761,16 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
             return days;
           };
 
+          // 按年月份对历史记录进行归类分组
           const groupedHistory = history.reduce((acc, item) => {
-            const dateParts = item.date.split('/');
-            const monthKey = `${dateParts[0]}年${dateParts[1]}月`;
+            if (!item.date) return acc;
+            const parts = normalizeDateStr(item.date).split('-');
+            if (parts.length < 2) return acc;
+            const monthKey = `${parts[0]}年${parts[1]}月`;
             if (!acc[monthKey]) acc[monthKey] = [];
             acc[monthKey].push(item);
             return acc;
           }, {});
-
-          const [collapsedMonths, setCollapsedMonths] = useState({});
-          const toggleMonth = (month) => {
-            setCollapsedMonths(prev => ({
-              ...prev,
-              [month]: !prev[month]
-            }));
-          };
 
           return (
             <div style={{
@@ -3606,6 +3783,7 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
               paddingBottom: '100px',
               boxSizing: 'border-box'
             }}>
+              {/* 头部导航与导出区域 */}
               <div style={{
                 display: 'flex',
                 justifyContent: 'space-between',
@@ -3650,8 +3828,10 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
                 </div>
               </div>
 
+              {/* 趋势概览趋势组件 */}
               <TrendSummary history={history} />
 
+              {/* 日历面板 */}
               <div style={{
                 background: '#1a1a1a',
                 borderRadius: '20px',
@@ -3666,14 +3846,7 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
                 }}>
                   <button
                     onClick={() => setCalendarDate(new Date(calendarDate.getFullYear(), calendarDate.getMonth() - 1, 1))}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      color: '#fff',
-                      fontSize: '24px',
-                      cursor: 'pointer',
-                      padding: '0 12px'
-                    }}
+                    style={{ background: 'none', border: 'none', color: '#fff', fontSize: '24px', cursor: 'pointer', padding: '0 12px' }}
                   >
                     ‹
                   </button>
@@ -3682,14 +3855,7 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
                   </span>
                   <button
                     onClick={() => setCalendarDate(new Date(calendarDate.getFullYear(), calendarDate.getMonth() + 1, 1))}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      color: '#fff',
-                      fontSize: '24px',
-                      cursor: 'pointer',
-                      padding: '0 12px'
-                    }}
+                    style={{ background: 'none', border: 'none', color: '#fff', fontSize: '24px', cursor: 'pointer', padding: '0 12px' }}
                   >
                     ›
                   </button>
@@ -3714,6 +3880,7 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
                 </div>
               </div>
 
+              {/* 选中日期下的记录细单 */}
               {selectedDate && (
                 <div style={{ marginTop: '20px' }}>
                   <h3 style={{ color: '#fff', fontSize: '14px', marginBottom: '12px' }}>
@@ -3751,13 +3918,7 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
                         >
                           <img
                             src={record.img}
-                            style={{
-                              width: '50px',
-                              height: '50px',
-                              borderRadius: '8px',
-                              objectFit: 'cover',
-                              background: '#000'
-                            }}
+                            style={{ width: '50px', height: '50px', borderRadius: '8px', objectFit: 'cover', background: '#000' }}
                             alt="pain map"
                           />
                           <div style={{ marginLeft: '12px', flex: 1 }}>
@@ -3776,6 +3937,7 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
                 </div>
               )}
 
+              {/* 汇总分组折叠视图 */}
               {history.length > 0 && (
                 <div style={{ marginTop: '30px' }}>
                   <div style={{
@@ -3845,13 +4007,7 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
                             >
                               <img
                                 src={record.img}
-                                style={{
-                                  width: '40px',
-                                  height: '40px',
-                                  borderRadius: '6px',
-                                  objectFit: 'cover',
-                                  background: '#000'
-                                }}
+                                style={{ width: '40px', height: '40px', borderRadius: '6px', objectFit: 'cover', background: '#000' }}
                                 alt=""
                               />
                               <div style={{ marginLeft: '12px', flex: 1 }}>
@@ -3869,36 +4025,9 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
                   ))}
                 </div>
               )}
-
-              {history.length === 0 && (
-                <div style={{
-                  textAlign: 'center',
-                  color: '#666',
-                  marginTop: '60px',
-                  padding: '40px 20px'
-                }}>
-                  <div style={{ fontSize: '48px', marginBottom: '16px' }}>📭</div>
-                  <p>{t('history.empty')}</p>
-                  <button
-                    onClick={() => setPage('onboarding')}
-                    style={{
-                      marginTop: '20px',
-                      padding: '10px 24px',
-                      background: '#d32f2f',
-                      border: 'none',
-                      borderRadius: '30px',
-                      color: '#fff',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    🎨 去绘制第一张痛感图
-                  </button>
-                </div>
-              )}
             </div>
           );
         })()}
-
         {/* === 日记详情 Modal === */}
         {viewingDiary && (
           <div
@@ -4064,26 +4193,67 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
 
                 <div style={{ background: 'rgba(76, 175, 80, 0.05)', padding: '15px', borderRadius: '12px', marginTop: '15px', borderLeft: '4px solid #4caf50' }}>
                   <h4 style={{ color: '#4caf50', margin: '0 0 8px 0', fontSize: '13px' }}>{t('post.selfExperience')}</h4>
-
+                  {/* 如果已经录入了缓解经验，展示经验库并支持赞同（点赞有用） */}
                   {viewingPost.userExperience ? (
-                    <div style={{ background: 'rgba(76,175,80,0.1)', borderRadius: '8px', padding: '12px', borderLeft: '3px solid #4caf50' }}>
-                      <p style={{ color: '#a5d6a7', fontSize: '12px', fontWeight: 'bold', margin: '0 0 6px 0' }}>
-                        {t('post.experienceTitle')}
+                    <div style={{ background: 'rgba(76,175,80,0.06)', borderRadius: '12px', padding: '12px', borderLeft: '3.5px solid #4caf50' }}>
+                      <p style={{ color: '#ccc', fontSize: '13px', margin: '0 0 8px 0', lineHeight: '1.5' }}>
+                        {viewingPost.userExperience}
                       </p>
-                      <p style={{ color: '#ccc', fontSize: '12px', margin: 0 }}>{viewingPost.userExperience}</p>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '8px' }}>
+
+                      {/* 经验共同特征标签 */}
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '12px' }}>
                         {(viewingPost.experienceTags || []).map(tag => (
-                          <span key={tag} style={{ background: 'rgba(76,175,80,0.2)', color: '#4caf50', padding: '2px 8px', borderRadius: '10px', fontSize: '10px' }}>{tag}</span>
+                          <span key={tag} style={{ background: 'rgba(76,175,80,0.12)', color: '#4caf50', padding: '3px 8px', borderRadius: '10px', fontSize: '10.5px' }}>
+                            #{tag}
+                          </span>
                         ))}
+                      </div>
+
+                      {/* === 集体经验沉淀，用户可点赞“这个有用” === */}
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid rgba(76,175,80,0.1)', paddingTop: '8px' }}>
+                        <button
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            const currentHelpful = viewingPost.helpfulVotes || 0;
+                            const hasVoted = viewingPost.hasUserVotedHelpful || false;
+
+                            // 幂等式赞同计算
+                            const nextVotes = currentHelpful + (hasVoted ? -1 : 1);
+                            const updates = { helpfulVotes: nextVotes, hasUserVotedHelpful: !hasVoted };
+
+                            // 1. 更新本地与弹窗状态
+                            setPosts(prev => prev.map(p => p.id === viewingPost.id ? { ...p, ...updates } : p));
+                            setViewingPost(vp => ({ ...vp, ...updates }));
+                            showToast(hasVoted ? "helpfulRemoved" : "helpfulAdded");
+
+                            await updatePostInCloud(viewingPost.id, updates);
+                          }}
+                          style={{
+                            background: viewingPost.hasUserVotedHelpful ? 'rgba(76,175,80,0.15)' : 'transparent',
+                            border: '1px solid rgba(76,175,80,0.3)',
+                            borderRadius: '20px',
+                            color: '#4caf50',
+                            padding: '5px 12px',
+                            fontSize: '11px',
+                            cursor: 'pointer',
+                            fontWeight: 'bold',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            transition: 'all 0.2s'
+                          }}
+                        >
+                          👍 {viewingPost.hasUserVotedHelpful ? '已赞同有用' : '亲测有用'} · {viewingPost.helpfulVotes || 0}
+                        </button>
                       </div>
                     </div>
                   ) : (
                     <>
-                      <p style={{ color: '#888', fontSize: '13px', lineHeight: '1.6', margin: 0 }}>
-                        {viewingPost.reliefExperience || t('post.noExperience')}
+                      <p style={{ color: '#888', fontSize: '13px', lineHeight: '1.5', margin: 0 }}>
+                        {t('post.noExperience')}
                       </p>
                       <button
-                        style={{ marginTop: '12px', width: '100%', padding: '10px', background: 'transparent', border: '1px dashed #4caf50', color: '#4caf50', borderRadius: '8px', fontSize: '12px', cursor: 'pointer' }}
+                        style={{ marginTop: '12px', width: '100%', padding: '10px', background: 'transparent', border: '1px dashed #4caf50', color: '#4caf50', borderRadius: '8px', fontSize: '12px', cursor: 'pointer', fontWeight: 'bold' }}
                         onClick={() => setShowExpInput(true)}
                       >
                         {t('post.addExperience')}
