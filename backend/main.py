@@ -3,7 +3,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Any, Union
 import os
 import json
 import re
@@ -35,19 +35,28 @@ def save_posts(posts):
 load_dotenv()
 
 # ═══════════════════════════════════════════════════════════
-# 多 API Provider 配置（集成 Vivo 蓝心大模型）
+# 大模型渠道配置（已整合 Qwen, DeepSeek, GLM, Vivo云端 与 本地BlueLM）
 # ═══════════════════════════════════════════════════════════
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "vivo").lower()  # 默认使用 vivo
 
 PROVIDER_CONFIG = {
-    "openai": {
-        "base_url": "https://api.openai.com/v1",
-        "api_key_env": "OPENAI_API_KEY",
-        "model": "gpt-4o",
-        "model_quick": "gpt-4o-mini",
-        "model_refine": "gpt-4o-mini",
+    "dashscope": {
+        "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        "api_key_env": "DASHSCOPE_API_KEY",
+        "model": "qwen-plus",
+        "model_quick": "qwen-turbo",
+        "model_refine": "qwen-turbo",
         "max_tokens": 4096,
-        "display_name": "OpenAI GPT-4o",
+        "display_name": "通义千问 Qwen-Plus",
+    },
+    "deepseek": {
+        "base_url": "https://api.deepseek.com/v1",
+        "api_key_env": "DEEPSEEK_API_KEY",
+        "model": "deepseek-chat",
+        "model_quick": "deepseek-chat",
+        "model_refine": "deepseek-chat",
+        "max_tokens": 4096,
+        "display_name": "DeepSeek-V3",
     },
     "zhipu": {
         "base_url": "https://open.bigmodel.cn/api/paas/v4",
@@ -58,23 +67,14 @@ PROVIDER_CONFIG = {
         "max_tokens": 4096,
         "display_name": "智谱 GLM-4-Plus",
     },
-    "dashscope": {
-        "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-        "api_key_env": "DASHSCOPE_API_KEY",
-        "model": "qwen-plus",
-        "model_quick": "qwen-turbo",
-        "model_refine": "qwen-turbo",
-        "max_tokens": 4096,
-        "display_name": "通义千问 Qwen-Plus",
-    },
     "vivo": {
         "base_url": "https://api-ai.vivo.com.cn/v1",
-        "api_key_env": "VIVO_API_KEY",  # 请在 .env 中配置 VIVO_API_KEY = "你的AppKey"
-        "model": "Volc-DeepSeek-V3.2",  # 支持配置为 Volc-DeepSeek-V3.2 或 Doubao-Seed-2.0-mini
+        "api_key_env": "VIVO_API_KEY",
+        "model": "Volc-DeepSeek-V3.2",
         "model_quick": "Doubao-Seed-2.0-mini",
         "model_refine": "Doubao-Seed-2.0-mini",
         "max_tokens": 4096,
-        "display_name": "Vivo蓝心大模型",
+        "display_name": "Vivo蓝心大模型 (云端API)",
     }
 }
 
@@ -88,7 +88,7 @@ api_key = os.getenv(config["api_key_env"])
 client = None
 if LLM_PROVIDER != "vivo":
     client = OpenAI(
-        api_key=api_key,
+        api_key=api_key or "EMPTY",
         base_url=config["base_url"],
     )
 
@@ -106,18 +106,19 @@ app.add_middleware(
 
 
 # ─────────────────────────────────────────────
-# 数据模型
+# Pydantic 校验模型（修正嵌套复杂类型的校验冲突）
 # ─────────────────────────────────────────────
 class PainData(BaseModel):
     dominantPain: str
     userPref: str
     painScore: int
     brushCounts: Optional[Dict[str, int]] = None
-    spatialMap: Optional[Dict[str, float]] = None
-    intensityProfile: Optional[Dict[str, float]] = None
+    spatialMap: Optional[Dict[str, Any]] = None  # 改为 Any 防止数值与边界类型校验冲突
+    intensityProfile: Optional[Dict[str, Any]] = None
+    timeRhythm: Optional[Dict[str, Any]] = None  # 增加前端传入的 timeRhythm 支持
     colorPalette: Optional[str] = None
     bodyMode: Optional[str] = None
-    medicalBackground: Optional[Dict[str, str]] = None
+    medicalBackground: Optional[Dict[str, Any]] = None  # 💡 核心修改：改为 Dict[str, Any]，允许携带 List[str] 类型的历史选项数组
     tonePreference: Optional[str] = "gentle"
     cycleDay: str = "未提供"
     targetLanguage: Optional[str] = "zh"
@@ -288,24 +289,26 @@ def build_lifestyle_context(mb: Dict, lang: str) -> str:
         elif mb["activityLevel"] == "active":
             contexts.append("日常体力活动量较大，有规律中高强度运动史" if lang == "zh" else "Lifestyle factor: High baseline physical activity")
 
-    # 生活 habits 整理
+    # 生活 habits 整理（增加防御性或空值校验）
     lifestyle_map_zh = {"sleepShort": "睡眠时长不足", "sleepIrregular": "作息紊乱/倒班熬夜", "smoking": "吸烟", "alcohol": "常饮酒", "coldFood": "喜食生冷", "spicy": "喜辛辣"}
     lifestyle_map_en = {"sleepShort": "Insufficient sleep", "sleepIrregular": "Irregular schedule/night shifts", "smoking": "Active smoking", "alcohol": "Regular alcohol consumption", "coldFood": "Prefers cold food/iced drinks"}
     
     active_habits = []
+    lifestyle_arr = mb.get("lifestyleArr") or []
     for habit in ["sleepShort", "sleepIrregular", "smoking", "alcohol", "coldFood", "spicy"]:
-        if habit in mb.get("lifestyleArr", []):
+        if habit in lifestyle_arr:
             active_habits.append(lifestyle_map_en[habit] if lang == "en" else lifestyle_map_zh[habit])
     
     if active_habits:
         contexts.append(f"不良作息与饮食倾向：{', '.join(active_habits)}" if lang == "zh" else f"Habit and dietary factors: {', '.join(active_habits)}")
 
-    # 家族史
-    if mb.get("familyHistoryArr") and "none" not in mb.get("familyHistoryArr", []):
+    # 家族史（增加列表防御性校验）
+    family_arr = mb.get("familyHistoryArr") or []
+    if family_arr and "none" not in family_arr:
         family_labels = []
         family_map_zh = {"mother": "母系严重痛经遗传史", "sister": "同胞姐妹痛经史", "unknown": "痛经家族史不详"}
         family_map_en = {"mother": "Maternal history of severe dysmenorrhea", "sister": "Sister with severe dysmenorrhea"}
-        for f in mb.get("familyHistoryArr", []):
+        for f in family_arr:
             label = family_map_en.get(f, f) if lang == "en" else family_map_zh.get(f, f)
             family_labels.append(label)
         if family_labels:
@@ -355,30 +358,6 @@ async def generate_pain_report(data: PainData):
     triage_advice = build_triage_advice(data.painScore, accompanying_symptoms, lang)
     exam_advice = build_exam_advice(mb, lang)
     health_tips_link = build_health_tips_link(data.dominantPain, lang)
-
-    JSON_TEMPLATE = """
-    {
-      "chief_complaint": "主诉：一句标准的妇科急急症描述，例如：'行经期第2天突发急性下腹痉挛性绞痛，伴恶心呕吐1天'",
-      "present_illness": "现病史：严格包含：因什么起病（行经期、前列腺素升高）、起病症状性质（绞痛/胀痛等）、伴随症状（冷汗/恶心等）、有无自行口服止痛药及药名和其起效情况、病情进展方向、以及有无常规妇科检查评估。",
-      "past_history": "既往史：严格客观梳理用户提供的疾病诊断、外科手术病史、以及过敏情况。若未填，请严格写作'无已知重大慢性疾病史、无手术史'。",
-      "menstrual_history": "月经史：必须说明初潮年龄、经期持续天数、周期是否规律、末次月经时间（LMP）。请使用规范病历用词。",
-      "clinical_diagnosis": "临床诊断筛查方向：给出高度严谨的排查方向。如：‘原发性痛经或盆腔器质性病变可能（不排除子宫腺肌症/子宫内膜异位症）’",
-      "clinical_suggestions": "临床处理建议：结合其过敏史给出明确安全指导。如对布洛芬过敏，严禁建议使用NSAIDs。交代多喝水温水及热敷原理，列出下一步门诊就医讨论方向。",
-      "analogy": "痛觉通感比喻：极具视觉和触觉通感的比喻，描述其在里面的拧干、针扎或重压过程，使伴侣能瞬间理解。",
-      "work": "请假条：字数限制在50字以内的专业、大方得体的病假条，直接复制可用。",
-      "action": [
-        "伴侣实操干预指令1：捂在下腹的动作细节",
-        "伴侣实操干预指令2：避开冷水，买药和烧水建议（严防其过敏药）",
-        "伴侣实操干预指令3：承担今日家务、创造安静低照度休息环境"
-      ],
-      "selfCare": [
-        "自愈舒缓提示1：解除请假愧疚与自责的心理学赋能话语",
-        "自愈舒缓提示2：特定的身体舒缓卧位（如：侧卧婴儿蜷缩式，膝盖间夹枕头放松平滑肌）",
-        "自愈舒缓提示3：顺时针轻揉与调息呼气松弛手法",
-        "自愈舒缓提示4：温热饮品或补充微量元素科学干预"
-      ]
-    }
-    """
 
     # ═══════════════════════════════════════════════════════════
     # 【Few-Shot 极少样本范例】：喂给大模型极其标准的规范样本，彻底杜绝幻觉
