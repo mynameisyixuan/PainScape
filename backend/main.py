@@ -2,8 +2,8 @@
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from typing import Optional, Dict, List, Any, Union
+from pydantic import BaseModel, Field
+from typing import Optional, Dict, List, Union, Any
 import os
 import json
 import re
@@ -35,7 +35,7 @@ def save_posts(posts):
 load_dotenv()
 
 # ═══════════════════════════════════════════════════════════
-# 大模型渠道配置（已整合 Qwen, DeepSeek, GLM, Vivo云端 与 本地BlueLM）
+# 统一大模型 Providers 配置
 # ═══════════════════════════════════════════════════════════
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "vivo").lower()  # 默认使用 vivo
 
@@ -74,7 +74,7 @@ PROVIDER_CONFIG = {
         "model_quick": "Doubao-Seed-2.0-mini",
         "model_refine": "Doubao-Seed-2.0-mini",
         "max_tokens": 4096,
-        "display_name": "Vivo蓝心大模型 (云端API)",
+        "display_name": "Vivo蓝心大模型",
     }
 }
 
@@ -84,7 +84,6 @@ if LLM_PROVIDER not in PROVIDER_CONFIG:
 config = PROVIDER_CONFIG[LLM_PROVIDER]
 api_key = os.getenv(config["api_key_env"])
 
-# 全局初始化标准客户端（若为非 vivo 渠道）
 client = None
 if LLM_PROVIDER != "vivo":
     client = OpenAI(
@@ -92,7 +91,7 @@ if LLM_PROVIDER != "vivo":
         base_url=config["base_url"],
     )
 
-print(f"✅ LLM Provider: {config['display_name']} ({config['model']})")
+print(f"✅ 当前激活的 LLM 渠道: {config['display_name']} ({config['model']})")
 
 app = FastAPI()
 
@@ -106,24 +105,73 @@ app.add_middleware(
 
 
 # ─────────────────────────────────────────────
-# Pydantic 校验模型（修正嵌套复杂类型的校验冲突）
+# 💡Pydantic 数据模型树（对齐 React 前端数据结构）
 # ─────────────────────────────────────────────
+
+class SpatialMapModel(BaseModel):
+    """精准映射画板正面、背面、盲画空间占比"""
+    abdomen: float
+    lowerBack: float
+    upperBody: float
+
+
+class IntensityProfileModel(BaseModel):
+    """精准映射绘画的速度与压感特征"""
+    avgSpeed: float
+    peakSpeed: float
+    avgPressure: float
+
+
+class TimeRhythmModel(BaseModel):
+    """精准映射痛觉生成时间节律"""
+    morning: float
+    afternoon: float
+    night: float
+    dominantPeriod: str  # 限制为 'morning' | 'afternoon' | 'night'
+
+
+class MedicalBackgroundModel(BaseModel):
+    """严格对齐前端已声明的 flat 档案结构，解决 JS 数组与空字符串数值校验问题"""
+    diagnosed: Optional[str] = ""
+    allergies: Optional[str] = ""
+    age: Optional[str] = ""
+    lifestyle: Optional[str] = ""
+    activityLevel: Optional[str] = ""
+    familyHistory: Optional[str] = ""
+    psychosocial: Optional[str] = ""
+    reproductiveHistory: Optional[str] = ""
+    height: Optional[Union[float, int, str]] = ""  # 兼容前端输入框中未填时的空字符串 "" 
+    weight: Optional[Union[float, int, str]] = ""  # 同上
+    otherDiagnosis: Optional[str] = ""
+    otherAllergies: Optional[str] = ""
+    surgicalHistory: Optional[str] = ""
+    menarcheAge: Optional[Union[int, str]] = ""
+    cycleRegular: Optional[str] = ""
+    periodDuration: Optional[str] = ""
+    lastPeriod: Optional[str] = ""
+    # 严格对齐前端 string[] 数组类型，设定默认空 List
+    familyHistoryArr: Optional[List[str]] = Field(default_factory=list)
+    lifestyleArr: Optional[List[str]] = Field(default_factory=list)
+    reproductiveHistoryArr: Optional[List[str]] = Field(default_factory=list)
+    accompanyingSymptomsArr: Optional[List[str]] = Field(default_factory=list)
+
+
 class PainData(BaseModel):
     dominantPain: str
     userPref: str
     painScore: int
     brushCounts: Optional[Dict[str, int]] = None
-    spatialMap: Optional[Dict[str, Any]] = None  # 改为 Any 防止数值与边界类型校验冲突
-    intensityProfile: Optional[Dict[str, Any]] = None
-    timeRhythm: Optional[Dict[str, Any]] = None  # 增加前端传入的 timeRhythm 支持
+    spatialMap: Optional[SpatialMapModel] = None  # 强类型嵌套
+    intensityProfile: Optional[IntensityProfileModel] = None  # 强类型嵌套
+    timeRhythm: Optional[TimeRhythmModel] = None  # 强类型嵌套
     colorPalette: Optional[str] = None
     bodyMode: Optional[str] = None
-    medicalBackground: Optional[Dict[str, Any]] = None  # 💡 核心修改：改为 Dict[str, Any]，允许携带 List[str] 类型的历史选项数组
+    medicalBackground: Optional[MedicalBackgroundModel] = None  # 强类型嵌套
     tonePreference: Optional[str] = "gentle"
     cycleDay: str = "未提供"
     targetLanguage: Optional[str] = "zh"
     isQuickLog: Optional[bool] = False
-    accompanyingSymptoms: Optional[List[str]] = None
+    accompanyingSymptoms: Optional[List[str]] = Field(default_factory=list)
 
 
 # ─────────────────────────────────────────────
@@ -170,25 +218,27 @@ TONE_MAP = {
 
 
 # ═══════════════════════════════════════════════════════════
-# 辅助函数
+# 辅助处理与运行时安全防御型函数（已对齐 Pydantic 强类型属性访问）
 # ═══════════════════════════════════════════════════════════
 
-def build_pain_location_desc(spatial_map: Optional[Dict], lang: str) -> str:
+def build_pain_location_desc(spatial_map: Optional[SpatialMapModel], lang: str) -> str:
     if not spatial_map:
         return "未提供位置定位" if lang == "zh" else "Location not provided"
     
     desc_parts = []
-    if spatial_map.get("abdomen", 0) > 0:
-        desc_parts.append(f"下腹盆腔核心区 {spatial_map['abdomen']*100:.0f}%" if lang == "zh" else f"Anterior lower pelvis {spatial_map['abdomen']*100:.0f}%")
-    if spatial_map.get("lowerBack", 0) > 0:
-        desc_parts.append(f"腰骶骶骨区 {spatial_map['lowerBack']*100:.0f}%" if lang == "zh" else f"Lumbosacral region {spatial_map['lowerBack']*100:.0f}%")
+    if spatial_map.abdomen > 0:
+        desc_parts.append(f"下腹盆腔核心区 {spatial_map.abdomen*100:.0f}%" if lang == "zh" else f"Anterior lower pelvis {spatial_map.abdomen*100:.0f}%")
+    if spatial_map.lowerBack > 0:
+        desc_parts.append(f"腰骶骶骨区 {spatial_map.lowerBack*100:.0f}%" if lang == "zh" else f"Lumbosacral region {spatial_map.lowerBack*100:.0f}%")
     
     return "、".join(desc_parts) if desc_parts else ("弥漫性盆腔疼痛" if lang == "zh" else "Diffuse pelvic pain")
 
 
-def build_risk_warning(mb: Dict, lang: str) -> str:
+def build_risk_warning(mb: Optional[MedicalBackgroundModel], lang: str) -> str:
+    if not mb:
+        return "目前未见特异性药物过敏风险提示" if lang == "zh" else "No specific medication risks documented"
     warnings = []
-    allergy = mb.get("allergies", "")
+    allergy = mb.allergies or ""
     
     if allergy == "ibuprofen":
         warnings.append("⚠️ 明确布洛芬（NSAIDs）药物过敏史。临床用药时请避免处方布洛芬，建议遵医嘱替换为对乙酰氨基酚。" if lang == "zh" else "⚠️ Documented Ibuprofen (NSAIDs) allergy. Avoid prescribing Ibuprofen; consider Acetaminophen.")
@@ -200,9 +250,10 @@ def build_risk_warning(mb: Dict, lang: str) -> str:
     return "\n".join(warnings) if warnings else ("目前未见特异性药物过敏风险提示" if lang == "zh" else "No specific medication risks documented")
 
 
-def build_triage_advice(pain_score: int, symptoms: List[str], lang: str) -> str:
+def build_triage_advice(pain_score: int, symptoms: Optional[List[str]], lang: str) -> str:
+    s_list = symptoms or []
     severe_symptoms = ["呕吐", "晕倒", "昏厥", "发黑", "vomiting", "fainting", "blackout"]
-    has_severe = any(s in severe_symptoms for s in symptoms) if symptoms else False
+    has_severe = any(s in severe_symptoms for s in s_list)
     
     if pain_score > 70 or has_severe:
         return "🏥 建议急门诊评估：当前痛觉评分较高且伴随自主神经系统受损指征（如恶心冷汗），建议尽快前往妇产科急门诊就诊，排除卵巢囊肿扭转或内膜异位囊肿破裂。" if lang == "zh" else "🏥 Urgent Gynecological Visit Recommended: High pain intensity with autonomic signs. Seek immediate assessment to rule out acute pelvic complications."
@@ -212,18 +263,12 @@ def build_triage_advice(pain_score: int, symptoms: List[str], lang: str) -> str:
         return "🏠 居家自愈观察：目前痛感负荷尚处于可耐受范围，建议配合热敷、顺时针轻揉腹部、静卧等自愈措施。" if lang == "zh" else "🏠 Home Self-Care: Mild symptoms. Manage with rest and local thermotherapy."
 
 
-def build_exam_advice(mb: Dict, lang: str) -> Dict:
-    has_sexual_life = mb.get("hasSexualLife") == "true" or mb.get("hasSexualLife") == True
-    
+def build_exam_advice(mb: Optional[MedicalBackgroundModel], lang: str) -> Dict:
     exam = {
         "name": "妇科盆腔超声（子宫及附件彩色多普勒超声）" if lang == "zh" else "Pelvic Color Doppler Ultrasound",
         "preparation": "需在检查前1小时内饮水500-800ml，保持充盈膀胱（憋尿）。" if lang == "zh" else "Drink 500-800ml water 1 hour prior to scan; keep bladder comfortably full.",
         "note": "✅ 门诊首选无创初筛，用于评估子宫腺肌症、子宫肌瘤、内膜厚度及附件囊肿。" if lang == "zh" else "✅ First-line non-invasive screening to evaluate adenomyosis, uterine fibroids, and ovarian cysts."
     }
-    
-    if has_sexual_life:
-        exam["alternative"] = "如已婚或有性生活史，推荐加做经阴道超声（阴超），可更清晰探查深部盆腔粘连或微小子宫内膜异位结节。" if lang == "zh" else "Transvaginal ultrasound is recommended for individuals with a history of sexual activity to detect deep pelvic adhesions."
-    
     return exam
 
 
@@ -271,7 +316,7 @@ def map_cycle_day_to_phase(cycle_day: str, lang: str) -> str:
     return f"（生理阶段参考：用户目前处于{phase}）" if lang == "zh" else f"(Physiological phase: {phase})"
 
 
-def build_lifestyle_context(mb: Dict, lang: str) -> str:
+def build_lifestyle_context(mb: Optional[MedicalBackgroundModel], lang: str) -> str:
     if not mb:
         return ""
 
@@ -279,22 +324,22 @@ def build_lifestyle_context(mb: Dict, lang: str) -> str:
     age_map_zh = {"under18": "18岁以下", "18-25": "18-25岁", "26-35": "26-35岁", "36-45": "36-45岁", "over45": "45岁以上"}
     age_map_en = {"under18": "Under 18", "18-25": "18-25", "26-35": "26-35", "36-45": "36-45", "over45": "Over 45"}
     
-    if mb.get("age"):
-        age_label = age_map_en.get(mb["age"], mb["age"]) if lang == "en" else age_map_zh.get(mb["age"], mb["age"])
+    if mb.age:
+        age_label = age_map_en.get(mb.age, mb.age) if lang == "en" else age_map_zh.get(mb.age, mb.age)
         contexts.append(f"年龄阶段: {age_label}" if lang == "zh" else f"Age cohort: {age_label}")
 
-    if mb.get("activityLevel"):
-        if mb["activityLevel"] == "sedentary":
+    if mb.activityLevel:
+        if mb.activityLevel == "sedentary":
             contexts.append("静态习惯：工作/日常久坐多动少（易导致盆腔微循环淤血，加重坠胀）" if lang == "zh" else "Lifestyle factor: Sedentary desk habit (potentially worsening pelvic blood pooling)")
-        elif mb["activityLevel"] == "active":
+        elif mb.activityLevel == "active":
             contexts.append("日常体力活动量较大，有规律中高强度运动史" if lang == "zh" else "Lifestyle factor: High baseline physical activity")
 
-    # 生活 habits 整理（增加防御性或空值校验）
+    # 生活 habits 整理
     lifestyle_map_zh = {"sleepShort": "睡眠时长不足", "sleepIrregular": "作息紊乱/倒班熬夜", "smoking": "吸烟", "alcohol": "常饮酒", "coldFood": "喜食生冷", "spicy": "喜辛辣"}
     lifestyle_map_en = {"sleepShort": "Insufficient sleep", "sleepIrregular": "Irregular schedule/night shifts", "smoking": "Active smoking", "alcohol": "Regular alcohol consumption", "coldFood": "Prefers cold food/iced drinks"}
     
     active_habits = []
-    lifestyle_arr = mb.get("lifestyleArr") or []
+    lifestyle_arr = mb.lifestyleArr or []
     for habit in ["sleepShort", "sleepIrregular", "smoking", "alcohol", "coldFood", "spicy"]:
         if habit in lifestyle_arr:
             active_habits.append(lifestyle_map_en[habit] if lang == "en" else lifestyle_map_zh[habit])
@@ -302,8 +347,8 @@ def build_lifestyle_context(mb: Dict, lang: str) -> str:
     if active_habits:
         contexts.append(f"不良作息与饮食倾向：{', '.join(active_habits)}" if lang == "zh" else f"Habit and dietary factors: {', '.join(active_habits)}")
 
-    # 家族史（增加列表防御性校验）
-    family_arr = mb.get("familyHistoryArr") or []
+    # 家族史
+    family_arr = mb.familyHistoryArr or []
     if family_arr and "none" not in family_arr:
         family_labels = []
         family_map_zh = {"mother": "母系严重痛经遗传史", "sister": "同胞姐妹痛经史", "unknown": "痛经家族史不详"}
@@ -317,8 +362,8 @@ def build_lifestyle_context(mb: Dict, lang: str) -> str:
     # 既往诊断
     diagnosis_map_zh = {"endometriosis": "子宫内膜异位症", "adenomyosis": "子宫腺肌症", "pcos": "多囊卵巢综合征", "fibroids": "子宫肌瘤", "pid": "盆腔炎性疾病（PID）"}
     diagnosis_map_en = {"endometriosis": "Endometriosis", "adenomyosis": "Adenomyosis", "pcos": "PCOS", "fibroids": "Uterine Fibroids", "pid": "Pelvic Inflammatory Disease"}
-    if mb.get("diagnosed") and mb["diagnosed"] not in ["none", "unchecked", ""]:
-        diag_label = diagnosis_map_en.get(mb["diagnosed"], mb["diagnosed"]) if lang == "en" else diagnosis_map_zh.get(mb["diagnosed"], mb["diagnosed"])
+    if mb.diagnosed and mb.diagnosed not in ["none", "unchecked", ""]:
+        diag_label = diagnosis_map_en.get(mb.diagnosed, mb.diagnosed) if lang == "en" else diagnosis_map_zh.get(mb.diagnosed, mb.diagnosed)
         contexts.append(f"临床诊断病史：曾确诊为 {diag_label}" if lang == "zh" else f"Clinical diagnosis history: Confirmed {diag_label}")
 
     if contexts:
@@ -332,9 +377,9 @@ def build_lifestyle_context(mb: Dict, lang: str) -> str:
 # ═══════════════════════════════════════════════════════════
 @app.post("/api/generate")
 async def generate_pain_report(data: PainData):
-    lang = data.targetLanguage or "zh"
-    is_quick = data.isQuickLog or False
-    mb = data.medicalBackground or {}
+    lang = str(data.targetLanguage or "zh")
+    is_quick = bool(data.isQuickLog or False)
+    mb = data.medicalBackground
 
     pt_dict = PAIN_MAP.get(lang, PAIN_MAP["zh"])
     bm_dict = BODY_MODE_MAP.get(lang, BODY_MODE_MAP["zh"])
@@ -343,8 +388,7 @@ async def generate_pain_report(data: PainData):
     lifestyle_ctx = build_lifestyle_context(mb, lang)
     phase_ctx = map_cycle_day_to_phase(data.cycleDay, lang)
     
-    allergy = mb.get("allergies", "")
-    diag = mb.get("diagnosed", "")
+    allergy = mb.allergies if mb else ""
 
     safe_painkiller = "对乙酰氨基酚" if lang == "zh" else "Acetaminophen"
     default_painkiller = "布洛芬" if lang == "zh" else "Ibuprofen"
@@ -363,20 +407,11 @@ async def generate_pain_report(data: PainData):
     # 【Few-Shot 极少样本范例】：喂给大模型极其标准的规范样本，彻底杜绝幻觉
     # ═══════════════════════════════════════════════════════════
     FEW_SHOT_EXAMPLE_ZH = """
-【FEW-SHOT CLINICAL REFERENCE SAMPLE / 妇科门诊病历样本标准】
-假设用户输入：
-- 痛感：twist（绞痛）
-- 周期：第2天，末次月经LMP：2026-06-01
-- 既往确诊：子宫内膜异位症
-- 伴随症状：乳房胀痛、腰骶酸痛
-- 过敏：布洛芬
-
-则期望的 JSON 输出：
 {
-  "chief_complaint": "经期第2天突发急性下腹痉挛性绞痛，伴乳房胀痛与腰骶酸痛1天。",
-  "present_illness": "患者既往月经规律。今日处于行经期第2天，前列腺素水平达峰，子宫平滑肌高频强烈收缩，无明显诱因下突发急性下腹部持续性收紧绞痛，呈阵发性剧烈加重。伴有双侧乳房胀痛及腰骶部明显坠胀。今日未自行服用药物。由于患者既往对布洛芬过敏，本次发作未进行NSAIDs类药物镇痛。病期无发热、无休克、无昏厥。尚未进行本次急症超声定位检查。",
+  "chief_complaint": "行经期第2天突发急性下腹痉挛性绞痛，伴恶心呕吐与后背放射感1天。",
+  "present_illness": "患者既往月经规律。今日处于行经期第2天，前列腺素水平达峰，子宫平滑肌高频强烈收缩，突发急性下腹部持续性收紧绞痛，呈阵发性剧烈加重。伴有乳房胀痛及腰骶部明显坠胀。今日未自行服用药物。由于患者既往对布洛芬过敏，本次发作未进行NSAIDs类药物镇痛。病期无发热、无休克、无昏厥。尚未进行本次急症超声定位检查。",
   "past_history": "既往确诊‘子宫内膜异位症’病史。既往行剖宫产术2次。否认高血压、心脑血管病史。明确对布洛芬（NSAIDs）类药物过敏。",
-  "menstrual_history": "月经初潮13岁。经期持续5天，周期28-30天，规律。末次月经（LMP）为2026年6月1日。当前处于经前及经期转换急性发作阶段。",
+  "menstrual_history": "月经初潮13岁。经期持续5天，周期28-30天，规律。末次月经（LMP）为2026年6月1日。当前处于经期急性疼痛高发阶段。",
   "clinical_diagnosis": "原发性痛经或继发性痛经发作（子宫内膜异位症引起可能）",
   "clinical_suggestions": "鉴于布洛芬过敏史，严禁临床处方NSAIDs药物，可遵医嘱替代为对乙酰氨基酚温水送服。居家应避免站立负重，卧床蜷缩侧卧休息，热敷下腹。建议尽快挂常规妇科门诊行超声探查，排查局部子宫粘连与巧克力囊肿大小。",
   "analogy": "像是肚子里有一把冰冷的铁钳子，正用力夹住子宫死死拧绞，每拧一下，后腰就跟着一阵发木发胀，连呼吸都觉得被生生拽住。",
@@ -413,7 +448,7 @@ You are an expert clinical gynecological medical assistant. Translate the visual
 【严格防幻觉与规范化硬性要求】
 1. 【绝对禁止无中生有】！如果用户未提供药物过敏，就写“无已知药物过敏”；未填手术史，就写“无明确大型手术史”；未提供年龄就不要提及患者的具体年龄数值！
 2. 术语规范：采用妇科临床医学规范化中文。严禁口语化或晦涩古板，如“月事”一律使用“行经期”、“月经周期”。
-3. 药物防错红线：对布洛芬或NSAIDs过敏者，【绝对禁止】在其‘action’或‘clinical_suggestions’中出现任何布洛芬、阿司匹林、双氯芬酸等处方建议，必须明确指导使用“对乙酰氨基酚”！
+3. 药物防错红线：对布洛芬或NSAIDs过敏者，【绝对禁止】在其‘action’或‘clinical_suggestions’中出现任何布洛芬、阿司匹林、双氯烟酸等处方建议，必须明确指导使用“对乙酰氨基酚”！
 4. 周期作息融合：结合用户当前所处的经期生理阶段特征，给出合理的运动和睡眠休养建议。
 
 {FEW_SHOT_EXAMPLE_ZH}
@@ -433,10 +468,10 @@ You are an expert clinical gynecological medical assistant. Translate the visual
 - 既往已确诊诊断：{get_val_from_mb(mb, "diagnosed")}
 - 外科手术史：{get_val_from_mb(mb, "surgicalHistory")}
 - 药物过敏史：{get_val_from_mb(mb, "allergies")}
-- 初潮年龄：{mb.get("menarcheAge", "未提供")} 岁
-- 月经周期规律性：{mb.get("cycleRegular", "未提供")}
-- 持续行经天数：{mb.get("periodDuration", "未提供")} 天
-- 末次月经第一天（LMP）：{mb.get("lastPeriod", "未提供")}
+- 初潮年龄：{getattr(mb, 'menarcheAge', '未提供') if mb else '未提供'} 岁
+- 月经周期规律性：{getattr(mb, 'cycleRegular', '未提供') if mb else '未提供'}
+- 持续行经天数：{getattr(mb, 'periodDuration', '未提供') if mb else '未提供'} 天
+- 末次月经第一天（LMP）：{getattr(mb, 'lastPeriod', '未提供') if mb else '未提供'}
 - 伴随症状：{accompanying_desc}
 
 【文案偏好与语气风格】：{tone}
@@ -546,11 +581,13 @@ You are an expert clinical gynecological medical assistant. Translate the visual
         return fallback
 
 
-def get_val_from_mb(mb: Dict, key: str, fallback: str = "未提供") -> str:
-    val = mb.get(key, "")
+def get_val_from_mb(mb: Optional[MedicalBackgroundModel], key: str, fallback: str = "未提供") -> str:
+    if not mb:
+        return fallback
+    val = getattr(mb, key, "")
     if not val or val in ["none", "unchecked", "unknown"]:
         return fallback
-    return val
+    return str(val)
 
 
 # ─────────────────────────────────────────────
@@ -566,7 +603,7 @@ def _fallback_response(lang: str, painkiller: str = "布洛芬") -> dict:
             "past_history": "No significant past medical history reported.",
             "menstrual_history": "Menstrual history not provided.",
             "clinical_diagnosis": "Primary dysmenorrhea (suspected)",
-            "clinical_suggestions": "Rest, heat therapy, and consider NSAIDs if no contraindications.",
+            "clinical_suggestions": "Rest, heat therapy, and consider NSAIDs if no indications.",
             "analogy": "Imagine your lower abdomen being twisted into a tight, relentless knot.",
             "work": "Hi Manager, I have a sudden severe medical issue today and can't get out of bed. I need to take a sick leave.",
             "action": [
@@ -585,7 +622,7 @@ def _fallback_response(lang: str, painkiller: str = "布洛芬") -> dict:
             "status": "success",
             "language": "zh",
             "chief_complaint": "主诉：周期性痛经发作伴下腹部绞痛1天。",
-            "present_illness": "患者自述既往月经规律。于行经第2天，因前列腺素水平升高刺激出现下腹持续痉挛绞痛，阵发加剧，伴腰骶部酸沉。自行热敷改善轻微。",
+            "present_illness": "患者自述既往月经规律。于行经第2天，因前列腺素水平升高刺激出现下腹持续痉挛绞痛，阵发加剧，伴腰骶部酸沉。自行热敷改善微弱。",
             "past_history": "无特殊既往病史、无明确手术史。",
             "menstrual_history": "月经初潮13岁，周期规律，LMP未填。",
             "clinical_diagnosis": "原发性痛经或盆腔器质性病变筛查",
