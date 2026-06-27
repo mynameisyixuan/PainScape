@@ -1,6 +1,6 @@
 # 🩸 PainScape
 **Beyond the Scale: An Embodied Visual Expression and Semantic Translation System for Menstrual Pain**  
-*(超越量表：面向女性经期疼痛的具身视觉表达与语义转译系统)*
+*(超越量表：面向经期疼痛的具身视觉表达与语义转译系统)*
 
 ![React](https://img.shields.io/badge/Frontend-React-61DAFB?style=flat-square&logo=react&logoColor=black)
 ![p5.js](https://img.shields.io/badge/Engine-p5.js-ED225D?style=flat-square&logo=p5.js&logoColor=white)

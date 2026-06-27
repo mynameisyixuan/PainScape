@@ -785,51 +785,38 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
     localStorage.setItem("painscape_med_bg", JSON.stringify(medicalBackground));
   }, [medicalBackground]);
 
-  // === 【最终修复 1】：完整捕获包含底图背景、笔迹、动态粒子的全高清图像，彻底解决背景消失问题 ===
   const captureFullCanvas = (side) => {
     const p5 = p5Ref.current;
-    if (!p5) {
-      console.warn('p5 实例不存在');
-      return document.createElement('canvas');
-    }
+    if (!p5) return document.createElement('canvas');
 
     const pg = side === 'front' ? pgFrontRef.current : pgBackRef.current;
-    if (!pg) {
-      console.warn(`${side} 画布不存在`);
-      return document.createElement('canvas');
-    }
+    if (!pg) return document.createElement('canvas');
 
-    // 1. 创建一块干净的高清离屏图形缓冲，并刷上底色
+    // === 【对齐修复】：离屏画布使用与原画板 pg 绝对 1:1 的平铺尺寸 ===
     const captureGraphics = p5.createGraphics(pg.width, pg.height);
-    captureGraphics.background(0); // 确保是与画板完全一致的黑色背景
+    captureGraphics.background(0);
 
-    // 2. 【核心修复】：将人体背景参照图以当前比例准确绘制在离屏画布底层
     let activeImg = side === 'front' ? bgFrontRef.current : bgBackRef.current;
     if (activeImg) {
       captureGraphics.imageMode(p5.CENTER);
-      captureGraphics.tint(255, 40); // 与画板背景完全对齐的 40 不透明度
-      let imgScale = (captureGraphics.height * 0.8) / activeImg.height;
-
-      // 融入底图调节缩放倍数
+      captureGraphics.tint(255, 40);
       let currentBgScale = bgScaleRef.current || 1.0;
-      imgScale *= currentBgScale;
-
-      captureGraphics.image(activeImg, captureGraphics.width / 2, captureGraphics.height / 2, activeImg.width * imgScale, activeImg.height * imgScale);
+      // 使用与主 draw 循环中完全等比例的比例尺
+      let imgScale = ((pg.height * 0.8) / activeImg.height) * currentBgScale;
+      captureGraphics.image(activeImg, pg.width / 2, pg.height / 2, activeImg.width * imgScale, activeImg.height * imgScale);
     }
 
-    // 3. 绘制静态画板笔迹层
     captureGraphics.noTint();
     captureGraphics.imageMode(p5.CORNER);
     captureGraphics.image(pg, 0, 0);
 
-    // 4. 绘制属于该侧面的所有动态呼吸粒子
+    // 绘制该侧的所有动态粒子
     dynamicParticles.current.forEach(dp => {
       if (dp.bodyMode === side) {
         dp.show(captureGraphics);
       }
     });
 
-    // 返回原生的 Canvas 节点，以便合成拼接
     return captureGraphics.elt;
   };
 
@@ -1107,22 +1094,7 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
   const [viewingPost, setViewingPost] = useState(null);
   const [groupFilter, setGroupFilter] = useState("all");
   const [painFilter, setPainFilter] = useState("all");
-  const [communityGroups, setCommunityGroups] = useState([
-    { id: 'family', name: '🏠 家庭群' },
-    { id: 'friend', name: '👥 朋友群' },
-  ]);
 
-  useEffect(() => {
-    setCommunityGroups(prev => prev.map(group => {
-      if (group.id === 'family') {
-        return { ...group, name: t('community.groupFamily') };
-      }
-      if (group.id === 'friend') {
-        return { ...group, name: t('community.groupFriend') };
-      }
-      return group;
-    }));
-  }, [t]);
 
   const brushCounts = useRef({ twist: 0, pierce: 0, heavy: 0, wave: 0, scrape: 0 });
   const staticParticles = useRef([]);
@@ -1204,8 +1176,9 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
       }
     }, { passive: false });
 
-    pgFrontRef.current = p5.createGraphics(window.innerWidth * 2, window.innerHeight * 2);
-    pgBackRef.current = p5.createGraphics(window.innerWidth * 2, window.innerHeight * 2);
+    // === 【对齐修复】：统一设为 1:1 视口坐标系，彻底消除双倍位移差 ===
+    pgFrontRef.current = p5.createGraphics(window.innerWidth, window.innerHeight);
+    pgBackRef.current = p5.createGraphics(window.innerWidth, window.innerHeight);
     camRef.current.x = 0;
     camRef.current.y = 0;
     if (!hasSavedInitial.current) {
@@ -1591,134 +1564,56 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
   };
 
   const generateContent = (overrideType, externalLlm = null, externalReportData = null) => {
-    const reportData = externalReportData || currentReportData;
-    if (currentReportData && currentReportData.status === 'success') {
-      return {
-        pain: currentReportData.pain || '',
-        analogy: currentReportData.analogy || '',
-        workText: currentReportData.work || '',
-        action: Array.isArray(currentReportData.action) ? currentReportData.action.join('\n\n') : currentReportData.action || '',
-        selfCare: Array.isArray(currentReportData.selfCare) ? currentReportData.selfCare.join('\n\n') : currentReportData.selfCare || '',
-        med_complaint: currentReportData.chief_complaint || currentReportData.med_complaint || '',
-        med_reference: currentReportData.present_illness || currentReportData.med_reference || '',
-        med_profile: currentReportData.past_history || '',
-        chief_complaint: currentReportData.chief_complaint || '',
-        present_illness: currentReportData.present_illness || '',
-        past_history: currentReportData.past_history || '',
-        menstrual_history: currentReportData.menstrual_history || '',
-        clinical_diagnosis: currentReportData.clinical_diagnosis || '',
-        clinical_suggestions: currentReportData.clinical_suggestions || '',
-        pain_location: currentReportData.pain_location || '',
-        accompanying_symptoms: currentReportData.accompanying_symptoms || '',
-        risk_warning: currentReportData.risk_warning || '',
-        triage_advice: currentReportData.triage_advice || '',
-        exam_advice: currentReportData.exam_advice || null,
-        health_tips_link: currentReportData.health_tips_link || '',
-      };
-    }
-    const activeLlm = externalLlm || llmData;
-    const hasLlm = activeLlm?.status === 'success';
-    const dominant = overrideType || getDominantPain();
+    // 1. 自动合并当前状态或外来注入的 AI 响应
+    const activeLlm = externalReportData || externalLlm || currentReportData || llmData;
+    const hasLlm = activeLlm && (activeLlm.status === 'success' || activeLlm.chief_complaint || activeLlm.present_illness);
 
+    const dominant = overrideType || getDominantPain();
     const intensityProfile = calculateIntensity();
     const pressureLevel = intensityProfile?.avgPressure || 0.5;
-    let painAdjectiveKey = "persistent";
-    if (pressureLevel > 0.8) painAdjectiveKey = "extremelyIntense";
-    else if (pressureLevel > 0.6) painAdjectiveKey = "intense";
-    else if (pressureLevel < 0.4) painAdjectiveKey = "faint";
 
-    const painName = `${t(`painAdjectives.${painAdjectiveKey}`)}${t(`painNames.${dominant}`)}`;
-    let finalMedComplaint = hasLlm ? activeLlm.med : (isEn ? "Chief complaint: Dysmenorrhea." : "主诉：持续性痛经。");
-    let auxiliaryInfo = [];
+    // 2. 本地高拟真兜底模板（当后端离线或未部署时使用）
+    let painName = `${t(`painNames.${dominant}`)}`;
+    let defaultAnalogy = t(`painTemplates.${dominant}.analogy`) || "强烈的痛觉。";
+    let defaultSelfCare = t(`painTemplates.${dominant}.selfCare`) || "好好休息。";
 
-    const diagMap = isEn ? {
-      'endometriosis': 'Endometriosis', 'adenomyosis': 'Adenomyosis', 'pcos': 'PCOS',
-      'fibroids': 'Uterine Fibroids', 'pid': 'PID', 'ovariancyst': 'Ovarian Cyst',
-      'cervicalstenosis': 'Cervical Stenosis', 'unchecked': 'No prior gynecological exams', 'none': 'None'
-    } : {
-      'endometriosis': '子宫内膜异位症', 'adenomyosis': '子宫腺肌症', 'pcos': '多囊卵巢综合征',
-      'fibroids': '子宫肌瘤', 'pid': '盆腔炎性疾病（PID）', 'ovariancyst': '卵巢囊肿',
-      'cervicalstenosis': '宫颈管狭窄', 'unchecked': '未做过相关检查', 'none': '无确诊'
+    const symptomMap = {
+      headache: "头痛", breast: "乳房胀痛", lumbosacral: "腰骶酸痛",
+      nausea: "恶心呕吐", diarrhea: "经期腹泻", fatigue: "疲惫乏力"
     };
+    const symptomsText = (medicalBackground.accompanyingSymptomsArr || [])
+      .map(s => symptomMap[s] || s)
+      .join('、') || "无明显伴随症状";
 
-    const diagValue = medicalBackground.diagnosed;
-    if (diagValue && diagValue !== '' && diagValue !== 'none' && diagValue !== 'unchecked') {
-      auxiliaryInfo.push(isEn ? `• History: ${diagMap[diagValue]}` : `• 既往诊断：${diagMap[diagValue]}。`);
-    } else if (diagValue === 'unchecked') {
-      auxiliaryInfo.push(isEn ? `• History: Patient reports no prior exams for dysmenorrhea.` : `• 既往病史：患者自述未做过痛经相关妇科检查。`);
-    }
+    let defaultComplaint = `月经期出现下腹部周期性${painName}，伴${symptomsText}1天。`;
+    let defaultPresentIllness = `患者既往月经规律。自述于今日（行经第${cycleDay || 'X'}天）突发${painName}。图像特征向量重构显示：痛感评分为 ${Object.values(brushCounts.current).reduce((a, b) => a + b, 0)} 点，伴有典型的${defaultAnalogy}，活动受限。`;
+    let defaultClinicalDiagnosis = `结合痛觉成像，建议排查子宫内膜异位症、子宫平滑肌痉挛或盆腔器质性充血。建议行妇科超声筛查。`;
 
-    const allergyValue = medicalBackground.allergies;
-    if (allergyValue && allergyValue !== '' && allergyValue !== 'none' && allergyValue !== 'unknown') {
-      const allergyName = isEn
-        ? (allergyValue === 'nsaids' ? 'NSAIDs' : allergyValue)
-        : (allergyValue === 'nsaids' ? '多种NSAIDs' : (allergyValue === 'ibuprofen' ? '布洛芬' : '阿司匹林'));
-      auxiliaryInfo.push(isEn ? `• Allergies: ${allergyName}.` : `• 药物过敏：${allergyName}过敏，请注意用药。`);
-    }
-
-    let finalMedReference = auxiliaryInfo.join('\n');
-
-    const timeRhythm = calculateTimeRhythm();
-    if (timeRhythm) {
-      const periodMap = isEn ? {
-        morning: { name: 'Morning', insight: 'Aligns with peak prostaglandin secretion rhythm.' },
-        afternoon: { name: 'Afternoon', insight: 'Exacerbated potentially by prolonged sitting and pelvic congestion.' },
-        night: { name: 'Night', insight: 'Heightened nociception during nighttime and altered pelvic blood flow when lying down.' }
-      } : {
-        morning: { name: '上午/晨间', insight: '与前列腺素在晨间分泌达峰的节律高度一致。' },
-        afternoon: { name: '下午', insight: '午后疼痛加剧，可能与久坐导致的盆腔充血有关。' },
-        night: { name: '夜间/晚间', insight: '夜间平卧时盆腔血流改变，易使坠痛感加剧。' }
+    // 3. 核心映射：如果后端 AI 返回了结构化分析，直接渲染 AI 精准生成的文本
+    if (hasLlm) {
+      return {
+        pain: activeLlm.pain || painName,
+        analogy: activeLlm.analogy || defaultAnalogy,
+        workText: activeLlm.workText || activeLlm.work || '',
+        action: activeLlm.action || '',
+        selfCare: activeLlm.selfCare || defaultSelfCare,
+        // 绑定病历级字段
+        chief_complaint: activeLlm.chief_complaint || activeLlm.med_complaint || defaultComplaint,
+        present_illness: activeLlm.present_illness || activeLlm.med_reference || defaultPresentIllness,
+        clinical_diagnosis: activeLlm.clinical_diagnosis || defaultClinicalDiagnosis,
       };
-      const dominantPeriodInfo = periodMap[timeRhythm.dominantPeriod];
-      if (dominantPeriodInfo) {
-        finalMedReference += isEn
-          ? `\n\n⏱️ [Temporal Pattern]: Pain concentrated in the ${dominantPeriodInfo.name}. ${dominantPeriodInfo.insight}`
-          : `\n\n⏱️【时间节律分析】：痛感集中于${dominantPeriodInfo.name}。${dominantPeriodInfo.insight}`;
-      }
     }
 
-    if (!finalMedReference) {
-      finalMedReference = isEn ? "• Please describe the pain texture to your doctor." : "• 建议向医生详细描述痛觉质地与发作时间。";
-    }
-
-    const extractField = (llmData, key, fallback) => {
-      if (!llmData || !llmData[key] || llmData[key].length === 0) return fallback;
-      const val = llmData[key];
-      if (Array.isArray(val)) return val.join('\n\n');
-      return String(val).replace(/\\n/g, '\n');
-    };
-
-    let actionParts = [];
-    const safePainkiller = isEn
-      ? (medicalBackground.allergies === 'ibuprofen' ? 'Acetaminophen' : 'Ibuprofen')
-      : (medicalBackground.allergies === 'ibuprofen' ? '对乙酰氨基酚' : '布洛芬');
-
-    if (userPrefs.includes('alone')) {
-      actionParts.push(isEn ? `☑️ Bring warm water and ${safePainkiller}.` : `☑️ 帮她倒杯温水，备好${safePainkiller}。`);
-      actionParts.push(isEn ? "☑️ Dim lights, leave the room, give her space." : "☑️ 调暗灯光，关门出去，不要频繁询问。");
-    } else {
-      actionParts.push(isEn ? "☑️ Warm your hands and place on her abdomen. Do the chores." : "☑️ 搓热手掌捂在她小腹。主动承担家务。");
-    }
-
-    const workTemplate = isEn
-      ? "Hi manager, I have a sudden medical emergency today and am physically unable to work. I need to take a sick leave to rest. Urgent matters have been handed over. Thank you."
-      : "老板/HR你好，我今天突发身体急症，目前疼得实在起不来，申请请假一天居家休息，紧急工作已交接，感谢批准。";
-
-    const finalAction = extractField(activeLlm, 'action', actionParts.join("\n\n"));
-    const finalSelfCare = extractField(activeLlm, 'selfCare', isEn ? "✨ Allow yourself to rest today." : "✨ 允许自己今天做一个废物，好好休息。");
-    const finalWorkText = extractField(activeLlm, 'work', workTemplate);
-    const finalAnalogy = extractField(activeLlm, 'analogy', isEn ? "A sharp, persistent pain." : "强烈的痛觉。");
-
+    // 4. 规则引擎兜底输出
     return {
       pain: painName,
-      analogy: finalAnalogy,
-      med_complaint: finalMedComplaint,
-      med_reference: finalMedReference,
-      med_profile: isEn ? `PainScape visual profile shows intense ${painName}.` : `PainScape 痛觉成像显示强烈的 ${painName} 特征。`,
-      workText: finalWorkText,
-      action: finalAction,
-      selfCare: finalSelfCare,
-      med: finalMedComplaint
+      analogy: defaultAnalogy,
+      workText: '',
+      action: '',
+      selfCare: defaultSelfCare,
+      chief_complaint: defaultComplaint,
+      present_illness: defaultPresentIllness,
+      clinical_diagnosis: defaultClinicalDiagnosis,
     };
   };
 
@@ -1940,12 +1835,11 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
 
       const dominant = quickPainType;
       let aiResult = null;
+
       const payload = {
         dominantPain: dominant,
         userPref: userPrefs.join(','),
-        painScore: Object.keys(brushCounts.current)
-          .filter(k => k !== 'eraser')
-          .reduce((sum, k) => sum + brushCounts.current[k], 0),
+        painScore: quickPainScore * 10,
         spatialMap: { abdomen: 0.8, lowerBack: 0.2, upperBody: 0 },
         intensityProfile: { avgSpeed: 15, peakSpeed: 25, avgPressure: quickPainScore / 10 },
         timeRhythm: calculateTimeRhythm() || { dominantPeriod: 'morning' },
@@ -1955,6 +1849,7 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
         tonePreference: tonePreference,
         targetLanguage: targetLanguage,
         cycleDay: cycleDay || t('medical.cycleNotProvided'),
+        accompanyingSymptoms: medicalBackground.accompanyingSymptomsArr || [],
         isQuickLog: true
       };
 
@@ -1966,12 +1861,16 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
           body: JSON.stringify(payload), signal: controller.signal
         });
         clearTimeout(timeoutId);
-        if (response.ok) aiResult = await response.json();
+        if (response.ok) {
+          aiResult = await response.json();
+          setLlmData(aiResult);
+          setCurrentReportData(aiResult);
+        }
       } catch (err) {
-        console.warn("后端不可用，转入本地模式", err);
+        console.warn("快速记录请求后端失败，已进入本地计算模型", err);
       }
 
-      const finalContent = generateContent(dominant, aiResult, currentReportData);
+      const finalContent = generateContent(dominant, aiResult);
       const newRecord = {
         id: Date.now(),
         date: new Date().toLocaleDateString(),
@@ -1986,7 +1885,7 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
 
       setPage("result");
     } catch (e) {
-      console.error("快速记录出错:", e);
+      console.error("快速记录提交出错:", e);
     } finally {
       setIsLoading(false);
     }
@@ -1999,8 +1898,9 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
       return shuffled.slice(0, count);
     };
 
-    const selfDb = t('science.selfCare', { returnObjects: true }) || [];
-    const partnerDb = t('science.partner', { returnObjects: true }) || [];
+    // 直接从 i18n 系统中安全读取当前语言版本的科普数据库
+    const selfDb = t('result.science.selfCare', { returnObjects: true }) || [];
+    const partnerDb = t('result.science.partner', { returnObjects: true }) || [];
 
     setRandomSelfCareTips(pickRandomItems(selfDb, 3));    // 随机抽 3 条女性科普
     setRandomPartnerTips(pickRandomItems(partnerDb, 3));   // 随机抽 3 条伴侣科普
@@ -2009,26 +1909,27 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
     if (!p5Ref.current) return;
     setIsLoading(true);
     try {
-      // === 核心替换：调用智能双面合图 ===
+      // 1. 生成 1:1 无偏移双面合图
       const url = generateCompositeCanvas();
       setImgUrl(url);
       const dominant = getDominantPain();
       let aiResult = null;
 
+      // 2. 组装发往后端 AI 的多维特征向量
       const payload = {
         dominantPain: dominant,
         userPref: userPrefs.join(','),
         painScore: Object.values(brushCounts.current).reduce((sum, v) => sum + v, 0),
-        spatialMap: calculateSpatialMap(),
-        intensityProfile: calculateIntensity(),
-        timeRhythm: calculateTimeRhythm(),
-        colorPalette: activeColor,
+        spatialMap: calculateSpatialMap(), // 区域热图向量
+        intensityProfile: calculateIntensity(), // 速度与压感向量
+        timeRhythm: calculateTimeRhythm(), // 时段分布向量
+        colorPalette: activeColor, // 情绪温度色彩
         bodyMode: bodyMode,
-        medicalBackground: medicalBackground,
+        medicalBackground: medicalBackground, // 完整的健康档案
         targetLanguage: targetLanguage,
         tonePreference: tonePreference,
         cycleDay: cycleDay || t('medical.cycleNotProvided'),
-        accompanyingSymptoms: [],
+        accompanyingSymptoms: medicalBackground.accompanyingSymptomsArr || [], // 伴随症状
       };
 
       try {
@@ -2048,7 +1949,7 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
           setCurrentReportData(aiResult);
         }
       } catch (err) {
-        console.warn("后端不可用，转入本地模式", err);
+        console.warn("后端解析请求失败，已转入本地混合规则引擎进行转译", err);
         setLlmData(null);
         setCurrentReportData(null);
       }
@@ -2076,10 +1977,10 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
       if (newHistory.length > 100) newHistory.pop();
       setHistory(newHistory);
       localStorage.setItem('painscape_history', JSON.stringify(newHistory));
-      triggerRandomScience(); // 触发随机科普提取
+      triggerRandomScience();
       setPage("result");
     } catch (e) {
-      console.error(e);
+      console.error("生成流程发生异常:", e);
     } finally {
       setIsLoading(false);
     }
@@ -3200,22 +3101,55 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
                           </button>
                         </div>
                       </div>
-                      <div style={{ marginTop: '24px', paddingTop: '16px', borderTop: '1px solid #333' }}>
-                        <h4 style={{ color: '#ef5350', fontSize: '13px', margin: '0 0 12px 0' }}>🧑‍🚀 伴侣必看：月经期解惑</h4>
+                      <div style={{ marginTop: '24px', paddingTop: '16px', borderTop: '1px solid #2d2d2d' }}>
+                        <h4 style={{
+                          color: '#ef5350',
+                          fontSize: '14px',
+                          fontWeight: '600',
+                          margin: '0 0 16px 0',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          letterSpacing: '0.5px'
+                        }}>
+                          🔴 经期小科普
+                        </h4>
 
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                          <div style={{ background: '#151515', borderRadius: '10px', padding: '12px' }}>
-                            <p style={{ color: '#fff', fontSize: '12px', fontWeight: 'bold', margin: '0 0 4px 0' }}>{t('result.science.partnerHoldTitle')}</p>
-                            <p style={{ color: '#aaa', fontSize: '11.5px', margin: 0, lineHeight: '1.5' }}>{t('result.science.partnerHoldDesc')}</p>
-                          </div>
-                          <div style={{ background: '#151515', borderRadius: '10px', padding: '12px' }}>
-                            <p style={{ color: '#fff', fontSize: '12px', fontWeight: 'bold', margin: '0 0 4px 0' }}>{t('result.science.partnerColdTitle')}</p>
-                            <p style={{ color: '#aaa', fontSize: '11.5px', margin: 0, lineHeight: '1.5' }}>{t('result.science.partnerColdDesc')}</p>
-                          </div>
-                          <div style={{ background: 'rgba(211,47,47,0.1)', borderRadius: '10px', padding: '12px', borderLeft: '3px solid #d32f2f' }}>
-                            <p style={{ color: '#ffcdd2', fontSize: '12px', fontWeight: 'bold', margin: '0 0 4px 0' }}>{t('result.science.partnerWarnTitle')}</p>
-                            <p style={{ color: '#ffb9b9', fontSize: '11.5px', margin: 0, lineHeight: '1.5' }}>{t('result.science.partnerWarnDesc')}</p>
-                          </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                          {randomPartnerTips.map((tip, idx) => {
+                            const isWarning = tip.title && tip.title.includes('警告');
+                            return (
+                              <div key={idx} style={{
+                                background: isWarning ? 'linear-gradient(145deg, #241414, #1a0f0f)' : 'linear-gradient(145deg, #1c1c1c, #141414)',
+                                borderRadius: '16px',
+                                padding: '18px',
+                                border: isWarning ? '1px solid rgba(211,47,47,0.3)' : '1px solid rgba(255, 255, 255, 0.05)',
+                                borderLeft: isWarning ? '4px solid #d32f2f' : '4px solid rgba(211, 47, 47, 0.6)',
+                                boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                                transition: 'transform 0.2s ease'
+                              }}>
+                                <div style={{
+                                  color: '#ffffff',
+                                  fontSize: '15px',
+                                  fontWeight: '600',
+                                  marginBottom: '10px',
+                                  lineHeight: '1.4',
+                                  letterSpacing: '0.3px'
+                                }}>
+                                  {tip.title}
+                                </div>
+                                <div style={{
+                                  color: '#b0b0b0',
+                                  fontSize: '13px',
+                                  margin: 0,
+                                  lineHeight: '1.65',
+                                  textAlign: 'justify'
+                                }}>
+                                  {tip.desc}
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                     </>
@@ -3343,22 +3277,52 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
                       >
                         {t('result.self.copyAdvice')}
                       </button>
-                      <div style={{ marginTop: '24px', paddingTop: '16px', borderTop: '1px solid #333' }}>
-                        <h4 style={{ color: '#ab47bc', fontSize: '13px', margin: '0 0 12px 0' }}>🌿 女性经期健康小百科</h4>
+                      <div style={{ marginTop: '24px', paddingTop: '16px', borderTop: '1px solid #2d2d2d' }}>
+                        <h4 style={{
+                          color: '#ab47bc',
+                          fontSize: '14px',
+                          fontWeight: '600',
+                          margin: '0 0 16px 0',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          letterSpacing: '0.5px'
+                        }}>
+                          🌿 健康小百科
+                        </h4>
 
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                          <div style={{ background: '#151515', borderRadius: '10px', padding: '12px' }}>
-                            <p style={{ color: '#fff', fontSize: '12px', fontWeight: 'bold', margin: '0 0 4px 0' }}>{t('result.science.tamponTitle')}</p>
-                            <p style={{ color: '#aaa', fontSize: '11.5px', margin: 0, lineHeight: '1.5' }}>{t('result.science.tamponDesc')}</p>
-                          </div>
-                          <div style={{ background: '#151515', borderRadius: '10px', padding: '12px' }}>
-                            <p style={{ color: '#fff', fontSize: '12px', fontWeight: 'bold', margin: '0 0 4px 0' }}>{t('result.science.sugarTitle')}</p>
-                            <p style={{ color: '#aaa', fontSize: '11.5px', margin: 0, lineHeight: '1.5' }}>{t('result.science.sugarDesc')}</p>
-                          </div>
-                          <div style={{ background: '#151515', borderRadius: '10px', padding: '12px' }}>
-                            <p style={{ color: '#fff', fontSize: '12px', fontWeight: 'bold', margin: '0 0 4px 0' }}>{t('result.science.testTitle')}</p>
-                            <p style={{ color: '#aaa', fontSize: '11.5px', margin: 0, lineHeight: '1.5' }}>{t('result.science.testDesc')}</p>
-                          </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                          {randomSelfCareTips.map((tip, idx) => (
+                            <div key={idx} style={{
+                              background: 'linear-gradient(145deg, #1c1c1c, #141414)',
+                              borderRadius: '16px',
+                              padding: '18px',
+                              border: '1px solid rgba(255, 255, 255, 0.05)',
+                              borderLeft: '4px solid #ab47bc',
+                              boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                              transition: 'transform 0.2s ease'
+                            }}>
+                              <div style={{
+                                color: '#ffffff',
+                                fontSize: '15px',
+                                fontWeight: '600',
+                                marginBottom: '10px',
+                                lineHeight: '1.4',
+                                letterSpacing: '0.3px'
+                              }}>
+                                {tip.title}
+                              </div>
+                              <div style={{
+                                color: '#b0b0b0',
+                                fontSize: '13px',
+                                margin: 0,
+                                lineHeight: '1.65',
+                                textAlign: 'justify'
+                              }}>
+                                {tip.desc}
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       </div>
                     </>
@@ -4170,127 +4134,224 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
 
         {/* === 社区帖子 Modal === */}
         {viewingPost && (
-          <div style={{ position: 'fixed', zIndex: 1000, top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.98)', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '20px', boxSizing: 'border-box', overflowY: 'auto' }} onClick={() => setViewingPost(null)}>
-            <div style={{ width: '100%', maxWidth: '400px', maxHeight: '90vh', overflowY: 'auto', margin: '0 auto', paddingBottom: '40px' }} onClick={(e) => e.stopPropagation()}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-                <span style={{ color: '#d32f2f', fontWeight: 'bold' }}>{t('post.title')}</span>
-                <button onClick={() => setViewingPost(null)} style={{ background: 'none', border: 'none', color: '#fff', fontSize: '24px' }}>✕</button>
+          <div
+            style={{
+              position: 'fixed',
+              zIndex: 11000,
+              top: 0,
+              left: 0,
+              width: '100vw',
+              height: '100vh',
+              background: 'rgba(10,10,10,0.98)',
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'flex-start', // 允许从上往下流动滚动，解决底部裁剪问题
+              overflowY: 'auto', // 仅让主背景滚动
+              padding: '24px 16px',
+              boxSizing: 'border-box'
+            }}
+            onClick={() => setViewingPost(null)}
+          >
+            <div
+              style={{
+                width: '100%',
+                maxWidth: '420px',
+                background: '#141414',
+                border: '1px solid #2a2a2a',
+                borderRadius: '24px',
+                padding: '20px',
+                boxSizing: 'border-box',
+                boxShadow: '0 20px 50px rgba(0,0,0,0.8)',
+                marginBottom: '40px'
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* 头部标题与关闭按钮 */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <span style={{ color: '#ef5350', fontWeight: 'bold', fontSize: '14px', letterSpacing: '0.5px' }}>
+                  {t('post.title')}
+                </span>
+                <button
+                  onClick={() => setViewingPost(null)}
+                  style={{
+                    background: 'rgba(255,255,255,0.05)',
+                    border: 'none',
+                    color: '#888',
+                    fontSize: '18px',
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '50%',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                >
+                  ✕
+                </button>
               </div>
 
-              <img src={viewingPost.img} style={{ width: '100%', borderRadius: '15px', border: '1px solid #333', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' }} />
+              {/* 主痛觉图谱展示 */}
+              <div style={{ borderRadius: '16px', overflow: 'hidden', border: '1px solid #222', background: '#000', marginBottom: '16px' }}>
+                <img src={viewingPost.img} style={{ width: '100%', display: 'block', objectFit: 'contain' }} alt="Embodied Pain Map" />
+              </div>
 
-              <div style={{ marginTop: '20px' }}>
-                <p style={{ color: '#fff', fontSize: '18px', fontWeight: 'bold', lineHeight: '1.4' }}>
-                  “{viewingPost.text}”
+              {/* 描述与痛觉性质 */}
+              <div style={{ marginBottom: '18px' }}>
+                <p style={{ color: '#fff', fontSize: '16px', fontWeight: '600', lineHeight: '1.5', margin: '0 0 10px 0' }}>
+                  “ {viewingPost.text} ”
                 </p>
-
-                <div style={{ background: '#111', padding: '15px', borderRadius: '12px', marginTop: '15px', borderLeft: '4px solid #d32f2f' }}>
-                  <h4 style={{ color: '#d32f2f', margin: '0 0 8px 0', fontSize: '13px' }}>{t('post.aiAnalysis')}</h4>
-                  <p style={{ color: '#ccc', fontSize: '13px', lineHeight: '1.6' }}>
-                    {viewingPost.analogy || t('post.aiDefault')}
-                  </p>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <span style={{ color: '#d32f2f', fontSize: '11px', background: 'rgba(211,47,47,0.1)', padding: '3px 10px', borderRadius: '12px', fontWeight: 'bold' }}>
+                    {t(`painNames.${viewingPost.painTags?.[0] || 'twist'}`)}
+                  </span>
+                  <span style={{ color: '#666', fontSize: '11px' }}>
+                    ID: #{viewingPost.id ? String(viewingPost.id).slice(-6) : 'unknown'}
+                  </span>
                 </div>
+              </div>
 
-                <div style={{ background: 'rgba(76, 175, 80, 0.05)', padding: '15px', borderRadius: '12px', marginTop: '15px', borderLeft: '4px solid #4caf50' }}>
-                  <h4 style={{ color: '#4caf50', margin: '0 0 8px 0', fontSize: '13px' }}>{t('post.selfExperience')}</h4>
-                  {/* 如果已经录入了缓解经验，展示经验库并支持赞同（点赞有用） */}
-                  {viewingPost.userExperience ? (
-                    <div style={{ background: 'rgba(76,175,80,0.06)', borderRadius: '12px', padding: '12px', borderLeft: '3.5px solid #4caf50' }}>
-                      <p style={{ color: '#ccc', fontSize: '13px', margin: '0 0 8px 0', lineHeight: '1.5' }}>
-                        {viewingPost.userExperience}
-                      </p>
+              {/* 模块1：AI 痛觉重构分析 */}
+              <div style={{
+                background: 'linear-gradient(145deg, #181818, #111111)',
+                padding: '16px',
+                borderRadius: '16px',
+                marginBottom: '14px',
+                border: '1px solid rgba(255,255,255,0.03)',
+                borderLeft: '4px solid #d32f2f'
+              }}>
+                <h4 style={{ color: '#ef5350', margin: '0 0 8px 0', fontSize: '13px', fontWeight: 'bold' }}>
+                  {t('post.aiAnalysis')}
+                </h4>
+                <p style={{ color: '#b0b0b0', fontSize: '12.5px', lineHeight: '1.6', margin: 0 }}>
+                  {viewingPost.analogy || t('post.aiDefault')}
+                </p>
+              </div>
 
-                      {/* 经验共同特征标签 */}
+              {/* 模块2：她的亲历自愈经验 */}
+              <div style={{
+                background: 'linear-gradient(145deg, #181a18, #111311)',
+                padding: '16px',
+                borderRadius: '16px',
+                border: '1px solid rgba(255,255,255,0.03)',
+                borderLeft: '4px solid #4caf50',
+                marginBottom: '20px'
+              }}>
+                <h4 style={{ color: '#4caf50', margin: '0 0 8px 0', fontSize: '13px', fontWeight: 'bold' }}>
+                  {t('post.selfExperience')}
+                </h4>
+
+                {viewingPost.userExperience ? (
+                  <div>
+                    <p style={{ color: '#b0b0b0', fontSize: '12.5px', margin: '0 0 12px 0', lineHeight: '1.6' }}>
+                      {viewingPost.userExperience}
+                    </p>
+
+                    {/* 标签列表 */}
+                    {viewingPost.experienceTags && viewingPost.experienceTags.length > 0 && (
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '12px' }}>
-                        {(viewingPost.experienceTags || []).map(tag => (
+                        {viewingPost.experienceTags.map(tag => (
                           <span key={tag} style={{ background: 'rgba(76,175,80,0.12)', color: '#4caf50', padding: '3px 8px', borderRadius: '10px', fontSize: '10.5px' }}>
                             #{tag}
                           </span>
                         ))}
                       </div>
+                    )}
 
-                      {/* === 集体经验沉淀，用户可点赞“这个有用” === */}
-                      <div style={{ display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid rgba(76,175,80,0.1)', paddingTop: '8px' }}>
-                        <button
-                          onClick={async (e) => {
-                            e.stopPropagation();
-                            const currentHelpful = viewingPost.helpfulVotes || 0;
-                            const hasVoted = viewingPost.hasUserVotedHelpful || false;
-
-                            // 幂等式赞同计算
-                            const nextVotes = currentHelpful + (hasVoted ? -1 : 1);
-                            const updates = { helpfulVotes: nextVotes, hasUserVotedHelpful: !hasVoted };
-
-                            // 1. 更新本地与弹窗状态
-                            setPosts(prev => prev.map(p => p.id === viewingPost.id ? { ...p, ...updates } : p));
-                            setViewingPost(vp => ({ ...vp, ...updates }));
-                            showToast(hasVoted ? "helpfulRemoved" : "helpfulAdded");
-
-                            await updatePostInCloud(viewingPost.id, updates);
-                          }}
-                          style={{
-                            background: viewingPost.hasUserVotedHelpful ? 'rgba(76,175,80,0.15)' : 'transparent',
-                            border: '1px solid rgba(76,175,80,0.3)',
-                            borderRadius: '20px',
-                            color: '#4caf50',
-                            padding: '5px 12px',
-                            fontSize: '11px',
-                            cursor: 'pointer',
-                            fontWeight: 'bold',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '6px',
-                            transition: 'all 0.2s'
-                          }}
-                        >
-                          👍 {viewingPost.hasUserVotedHelpful ? '已赞同有用' : '亲测有用'} · {viewingPost.helpfulVotes || 0}
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      <p style={{ color: '#888', fontSize: '13px', lineHeight: '1.5', margin: 0 }}>
-                        {t('post.noExperience')}
-                      </p>
+                    {/* 经验投票区域 */}
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '10px' }}>
                       <button
-                        style={{ marginTop: '12px', width: '100%', padding: '10px', background: 'transparent', border: '1px dashed #4caf50', color: '#4caf50', borderRadius: '8px', fontSize: '12px', cursor: 'pointer', fontWeight: 'bold' }}
-                        onClick={() => setShowExpInput(true)}
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          const currentHelpful = viewingPost.helpfulVotes || 0;
+                          const hasVoted = viewingPost.hasUserVotedHelpful || false;
+                          const nextVotes = currentHelpful + (hasVoted ? -1 : 1);
+                          const updates = { helpfulVotes: nextVotes, hasUserVotedHelpful: !hasVoted };
+
+                          setPosts(prev => prev.map(p => p.id === viewingPost.id ? { ...p, ...updates } : p));
+                          setViewingPost(vp => ({ ...vp, ...updates }));
+                          showToast(hasVoted ? "helpfulRemoved" : "helpfulAdded");
+
+                          await updatePostInCloud(viewingPost.id, updates);
+                        }}
+                        style={{
+                          background: viewingPost.hasUserVotedHelpful ? 'rgba(76,175,80,0.15)' : 'rgba(255,255,255,0.02)',
+                          border: '1px solid rgba(76,175,80,0.3)',
+                          borderRadius: '20px',
+                          color: '#4caf50',
+                          padding: '6px 14px',
+                          fontSize: '11px',
+                          cursor: 'pointer',
+                          fontWeight: 'bold',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          transition: 'all 0.2s'
+                        }}
                       >
-                        {t('post.addExperience')}
+                        👍 {viewingPost.hasUserVotedHelpful ? '已赞同有用' : '亲测有用'} · {viewingPost.helpfulVotes || 0}
                       </button>
-                    </>
-                  )}
-                </div>
-
-                {showExpInput && (
-                  <div style={{ background: '#1a1a1a', padding: '15px', borderRadius: '12px', marginTop: '12px', border: '1px solid #333' }}>
-                    <textarea
-                      placeholder={t('post.experiencePlaceholder')}
-                      style={{ width: '100%', background: '#111', color: '#fff', border: '1px solid #444', borderRadius: '8px', padding: '10px', fontSize: '13px', minHeight: '80px', resize: 'none' }}
-                      value={expText}
-                      onChange={e => setExpText(e.target.value)}
-                    />
-                    <input
-                      placeholder={t('post.tagsPlaceholder')}
-                      style={{ width: '100%', background: '#111', color: '#fff', border: '1px solid #444', borderRadius: '8px', padding: '10px', fontSize: '13px', marginTop: '8px' }}
-                      value={expTags}
-                      onChange={e => setExpTags(e.target.value)}
-                    />
-                    <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
-                      <button
-                        style={{ flex: 1, padding: '8px', background: '#333', color: '#aaa', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
-                        onClick={() => setShowExpInput(false)}
-                      >{t('post.cancel')}</button>
-                      <button
-                        style={{ flex: 1, padding: '8px', background: '#4caf50', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
-                        onClick={() => handleSaveExperience(viewingPost)}
-                      >{t('post.publishExperience')}</button>
                     </div>
+                  </div>
+                ) : (
+                  <div>
+                    <p style={{ color: '#888', fontSize: '12px', lineHeight: '1.5', margin: '0 0 10px 0' }}>
+                      {t('post.noExperience')}
+                    </p>
+                    <button
+                      style={{
+                        width: '100%',
+                        padding: '10px',
+                        background: 'transparent',
+                        border: '1px dashed #4caf50',
+                        color: '#4caf50',
+                        borderRadius: '12px',
+                        fontSize: '12px',
+                        cursor: 'pointer',
+                        fontWeight: 'bold'
+                      }}
+                      onClick={() => setShowExpInput(true)}
+                    >
+                      {t('post.addExperience')}
+                    </button>
                   </div>
                 )}
               </div>
 
-              <div style={{ marginTop: '25px', paddingTop: '20px', borderTop: '1px solid #222', display: 'flex', justifyContent: 'center' }}>
+              {/* 输入经验表单 */}
+              {showExpInput && (
+                <div style={{ background: '#1c1c1c', padding: '16px', borderRadius: '16px', border: '1px solid #333', marginBottom: '20px' }}>
+                  <textarea
+                    placeholder={t('post.experiencePlaceholder')}
+                    style={{ width: '100%', background: '#111', color: '#fff', border: '1px solid #444', borderRadius: '8px', padding: '10px', fontSize: '13px', minHeight: '80px', resize: 'none', boxSizing: 'border-box' }}
+                    value={expText}
+                    onChange={e => setExpText(e.target.value)}
+                  />
+                  <input
+                    placeholder={t('post.tagsPlaceholder')}
+                    style={{ width: '100%', background: '#111', color: '#fff', border: '1px solid #444', borderRadius: '8px', padding: '10px', fontSize: '13px', marginTop: '8px', boxSizing: 'border-box' }}
+                    value={expTags}
+                    onChange={e => setExpTags(e.target.value)}
+                  />
+                  <div style={{ display: 'flex', gap: '10px', marginTop: '12px' }}>
+                    <button
+                      style={{ flex: 1, padding: '8px', background: '#333', color: '#aaa', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '12px' }}
+                      onClick={() => setShowExpInput(false)}
+                    >
+                      {t('post.cancel')}
+                    </button>
+                    <button
+                      style={{ flex: 1, padding: '8px', background: '#4caf50', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}
+                      onClick={() => handleSaveExperience(viewingPost)}
+                    >
+                      {t('post.publishExperience')}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* 底部按钮交互排版 */}
+              <div style={{ display: 'flex', gap: '12px', borderTop: '1px solid #2a2a2a', paddingTop: '16px' }}>
                 <button
                   onClick={async (e) => {
                     e.stopPropagation();
@@ -4300,23 +4361,51 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
                       hasUserHugged: !isHugged
                     };
 
-                    setPosts(prev => prev.map(p =>
-                      p.id === viewingPost.id ? { ...p, ...updates } : p
-                    ));
+                    setPosts(prev => prev.map(p => p.id === viewingPost.id ? { ...p, ...updates } : p));
                     setViewingPost(vp => ({ ...vp, ...updates }));
                     showToast(isHugged ? "hugRetracted" : "hugSent");
 
                     const updatedPosts = await updatePostInCloud(viewingPost.id, updates);
                     if (updatedPosts) setPosts(updatedPosts);
                   }}
+                  style={{
+                    flex: 1.3,
+                    padding: '12px',
+                    borderRadius: '24px',
+                    border: viewingPost.hasUserHugged ? '1px solid #ef5350' : '1px solid #333',
+                    background: viewingPost.hasUserHugged ? 'rgba(239,83,80,0.1)' : 'rgba(255,255,255,0.02)',
+                    color: viewingPost.hasUserHugged ? '#ef5350' : '#888',
+                    cursor: 'pointer',
+                    fontWeight: 'bold',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    fontSize: '13px'
+                  }}
                 >
-                  <span style={{ fontSize: '20px' }}>
-                    {viewingPost.hasUserHugged ? '❤️' : '🤍'}
-                  </span>
+                  <span style={{ fontSize: '16px' }}>{viewingPost.hasUserHugged ? '❤️' : '🤍'}</span>
                   <span>{viewingPost.hasUserHugged ? t('post.hugged') : t('post.giveHug')}</span>
-                  <span style={{ fontSize: '13px', color: viewingPost.hasUserHugged ? '#ef9a9a' : '#666', fontWeight: 'normal' }}>
+                  <span style={{ fontSize: '11px', background: 'rgba(255,255,255,0.05)', padding: '2px 6px', borderRadius: '8px' }}>
                     {viewingPost.hugs}
                   </span>
+                </button>
+
+                <button
+                  onClick={() => setViewingPost(null)}
+                  style={{
+                    flex: 1,
+                    padding: '12px',
+                    borderRadius: '24px',
+                    border: 'none',
+                    background: '#333',
+                    color: '#eee',
+                    cursor: 'pointer',
+                    fontWeight: 'bold',
+                    fontSize: '13px'
+                  }}
+                >
+                  {t('diary.close')}
                 </button>
               </div>
             </div>

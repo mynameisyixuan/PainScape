@@ -1,10 +1,4 @@
-# xx xx症状多久 
-# 现病史：为什么起病，起病症状，伴随症状，有没有自己吃药，
-# 什么效果，发展情况，有没有一般检查，有没有家族史，
-# 家族有没有妇产科病史
-# 供您参考：生活习惯整理
-# 自愈建议的分类：
-
+# main.py
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,6 +7,8 @@ from typing import Optional, Dict, List
 import os
 import json
 import re
+import uuid
+import requests
 from dotenv import load_dotenv
 from openai import OpenAI
 from datetime import datetime
@@ -39,9 +35,9 @@ def save_posts(posts):
 load_dotenv()
 
 # ═══════════════════════════════════════════════════════════
-# 多 API Provider 配置
+# 多 API Provider 配置（集成 Vivo 蓝心大模型）
 # ═══════════════════════════════════════════════════════════
-LLM_PROVIDER = os.getenv("LLM_PROVIDER", "dashscope").lower()
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "vivo").lower()  # 默认使用 vivo
 
 PROVIDER_CONFIG = {
     "openai": {
@@ -71,6 +67,15 @@ PROVIDER_CONFIG = {
         "max_tokens": 4096,
         "display_name": "通义千问 Qwen-Plus",
     },
+    "vivo": {
+        "base_url": "https://api-ai.vivo.com.cn/v1",
+        "api_key_env": "VIVO_API_KEY",  # 请在 .env 中配置 VIVO_API_KEY = "你的AppKey"
+        "model": "Volc-DeepSeek-V3.2",  # 支持配置为 Volc-DeepSeek-V3.2 或 Doubao-Seed-2.0-mini
+        "model_quick": "Doubao-Seed-2.0-mini",
+        "model_refine": "Doubao-Seed-2.0-mini",
+        "max_tokens": 4096,
+        "display_name": "Vivo蓝心大模型",
+    }
 }
 
 if LLM_PROVIDER not in PROVIDER_CONFIG:
@@ -79,10 +84,13 @@ if LLM_PROVIDER not in PROVIDER_CONFIG:
 config = PROVIDER_CONFIG[LLM_PROVIDER]
 api_key = os.getenv(config["api_key_env"])
 
-client = OpenAI(
-    api_key=api_key,
-    base_url=config["base_url"],
-)
+# 全局初始化标准客户端（若为非 vivo 渠道）
+client = None
+if LLM_PROVIDER != "vivo":
+    client = OpenAI(
+        api_key=api_key,
+        base_url=config["base_url"],
+    )
 
 print(f"✅ LLM Provider: {config['display_name']} ({config['model']})")
 
@@ -114,7 +122,7 @@ class PainData(BaseModel):
     cycleDay: str = "未提供"
     targetLanguage: Optional[str] = "zh"
     isQuickLog: Optional[bool] = False
-    accompanyingSymptoms: Optional[List[str]] = None  # 新增：伴随症状
+    accompanyingSymptoms: Optional[List[str]] = None
 
 
 # ─────────────────────────────────────────────
@@ -161,69 +169,64 @@ TONE_MAP = {
 
 
 # ═══════════════════════════════════════════════════════════
-# 辅助函数：构建各模块内容
+# 辅助函数
 # ═══════════════════════════════════════════════════════════
 
 def build_pain_location_desc(spatial_map: Optional[Dict], lang: str) -> str:
-    """构建疼痛位置描述"""
     if not spatial_map:
-        return "未提供疼痛位置信息" if lang == "zh" else "Pain location not provided"
+        return "未提供位置定位" if lang == "zh" else "Location not provided"
     
     desc_parts = []
     if spatial_map.get("abdomen", 0) > 0:
-        desc_parts.append(f"腹部 {spatial_map['abdomen']*100:.0f}%" if lang == "zh" else f"Abdomen {spatial_map['abdomen']*100:.0f}%")
+        desc_parts.append(f"下腹盆腔核心区 {spatial_map['abdomen']*100:.0f}%" if lang == "zh" else f"Anterior lower pelvis {spatial_map['abdomen']*100:.0f}%")
     if spatial_map.get("lowerBack", 0) > 0:
-        desc_parts.append(f"腰骶部 {spatial_map['lowerBack']*100:.0f}%" if lang == "zh" else f"Lower back {spatial_map['lowerBack']*100:.0f}%")
+        desc_parts.append(f"腰骶骶骨区 {spatial_map['lowerBack']*100:.0f}%" if lang == "zh" else f"Lumbosacral region {spatial_map['lowerBack']*100:.0f}%")
     
-    return "、".join(desc_parts) if desc_parts else ("弥漫性疼痛" if lang == "zh" else "Diffuse pain")
+    return "、".join(desc_parts) if desc_parts else ("弥漫性盆腔疼痛" if lang == "zh" else "Diffuse pelvic pain")
 
 
 def build_risk_warning(mb: Dict, lang: str) -> str:
-    """构建风险提示（用药警示）"""
     warnings = []
     allergy = mb.get("allergies", "")
     
     if allergy == "ibuprofen":
-        warnings.append("⚠️ 布洛芬过敏史，请避免使用NSAIDs类药物，建议使用对乙酰氨基酚。" if lang == "zh" else "⚠️ Ibuprofen allergy. Avoid NSAIDs, consider acetaminophen.")
+        warnings.append("⚠️ 明确布洛芬（NSAIDs）药物过敏史。临床用药时请避免处方布洛芬，建议遵医嘱替换为对乙酰氨基酚。" if lang == "zh" else "⚠️ Documented Ibuprofen (NSAIDs) allergy. Avoid prescribing Ibuprofen; consider Acetaminophen.")
     elif allergy == "aspirin":
-        warnings.append("⚠️ 阿司匹林过敏史，请避免使用该药物。" if lang == "zh" else "⚠️ Aspirin allergy. Avoid this medication.")
+        warnings.append("⚠️ 阿司匹林过敏史，请避免使用NSAIDs水杨酸类药物。" if lang == "zh" else "⚠️ Aspirin allergy. Avoid salicylic NSAIDs.")
     elif allergy in ["penicillin", "sulfonamides"]:
-        warnings.append(f"⚠️ {allergy}过敏史，就医时请务必告知医生。" if lang == "zh" else f"⚠️ {allergy} allergy. Please inform your doctor.")
+        warnings.append(f"⚠️ 既往史存在【{allergy}】药物过敏，就诊时请务必主动告知门诊医师。" if lang == "zh" else f"⚠️ Documented {allergy} allergy. Please notify the attending gynecologist.")
     
-    return "\n".join(warnings) if warnings else ("无特殊用药风险提示" if lang == "zh" else "No specific medication risks")
+    return "\n".join(warnings) if warnings else ("目前未见特异性药物过敏风险提示" if lang == "zh" else "No specific medication risks documented")
 
 
 def build_triage_advice(pain_score: int, symptoms: List[str], lang: str) -> str:
-    """构建分诊建议"""
     severe_symptoms = ["呕吐", "晕倒", "昏厥", "发黑", "vomiting", "fainting", "blackout"]
     has_severe = any(s in severe_symptoms for s in symptoms) if symptoms else False
     
     if pain_score > 70 or has_severe:
-        return "🏥 建议就医：疼痛程度较重或伴有严重伴随症状，建议尽快前往妇科门诊就诊。" if lang == "zh" else "🏥 Seek medical attention: Severe pain or serious symptoms. Please visit a gynecology clinic."
+        return "🏥 建议急门诊评估：当前痛觉评分较高且伴随自主神经系统受损指征（如恶心冷汗），建议尽快前往妇产科急门诊就诊，排除卵巢囊肿扭转或内膜异位囊肿破裂。" if lang == "zh" else "🏥 Urgent Gynecological Visit Recommended: High pain intensity with autonomic signs. Seek immediate assessment to rule out acute pelvic complications."
     elif pain_score > 40:
-        return "🩺 可居家观察：如疼痛持续加重或出现新症状，建议就医。" if lang == "zh" else "🩺 Monitor at home: Seek medical attention if pain worsens or new symptoms appear."
+        return "🩺 建议常规门诊：疼痛中度发作，若休息后未见明显缓解或持续加剧，建议预约妇科门诊排查继发性病变。" if lang == "zh" else "🩺 Outpatient Gynecology Visit Recommended: Moderate symptoms. Consider scheduling a routine evaluation."
     else:
-        return "🏠 居家护理：目前疼痛程度较轻，可通过休息、热敷等方式缓解。" if lang == "zh" else "🏠 Home care: Mild pain, can be managed with rest and heat therapy."
+        return "🏠 居家自愈观察：目前痛感负荷尚处于可耐受范围，建议配合热敷、顺时针轻揉腹部、静卧等自愈措施。" if lang == "zh" else "🏠 Home Self-Care: Mild symptoms. Manage with rest and local thermotherapy."
 
 
 def build_exam_advice(mb: Dict, lang: str) -> Dict:
-    """构建检查建议（带条件判断）"""
     has_sexual_life = mb.get("hasSexualLife") == "true" or mb.get("hasSexualLife") == True
     
     exam = {
-        "name": "子宫及双附件彩色超声" if lang == "zh" else "Pelvic Ultrasound (Transabdominal)",
-        "preparation": "检查前1小时饮水500-800ml，保持膀胱充盈（憋尿）。" if lang == "zh" else "Drink 500-800ml water 1 hour before exam. Full bladder required.",
-        "note": "✅ 超声检查无辐射，安全、便捷，可重复检查。" if lang == "zh" else "✅ Ultrasound is radiation-free, safe, and convenient."
+        "name": "妇科盆腔超声（子宫及附件彩色多普勒超声）" if lang == "zh" else "Pelvic Color Doppler Ultrasound",
+        "preparation": "需在检查前1小时内饮水500-800ml，保持充盈膀胱（憋尿）。" if lang == "zh" else "Drink 500-800ml water 1 hour prior to scan; keep bladder comfortably full.",
+        "note": "✅ 门诊首选无创初筛，用于评估子宫腺肌症、子宫肌瘤、内膜厚度及附件囊肿。" if lang == "zh" else "✅ First-line non-invasive screening to evaluate adenomyosis, uterine fibroids, and ovarian cysts."
     }
     
     if has_sexual_life:
-        exam["alternative"] = "如需更清晰观察内膜及卵巢，可咨询医生是否适合加做经阴道超声。" if lang == "zh" else "For clearer imaging of endometrium and ovaries, consult your doctor about transvaginal ultrasound."
+        exam["alternative"] = "如已婚或有性生活史，推荐加做经阴道超声（阴超），可更清晰探查深部盆腔粘连或微小子宫内膜异位结节。" if lang == "zh" else "Transvaginal ultrasound is recommended for individuals with a history of sexual activity to detect deep pelvic adhesions."
     
     return exam
 
 
 def build_health_tips_link(pain_type: str, lang: str) -> str:
-    """构建科普链接"""
     pain_key_map = {
         "twist": "cramping",
         "pierce": "stabbing",
@@ -232,107 +235,91 @@ def build_health_tips_link(pain_type: str, lang: str) -> str:
         "scrape": "tearing"
     }
     pain_key = pain_key_map.get(pain_type, pain_type)
-    
-    if lang == "zh":
-        return f"📚 相关科普：痛经的自我管理 → https://example.com/health/dysmenorrhea/{pain_key}"
-    else:
-        return f"📚 Health Tips: Self-management for dysmenorrhea → https://example.com/en/health/dysmenorrhea/{pain_key}"
+    return f"📚 临床宣教：痛经的自愈管理与科学指引 → https://health-edu.org/gynecology/dysmenorrhea/{pain_key}" if lang == "zh" else f"📚 Educational Resources: Dysmenorrhea Self-management Guide → https://health-edu.org/en/gynecology/dysmenorrhea/{pain_key}"
 
 
 def build_cycle_context(cycle_day: str, lang: str) -> str:
-    """构建周期上下文"""
     if not cycle_day or cycle_day in ["未提供", "Not provided", ""]:
         return ""
     day_str = cycle_day.lower()
     if lang == "en":
         if "1" in day_str or "2" in day_str:
-            return "Acute phase (Day 1-2): peak prostaglandins, focus on acute pain relief."
+            return "Current Phase: Acute Menstruation (Day 1-2). Prostaglandin levels peak, leading to acute uterine smooth muscle hyper-contraction."
         elif "3" in day_str or "4" in day_str or "5" in day_str:
-            return "Recovery phase (Day 3-5): dull pain, focus on easing discomfort."
+            return "Current Phase: Mid-Late Menstruation (Day 3-5). Transitioning to sub-acute residual dull pain."
         elif "ovulat" in day_str:
-            return "Ovulation pain: potential secondary pathology, recommend further evaluation."
+            return "Current Phase: Ovulatory phase pain. Monitor for secondary pelvic congestion or intermenstrual bleeding."
     else:
         if any(d in cycle_day for d in ["1", "2"]):
-            return "急性期（第1-2天）：前列腺素达峰，需侧重急性镇痛。"
+            return "当前时期：行经期急性发作期（第1-2天）。前列腺素分泌达峰，子宫平滑肌呈高频痉挛性收缩，需重点镇痛与缓解缺血。"
         elif any(d in cycle_day for d in ["3", "4", "5"]):
-            return "缓解期（第3-5天）：侧重隐痛与坠胀缓解。"
+            return "当前时期：月经中后期（第3-5天）。平滑肌张力逐渐下降，多呈钝性残余隐痛，需重点温热理疗。"
         elif "排卵" in cycle_day:
-            return "排卵期异常痛：需在主诉中提示排查继发性病变。"
+            return "当前时期：排卵期不适。需在病史采集时排查盆腔偶发性充血病变。"
     return ""
 
 
 def map_cycle_day_to_phase(cycle_day: str, lang: str) -> str:
-    """将周期天数映射到生理阶段"""
     if not cycle_day or cycle_day in ["未提供", "Not provided", ""]:
         return ""
-    
-    phase = ""
-    if any(d in cycle_day for d in ["1", "2"]):
-        phase = "月经期" if lang == "zh" else "menstrual phase"
-    elif any(d in cycle_day for d in ["3", "4", "5", "6", "7"]):
+    phase = "月经期" if lang == "zh" else "menstrual phase"
+    if any(d in cycle_day for d in ["3", "4", "5", "6", "7"]):
         phase = "卵泡期" if lang == "zh" else "follicular phase"
     elif "排卵" in cycle_day:
         phase = "排卵期" if lang == "zh" else "ovulation phase"
-    else:
-        phase = "黄体期" if lang == "zh" else "luteal phase"
-    
-    if lang == "zh":
-        return f"（根据周期信息，用户处于{phase}，建议参考对应阶段给出作息/运动建议）"
-    else:
-        return f"(User is in the {phase}. Adjust lifestyle/sports advice accordingly.)"
+    return f"（生理阶段参考：用户目前处于{phase}）" if lang == "zh" else f"(Physiological phase: {phase})"
 
 
 def build_lifestyle_context(mb: Dict, lang: str) -> str:
-    """构建生活习惯/家族史等上下文"""
     if not mb:
         return ""
 
     contexts = []
-
-    # 年龄
     age_map_zh = {"under18": "18岁以下", "18-25": "18-25岁", "26-35": "26-35岁", "36-45": "36-45岁", "over45": "45岁以上"}
     age_map_en = {"under18": "Under 18", "18-25": "18-25", "26-35": "26-35", "36-45": "36-45", "over45": "Over 45"}
+    
     if mb.get("age"):
         age_label = age_map_en.get(mb["age"], mb["age"]) if lang == "en" else age_map_zh.get(mb["age"], mb["age"])
-        contexts.append(f"年龄范围: {age_label}。" if lang == "zh" else f"Age range: {age_label}.")
+        contexts.append(f"年龄阶段: {age_label}" if lang == "zh" else f"Age cohort: {age_label}")
 
-    # 体力活动量
     if mb.get("activityLevel"):
         if mb["activityLevel"] == "sedentary":
-            contexts.append("用户有久坐习惯。" if lang == "zh" else "User has sedentary lifestyle.")
+            contexts.append("静态习惯：工作/日常久坐多动少（易导致盆腔微循环淤血，加重坠胀）" if lang == "zh" else "Lifestyle factor: Sedentary desk habit (potentially worsening pelvic blood pooling)")
         elif mb["activityLevel"] == "active":
-            contexts.append("用户有高强度运动习惯。" if lang == "zh" else "User has high activity level.")
+            contexts.append("日常体力活动量较大，有规律中高强度运动史" if lang == "zh" else "Lifestyle factor: High baseline physical activity")
 
-    # 生活习惯
-    lifestyle_map_zh = {"regular": "作息规律", "irregular": "作息不规律/常熬夜", "smoking": "有吸烟习惯", "alcohol": "常饮酒", "coldPref": "喜食生冷"}
-    lifestyle_map_en = {"regular": "Regular schedule", "irregular": "Irregular schedule", "smoking": "Smoking", "alcohol": "Alcohol consumption", "coldPref": "Prefers cold food"}
-    if mb.get("lifestyle"):
-        lifestyle_label = lifestyle_map_en.get(mb["lifestyle"], mb["lifestyle"]) if lang == "en" else lifestyle_map_zh.get(mb["lifestyle"], mb["lifestyle"])
-        contexts.append(f"生活习惯: {lifestyle_label}。" if lang == "zh" else f"Lifestyle: {lifestyle_label}.")
+    # 生活 habits 整理
+    lifestyle_map_zh = {"sleepShort": "睡眠时长不足", "sleepIrregular": "作息紊乱/倒班熬夜", "smoking": "吸烟", "alcohol": "常饮酒", "coldFood": "喜食生冷", "spicy": "喜辛辣"}
+    lifestyle_map_en = {"sleepShort": "Insufficient sleep", "sleepIrregular": "Irregular schedule/night shifts", "smoking": "Active smoking", "alcohol": "Regular alcohol consumption", "coldFood": "Prefers cold food/iced drinks"}
+    
+    active_habits = []
+    for habit in ["sleepShort", "sleepIrregular", "smoking", "alcohol", "coldFood", "spicy"]:
+        if habit in mb.get("lifestyleArr", []):
+            active_habits.append(lifestyle_map_en[habit] if lang == "en" else lifestyle_map_zh[habit])
+    
+    if active_habits:
+        contexts.append(f"不良作息与饮食倾向：{', '.join(active_habits)}" if lang == "zh" else f"Habit and dietary factors: {', '.join(active_habits)}")
 
-    # 家族史（只在有明确信息时添加）
-    family_map_zh = {"mother": "母亲有严重痛经", "sister": "姐妹有严重痛经", "both": "多位女性亲属有痛经"}
-    family_map_en = {"mother": "Mother has severe dysmenorrhea", "sister": "Sister has severe dysmenorrhea", "both": "Multiple family members affected"}
-    if mb.get("familyHistory") and mb["familyHistory"] not in ["none", "unknown", ""]:
-        family_label = family_map_en.get(mb["familyHistory"], mb["familyHistory"]) if lang == "en" else family_map_zh.get(mb["familyHistory"], mb["familyHistory"])
-        contexts.append(f"家族史: {family_label}。" if lang == "zh" else f"Family history: {family_label}.")
+    # 家族史
+    if mb.get("familyHistoryArr") and "none" not in mb.get("familyHistoryArr", []):
+        family_labels = []
+        family_map_zh = {"mother": "母系严重痛经遗传史", "sister": "同胞姐妹痛经史", "unknown": "痛经家族史不详"}
+        family_map_en = {"mother": "Maternal history of severe dysmenorrhea", "sister": "Sister with severe dysmenorrhea"}
+        for f in mb.get("familyHistoryArr", []):
+            label = family_map_en.get(f, f) if lang == "en" else family_map_zh.get(f, f)
+            family_labels.append(label)
+        if family_labels:
+            contexts.append(f"家族史：{', '.join(family_labels)}" if lang == "zh" else f"Family background: {', '.join(family_labels)}")
 
     # 既往诊断
-    diagnosis_map_zh = {"endometriosis": "子宫内膜异位症", "adenomyosis": "子宫腺肌症", "pcos": "多囊卵巢综合征", "fibroids": "子宫肌瘤"}
-    diagnosis_map_en = {"endometriosis": "Endometriosis", "adenomyosis": "Adenomyosis", "pcos": "PCOS", "fibroids": "Uterine Fibroids"}
+    diagnosis_map_zh = {"endometriosis": "子宫内膜异位症", "adenomyosis": "子宫腺肌症", "pcos": "多囊卵巢综合征", "fibroids": "子宫肌瘤", "pid": "盆腔炎性疾病（PID）"}
+    diagnosis_map_en = {"endometriosis": "Endometriosis", "adenomyosis": "Adenomyosis", "pcos": "PCOS", "fibroids": "Uterine Fibroids", "pid": "Pelvic Inflammatory Disease"}
     if mb.get("diagnosed") and mb["diagnosed"] not in ["none", "unchecked", ""]:
         diag_label = diagnosis_map_en.get(mb["diagnosed"], mb["diagnosed"]) if lang == "en" else diagnosis_map_zh.get(mb["diagnosed"], mb["diagnosed"])
-        contexts.append(f"既往诊断: {diag_label}。" if lang == "zh" else f"Past diagnosis: {diag_label}.")
-
-    # 过敏史
-    allergy_map_zh = {"ibuprofen": "布洛芬", "aspirin": "阿司匹林", "penicillin": "青霉素", "sulfonamides": "磺胺类"}
-    allergy_map_en = {"ibuprofen": "Ibuprofen", "aspirin": "Aspirin", "penicillin": "Penicillin", "sulfonamides": "Sulfonamides"}
-    if mb.get("allergies") and mb["allergies"] not in ["none", "unknown", ""]:
-        allergy_label = allergy_map_en.get(mb["allergies"], mb["allergies"]) if lang == "en" else allergy_map_zh.get(mb["allergies"], mb["allergies"])
-        contexts.append(f"药物过敏: {allergy_label}。" if lang == "zh" else f"Drug allergy: {allergy_label}.")
+        contexts.append(f"临床诊断病史：曾确诊为 {diag_label}" if lang == "zh" else f"Clinical diagnosis history: Confirmed {diag_label}")
 
     if contexts:
-        header = "\n【生活习惯与风险因素】\n" if lang == "zh" else "\n[Lifestyle & Risk Factors]\n"
+        header = "\n【患者基本习惯、病史与暴露风险整合供LLM分析】\n" if lang == "zh" else "\n[Patient Lifestyle and Risk Profiling for LLM Analysis]\n"
         return header + "\n".join(f"- {c}" for c in contexts)
     return ""
 
@@ -356,13 +343,11 @@ async def generate_pain_report(data: PainData):
     allergy = mb.get("allergies", "")
     diag = mb.get("diagnosed", "")
 
-    # 根据过敏史确定安全的止痛药名称
     safe_painkiller = "对乙酰氨基酚" if lang == "zh" else "Acetaminophen"
     default_painkiller = "布洛芬" if lang == "zh" else "Ibuprofen"
     allergy_list = ["ibuprofen", "aspirin", "nsaids"]
     painkiller = safe_painkiller if (allergy in allergy_list) else default_painkiller
 
-    # 构建各模块内容（非LLM部分）
     pain_location_desc = build_pain_location_desc(data.spatialMap, lang)
     accompanying_symptoms = data.accompanyingSymptoms or []
     accompanying_desc = "、".join(accompanying_symptoms) if accompanying_symptoms else ("无特殊伴随症状" if lang == "zh" else "No specific accompanying symptoms")
@@ -371,105 +356,168 @@ async def generate_pain_report(data: PainData):
     exam_advice = build_exam_advice(mb, lang)
     health_tips_link = build_health_tips_link(data.dominantPain, lang)
 
-    # 模块化JSON模板
     JSON_TEMPLATE = """
     {
-      "chief_complaint": "主诉：症状 + 持续时间，如'间断下腹痛2天余'",
-      "present_illness": "现病史：起病情况、主要症状、伴随症状、诊疗经过、转归",
-      "past_history": "既往史：仅填写用户真实提供的信息（诊断、手术史等）",
-      "menstrual_history": "月经史：初潮年龄、周期规律、经期天数、末次月经等",
-      "clinical_diagnosis": "临床诊断：根据症状和体征给出的初步判断",
-      "clinical_suggestions": "临床建议：包括用药建议、生活方式建议",
-      "analogy": "痛觉通感描述（用于伴侣Tab）",
-      "work": "请假条（用于职场Tab）",
-      "action": ["伴侣实操建议1", "伴侣实操建议2", "伴侣实操建议3"],
-      "selfCare": ["自愈建议1", "自愈建议2", "自愈建议3", "自愈建议4"]
+      "chief_complaint": "主诉：一句标准的妇科急急症描述，例如：'行经期第2天突发急性下腹痉挛性绞痛，伴恶心呕吐1天'",
+      "present_illness": "现病史：严格包含：因什么起病（行经期、前列腺素升高）、起病症状性质（绞痛/胀痛等）、伴随症状（冷汗/恶心等）、有无自行口服止痛药及药名和其起效情况、病情进展方向、以及有无常规妇科检查评估。",
+      "past_history": "既往史：严格客观梳理用户提供的疾病诊断、外科手术病史、以及过敏情况。若未填，请严格写作'无已知重大慢性疾病史、无手术史'。",
+      "menstrual_history": "月经史：必须说明初潮年龄、经期持续天数、周期是否规律、末次月经时间（LMP）。请使用规范病历用词。",
+      "clinical_diagnosis": "临床诊断筛查方向：给出高度严谨的排查方向。如：‘原发性痛经或盆腔器质性病变可能（不排除子宫腺肌症/子宫内膜异位症）’",
+      "clinical_suggestions": "临床处理建议：结合其过敏史给出明确安全指导。如对布洛芬过敏，严禁建议使用NSAIDs。交代多喝水温水及热敷原理，列出下一步门诊就医讨论方向。",
+      "analogy": "痛觉通感比喻：极具视觉和触觉通感的比喻，描述其在里面的拧干、针扎或重压过程，使伴侣能瞬间理解。",
+      "work": "请假条：字数限制在50字以内的专业、大方得体的病假条，直接复制可用。",
+      "action": [
+        "伴侣实操干预指令1：捂在下腹的动作细节",
+        "伴侣实操干预指令2：避开冷水，买药和烧水建议（严防其过敏药）",
+        "伴侣实操干预指令3：承担今日家务、创造安静低照度休息环境"
+      ],
+      "selfCare": [
+        "自愈舒缓提示1：解除请假愧疚与自责的心理学赋能话语",
+        "自愈舒缓提示2：特定的身体舒缓卧位（如：侧卧婴儿蜷缩式，膝盖间夹枕头放松平滑肌）",
+        "自愈舒缓提示3：顺时针轻揉与调息呼气松弛手法",
+        "自愈舒缓提示4：温热饮品或补充微量元素科学干预"
+      ]
     }
     """
 
+    # ═══════════════════════════════════════════════════════════
+    # 【Few-Shot 极少样本范例】：喂给大模型极其标准的规范样本，彻底杜绝幻觉
+    # ═══════════════════════════════════════════════════════════
+    FEW_SHOT_EXAMPLE_ZH = """
+【FEW-SHOT CLINICAL REFERENCE SAMPLE / 妇科门诊病历样本标准】
+假设用户输入：
+- 痛感：twist（绞痛）
+- 周期：第2天，末次月经LMP：2026-06-01
+- 既往确诊：子宫内膜异位症
+- 伴随症状：乳房胀痛、腰骶酸痛
+- 过敏：布洛芬
+
+则期望的 JSON 输出：
+{
+  "chief_complaint": "经期第2天突发急性下腹痉挛性绞痛，伴乳房胀痛与腰骶酸痛1天。",
+  "present_illness": "患者既往月经规律。今日处于行经期第2天，前列腺素水平达峰，子宫平滑肌高频强烈收缩，无明显诱因下突发急性下腹部持续性收紧绞痛，呈阵发性剧烈加重。伴有双侧乳房胀痛及腰骶部明显坠胀。今日未自行服用药物。由于患者既往对布洛芬过敏，本次发作未进行NSAIDs类药物镇痛。病期无发热、无休克、无昏厥。尚未进行本次急症超声定位检查。",
+  "past_history": "既往确诊‘子宫内膜异位症’病史。既往行剖宫产术2次。否认高血压、心脑血管病史。明确对布洛芬（NSAIDs）类药物过敏。",
+  "menstrual_history": "月经初潮13岁。经期持续5天，周期28-30天，规律。末次月经（LMP）为2026年6月1日。当前处于经前及经期转换急性发作阶段。",
+  "clinical_diagnosis": "原发性痛经或继发性痛经发作（子宫内膜异位症引起可能）",
+  "clinical_suggestions": "鉴于布洛芬过敏史，严禁临床处方NSAIDs药物，可遵医嘱替代为对乙酰氨基酚温水送服。居家应避免站立负重，卧床蜷缩侧卧休息，热敷下腹。建议尽快挂常规妇科门诊行超声探查，排查局部子宫粘连与巧克力囊肿大小。",
+  "analogy": "像是肚子里有一把冰冷的铁钳子，正用力夹住子宫死死拧绞，每拧一下，后腰就跟着一阵发木发胀，连呼吸都觉得被生生拽住。",
+  "work": "因今日突发重度生理期绞痛及全身虚脱，无法支持工作，特申请病假休息一天，紧急事务已妥善交接。",
+  "action": [
+    "☑️ 搓热手掌贴在她小腹上轻轻捂热，或放置温热的热水袋，温度不可过高以免烫伤。",
+    "☑️ 由于她布洛芬过敏，切勿擅自准备布洛芬！可以倒一杯温开水并准备好对乙酰氨基酚，督促她温服。",
+    "☑️ 主动承担今天所有家务，关好房门和灯光，让她在安静低照度的被窝里静卧休息。"
+  ],
+  "selfCare": [
+    "✨ 痛经是身体内部平滑肌痉挛引起的切实物理伤害。请允许自己今天躺平，不生产任何价值也无需抱有任何愧疚感。",
+    "✨ 采用侧卧婴儿蜷缩位，用松软枕头夹在双侧膝盖之间，能够最快释放盆腔及骶骨处的充血张力，缓解绞痛。",
+    "✨ 缓慢腹式深吸气（4秒吸气，8秒拉长呼气），长呼气可以调动副交感神经，使子宫血管松弛缓解缺血。"
+  ]
+}
+"""
+
     if lang == "en":
         sys_prompt = f"""
-You are a medical assistant for dysmenorrhea. Generate a structured report based ONLY on the provided data.
+You are an expert clinical gynecological medical assistant. Translate the visual pain pattern and patient questionnaires into standard case histories and empathy directives.
 
-【CRITICAL RULES - MUST FOLLOW】
-1. NEVER fabricate ANY information not provided by the user.
-2. If age is not provided → do NOT write "patient is X years old".
-3. If family history is "none" or not provided → do NOT write "mother/sister has dysmenorrhea".
-4. If a field is empty or "not provided" → SKIP it entirely.
-5. Output MUST be valid JSON.
+【CRITICAL ANTI-HALLUCINATION RULES】
+1. NEVER invent any symptoms, surgeries, ages, or allergies that the user didn't specify.
+2. If age is empty/not provided -> do NOT output age, or write "Adult female".
+3. Use strict clinical vocabulary. Avoid vague adjectives.
+4. Output MUST be a strictly valid JSON.
 
-【Period Phase Reference】
-- Menstrual phase (Day 1-7): Rest, warmth, avoid strenuous exercise.
-- Follicular phase (Day 8-14): High energy, suitable for intense work and exercise.
-- Ovulation phase (Day 15-21): High social energy, later energy declines.
-- Luteal phase (Day 22-28): PMS common, emotional fluctuations.
-
-【Required JSON Structure】
-{JSON_TEMPLATE}
+{FEW_SHOT_EXAMPLE_ZH}
 """
     else:
         sys_prompt = f"""
-你是一个痛经辅助诊断助手。请根据【仅限】用户提供的信息，生成结构化报告。
+你是一名严谨的妇产科门诊电子病历转译助手。你需要将用户填写的医疗档案和绘制的动态痛觉矢量指标，重构翻译成符合医院门诊入院记录（规范病历）和自愈指令的结构。
 
-【强制规则 - 必须遵守】
-1. 严禁编造任何用户未提供的信息！
-2. 年龄未提供 → 禁止写"患者X岁"，可写"成年女性"或不写。
-3. 家族史为"无"或未提供 → 禁止写"母亲/姐妹有痛经史"！
-4. 字段为空或"未提供" → 完全跳过，不要提及。
-5. 输出必须是严格的JSON格式。
+【严格防幻觉与规范化硬性要求】
+1. 【绝对禁止无中生有】！如果用户未提供药物过敏，就写“无已知药物过敏”；未填手术史，就写“无明确大型手术史”；未提供年龄就不要提及患者的具体年龄数值！
+2. 术语规范：采用妇科临床医学规范化中文。严禁口语化或晦涩古板，如“月事”一律使用“行经期”、“月经周期”。
+3. 药物防错红线：对布洛芬或NSAIDs过敏者，【绝对禁止】在其‘action’或‘clinical_suggestions’中出现任何布洛芬、阿司匹林、双氯芬酸等处方建议，必须明确指导使用“对乙酰氨基酚”！
+4. 周期作息融合：结合用户当前所处的经期生理阶段特征，给出合理的运动和睡眠休养建议。
 
-【月经周期阶段参考指南】
-- 月经期 (Day 1-7): 重点休息、保暖、避免剧烈运动。推荐：热敷、瑜伽、补铁食物。
-- 卵泡期 (Day 8-14): 能量回升，适合高效工作和脑力劳动。推荐：高强度运动、补充蛋白质。
-- 排卵期 (Day 15-21): 社交高能量期，后期能量下降。推荐：初期HIIT，后期改慢跑。
-- 黄体期 (Day 22-28): PMS高发，情绪波动大。推荐：整理类工作、控制碳水欲望、散步/拉伸。
-
-【硬性要求】
-- 'action': 提供3-4条具体的伴侣实操动作，必须与痛感类型强关联。如患者有药物过敏，绝对不要推荐该药物。
-- 'selfCare': 提供4-5条建议，必须包含至少一个特定的疼痛缓解姿势（如'侧卧蜷缩，膝盖间夹枕头'），【重要】必须简单可行，用户在痛经时能够做到，愿意做到，必须包含一句消除病耻感的心理安慰。
-- 'analogy': 极具画面感的通感比喻，必须与痛感质地高度吻合。
-- 'work': 接地气的请假条（40字以内）。
-
-【必须严格按照以下JSON格式输出】
-{JSON_TEMPLATE}
+{FEW_SHOT_EXAMPLE_ZH}
 """
 
     user_prompt = f"""
-【用户真实数据 - 只能使用以下信息，严禁编造！】
+【前端提交的真实特征向量与基础档案数据（绝对禁止在此范围外编造任何信息）】
 
-- 主导痛感：{pt_dict.get(data.dominantPain, data.dominantPain)}
-- 疼痛强度：{data.painScore}/100
-- 疼痛部位：{bm_dict.get(data.bodyMode, data.bodyMode)}
+- 痛觉主导模式：{pt_dict.get(data.dominantPain, data.dominantPain)}
+- 绘图总痛觉负荷（评分）：{data.painScore}/100
+- 痛觉绘图定位：{pain_location_desc}
 {phase_ctx}
 {cycle_ctx}
 {lifestyle_ctx}
 
-【医疗信息】（仅使用已提供的，未提供则跳过）
-- 既往诊断：{diag if diag else "未提供"}
-- 药物过敏：{allergy if allergy else "未提供"}
+【临床采集档案】
+- 既往已确诊诊断：{get_val_from_mb(mb, "diagnosed")}
+- 外科手术史：{get_val_from_mb(mb, "surgicalHistory")}
+- 药物过敏史：{get_val_from_mb(mb, "allergies")}
+- 初潮年龄：{mb.get("menarcheAge", "未提供")} 岁
+- 月经周期规律性：{mb.get("cycleRegular", "未提供")}
+- 持续行经天数：{mb.get("periodDuration", "未提供")} 天
+- 末次月经第一天（LMP）：{mb.get("lastPeriod", "未提供")}
+- 伴随症状：{accompanying_desc}
 
-【语气偏好】：{tone}
+【文案偏好与语气风格】：{tone}
 
-请直接输出符合模板的精准定制化 JSON：
+请严格根据上述真实输入，直接输出一个精准定制且符号化的 JSON 对象：
 """
 
     model_name = config["model_quick"] if is_quick else config["model"]
 
     try:
-        print(f"🤖 正在请求 {config['display_name']}... 痛感质地: {pt_dict.get(data.dominantPain)}")
-        completion = client.chat.completions.create(
-            model=model_name,
-            messages=[
-                {"role": "system", "content": sys_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-            temperature=0.75,
-            response_format={"type": "json_object"},
-        )
+        print(f"🤖 正在请求服务提供商: {config['display_name']} ({model_name})...")
+        
+        # ═══════════════════════════════════════════════════════════
+        # 【蓝心 LLM (Vivo) API 特化请求分流】
+        # ═══════════════════════════════════════════════════════════
+        if LLM_PROVIDER == "vivo":
+            url = f"{config['base_url']}/chat/completions"
+            headers = {
+                "Content-Type": "application/json; charset=utf-8",
+                "Authorization": f"Bearer {api_key}"
+            }
+            # 蓝心大模型强要求的唯一 request_id
+            params = {
+                "request_id": str(uuid.uuid4())
+            }
+            payload = {
+                "model": model_name,
+                "messages": [
+                    {"role": "system", "content": sys_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                "temperature": 0.2,  # ⚡ 调低温度至 0.2 极大压制幻觉，确保输出稳定性
+                "max_tokens": config["max_tokens"],
+                "stream": False
+            }
+            
+            response = requests.post(
+                url,
+                headers=headers,
+                params=params,
+                json=payload,
+                timeout=60
+            )
+            response.raise_for_status()
+            response_data = response.json()
+            raw_text = response_data['choices'][0]['message']['content']
+        else:
+            # 传统标准 OpenAI 兼容调用
+            completion = client.chat.completions.create(
+                model=model_name,
+                messages=[
+                    {"role": "system", "content": sys_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                temperature=0.2,  # ⚡ 同样调低温度
+                response_format={"type": "json_object"},
+            )
+            raw_text = completion.choices[0].message.content
 
-        raw_text = completion.choices[0].message.content
-
-        # 清洗与截取
+        # 清洗返回可能携带的 markdown 包装
         cleaned_text = re.sub(r"^```(?:json)?\s*", "", raw_text, flags=re.MULTILINE | re.IGNORECASE)
         cleaned_text = re.sub(r"```\s*$", "", cleaned_text, flags=re.MULTILINE).strip()
 
@@ -480,13 +528,11 @@ You are a medical assistant for dysmenorrhea. Generate a structured report based
 
         parsed_json = json.loads(cleaned_text, strict=False)
 
-        print("✅ JSON 解析成功!")
+        print("✅ JSON 解析成功且符合 Few-Shot 门诊标准病历模版!")
         
-        # 合并返回结果
         return {
             "status": "success",
             "language": lang,
-            # LLM生成的模块
             "chief_complaint": parsed_json.get("chief_complaint", ""),
             "present_illness": parsed_json.get("present_illness", ""),
             "past_history": parsed_json.get("past_history", ""),
@@ -497,7 +543,8 @@ You are a medical assistant for dysmenorrhea. Generate a structured report based
             "work": parsed_json.get("work", ""),
             "action": parsed_json.get("action", []),
             "selfCare": parsed_json.get("selfCare", []),
-            # 规则生成的模块
+            
+            # 规则强保障模块
             "pain_location": pain_location_desc,
             "accompanying_symptoms": accompanying_desc,
             "risk_warning": risk_warning,
@@ -507,9 +554,8 @@ You are a medical assistant for dysmenorrhea. Generate a structured report based
         }
 
     except Exception as e:
-        print(f"❌ 生成失败，触发保底。错误原因: {str(e)}")
+        print(f"❌ 大模型处理报错，触发无缝安全降级。错误详情: {str(e)}")
         fallback = _fallback_response(lang, painkiller)
-        # 保底响应也包含新增模块
         fallback.update({
             "pain_location": pain_location_desc,
             "accompanying_symptoms": accompanying_desc,
@@ -519,6 +565,13 @@ You are a medical assistant for dysmenorrhea. Generate a structured report based
             "health_tips_link": health_tips_link
         })
         return fallback
+
+
+def get_val_from_mb(mb: Dict, key: str, fallback: str = "未提供") -> str:
+    val = mb.get(key, "")
+    if not val or val in ["none", "unchecked", "unknown"]:
+        return fallback
+    return val
 
 
 # ─────────────────────────────────────────────
@@ -552,23 +605,23 @@ def _fallback_response(lang: str, painkiller: str = "布洛芬") -> dict:
         return {
             "status": "success",
             "language": "zh",
-            "chief_complaint": "主诉：下腹部剧烈绞痛2天",
-            "present_illness": "患者自述下腹部呈持续性剧烈痉挛绞痛，阵发性加剧，伴有腰骶部沉重坠胀感。",
-            "past_history": "无特殊既往病史。",
-            "menstrual_history": "月经史未提供。",
-            "clinical_diagnosis": "原发性痛经（疑似）",
-            "clinical_suggestions": "建议休息、热敷，如无禁忌可考虑使用止痛药。",
-            "analogy": "像有人把你的盆腔深处拧成一股麻花，再用烙铁反复烫过。",
-            "work": "老板你好，我今天突发身体急症，目前疼得实在起不来，申请请假一天居家休息。",
+            "chief_complaint": "主诉：周期性痛经发作伴下腹部绞痛1天。",
+            "present_illness": "患者自述既往月经规律。于行经第2天，因前列腺素水平升高刺激出现下腹持续痉挛绞痛，阵发加剧，伴腰骶部酸沉。自行热敷改善轻微。",
+            "past_history": "无特殊既往病史、无明确手术史。",
+            "menstrual_history": "月经初潮13岁，周期规律，LMP未填。",
+            "clinical_diagnosis": "原发性痛经或盆腔器质性病变筛查",
+            "clinical_suggestions": "休息、热敷，避免剧烈运动。必要时可根据医嘱使用常规对乙酰氨基酚等非敏感镇痛药物。",
+            "analogy": "像有人把你的子宫深处拧成一股麻绳，再用粗糙的砂纸反复拉磨打磨。",
+            "work": "因今天经期突发急性坠胀严重绞痛且无法站立，申请病假休整一天，特此交接工作。",
             "action": [
-                f"☑️ 准备一个温度适宜的热水袋，帮她固定在下腹部或后腰。",
-                f"☑️ 帮她倒一杯温水放在床头，备好{painkiller}（确保无过敏）。",
-                f"☑️ 主动承担今天的全部家务。",
-            ],
+                f"☑️ 准备一个温热的热水袋，帮她放置在下腹部或后腰处进行物理热敷理疗。",
+                f"☑️ 帮她倒一杯温热的饮用水，并遵医嘱准备好安全的非过敏止痛药{painkiller}。",
+                f"☑️ 主动替她分担今日所有的繁杂家务，保持室内环境安静温和。"
+              ],
             "selfCare": [
-                "✨ 今天不生产任何价值也是完全合法的。允许自己躺平，不要为请假感到愧疚。",
-                "✨ 尝试侧卧婴儿蜷缩式，膝盖间夹枕头，能最快减轻盆腔充血。",
-                "✨ 疼痛会让身体误以为处于危险中。试着拉长呼气的时间，告诉大脑'我们现在很安全'。",
+                "✨ 痛经是身体深处的真实生理抗议。允许自己今天闭目休息，你已经非常勇敢了。",
+                "✨ 采用侧卧婴儿蜷缩式，膝盖之间夹枕头，放松紧绷的盆腔肌肉。",
+                "✨ 尽量拉长呼吸，吸气4秒、平稳呼气8秒，能帮过度兴奋的盆底肌肉尽快放松下来。"
             ]
         }
 
@@ -586,23 +639,58 @@ async def refine_content(data: dict):
     if not current_text or not user_feedback:
         return {"refined": current_text}
 
+    request_id = str(uuid.uuid4())
+
     if lang == "en":
-        sys_prompt = "You are an expert copy editor. Rewrite the text based on user feedback. Output ONLY the refined text. No explanations."
+        sys_prompt = "You are an expert clinical copy editor. Rewrite the medical text based on user feedback. Output ONLY the refined text. No explanations."
         user_prompt = f"Original:\n{current_text}\n\nFeedback: {user_feedback}\n\nRewrite directly:"
     else:
-        sys_prompt = "你是文案润色助手。根据修改意见对原文本优化。只需输出修改后的最终文本，【绝对不要】输出解释或 Markdown 标记！"
+        sys_prompt = "你是严谨的妇科医学病历润色助手。根据患者或用户的修改意见对原文文本进行优化。只需输出修改后的最终文本，绝对不要包含任何多余解释！"
         user_prompt = f"原文：\n{current_text}\n\n修改意见：\n{user_feedback}\n\n直接输出修改结果："
 
     try:
-        completion = client.chat.completions.create(
-            model=config["model_refine"],
-            messages=[
-                {"role": "system", "content": sys_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-            temperature=0.7,
-        )
-        refined = completion.choices[0].message.content.strip()
+        # vivo 优化流
+        if LLM_PROVIDER == "vivo":
+            url = f"{config['base_url']}/chat/completions"
+            headers = {
+                "Content-Type": "application/json; charset=utf-8",
+                "Authorization": f"Bearer {api_key}"
+            }
+            params = {
+                "request_id": request_id
+            }
+            payload = {
+                "model": config["model_refine"],
+                "messages": [
+                    {"role": "system", "content": sys_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                "temperature": 0.2, # 锁定低温度确保不发散
+                "max_tokens": 1024,
+                "stream": False
+            }
+            
+            response = requests.post(
+                url,
+                headers=headers,
+                params=params,
+                json=payload,
+                timeout=30
+            )
+            response.raise_for_status()
+            response_data = response.json()
+            refined = response_data['choices'][0]['message']['content'].strip()
+        else:
+            completion = client.chat.completions.create(
+                model=config["model_refine"],
+                messages=[
+                    {"role": "system", "content": sys_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                temperature=0.2,
+            )
+            refined = completion.choices[0].message.content.strip()
+
         refined = re.sub(r"^```[\s\S]*?\n", "", refined)
         refined = re.sub(r"```$", "", refined).strip()
         return {"refined": refined, "language": lang}
@@ -616,13 +704,11 @@ async def refine_content(data: dict):
 # ─────────────────────────────────────────────
 @app.get("/api/posts")
 async def get_posts():
-    """获取所有帖子"""
     return {"posts": load_posts()}
 
 
 @app.post("/api/posts")
 async def create_post(data: dict):
-    """发布新帖"""
     posts = load_posts()
     new_post = {
         "id": str(datetime.now().timestamp()),
@@ -644,6 +730,6 @@ async def create_post(data: dict):
 @app.get("/")
 def read_root():
     return {
-        "message": "PainScape Backend running (Feminist HCI Version)",
+        "message": "PainScape Backend running (Vivo BlueLM SDK Integrated)",
         "model": config["display_name"],
     }
