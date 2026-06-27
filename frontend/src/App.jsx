@@ -2821,18 +2821,36 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
         {/* === Canvas 绘画页面 === */}
         {page === "canvas" && (
           <div style={{ position: 'absolute', top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 10, pointerEvents: 'auto', userSelect: 'none', WebkitUserSelect: 'none' }}>
-            <div style={{ pointerEvents: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '15px', padding: '15px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+
+            {/* === 顶部高精简导航栏 === */}
+            <div style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '60px',
+              background: 'rgba(10, 10, 10, 0.85)',
+              backdropFilter: 'blur(12px)',
+              borderBottom: '1px solid #1a1a1a',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '0 16px',
+              boxSizing: 'border-box',
+              zIndex: 100
+            }}>
+              {/* 左侧控制区 */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <button
                   onClick={() => setPage("onboarding")}
                   style={{
-                    background: 'transparent',
-                    border: '1px solid #444',
-                    color: '#888',
-                    width: '36px',
-                    height: '36px',
+                    background: 'rgba(255,255,255,0.05)',
+                    border: '1px solid #333',
+                    color: '#fff',
+                    width: '32px',
+                    height: '32px',
                     borderRadius: '50%',
-                    fontSize: '18px',
+                    fontSize: '14px',
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
@@ -2841,69 +2859,146 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
                 >
                   ←
                 </button>
-                <span style={{ color: '#fff', fontWeight: 'bold', fontSize: '20px' }}>PainScape</span>
                 <button
                   onClick={(e) => { e.stopPropagation(); setIsMuted(!isMuted); }}
                   style={{
-                    background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(10px)',
-                    border: `1px solid ${isMuted ? '#666' : '#4caf50'}`,
-                    borderRadius: '50%', width: '36px', height: '36px',
-                    fontSize: '16px', cursor: 'pointer', display: 'flex',
+                    background: 'rgba(255,255,255,0.05)',
+                    border: `1px solid ${isMuted ? '#444' : '#4caf50'}`,
+                    borderRadius: '50%', width: '32px', height: '32px',
+                    fontSize: '14px', cursor: 'pointer', display: 'flex',
                     alignItems: 'center', justifyContent: 'center',
                     color: isMuted ? '#666' : '#4caf50'
                   }}
                 >
                   {isMuted ? '🔇' : '🔊'}
                 </button>
-                <button style={{ background: '#d32f2f', color: '#fff', border: 'none', padding: '6px 18px', borderRadius: '20px', cursor: 'pointer', fontWeight: 'bold' }} onClick={handleFinish}>
-                  {t('canvas.generate')}
-                </button>
               </div>
 
-              <div style={{ display: 'flex', background: 'rgba(30,30,30,0.8)', borderRadius: '20px', padding: '4px', backdropFilter: 'blur(10px)' }}>
-                <button style={{ padding: '6px 15px', borderRadius: '16px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 'bold', background: bodyMode === 'front' ? '#4caf50' : 'transparent', color: bodyMode === 'front' ? '#fff' : '#888' }} onClick={(e) => { e.stopPropagation(); setBodyMode('front'); }}>
+              {/* 中间：正反面切换（药丸形档位） */}
+              <div style={{
+                display: 'flex',
+                background: 'rgba(255,255,255,0.03)',
+                borderRadius: '20px',
+                padding: '2px',
+                border: '1px solid #222'
+              }}>
+                <button
+                  style={{
+                    padding: '6px 14px',
+                    borderRadius: '16px',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    fontWeight: 'bold',
+                    background: bodyMode === 'front' ? '#4caf50' : 'transparent',
+                    color: bodyMode === 'front' ? '#fff' : '#888',
+                    transition: 'all 0.2s'
+                  }}
+                  onClick={(e) => { e.stopPropagation(); setBodyMode('front'); }}
+                >
                   {t('canvas.bodyFront')}
                 </button>
-                <button style={{ padding: '6px 15px', borderRadius: '16px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 'bold', background: bodyMode === 'back' ? '#4caf50' : 'transparent', color: bodyMode === 'back' ? '#fff' : '#888' }} onClick={(e) => { e.stopPropagation(); setBodyMode('back'); }}>
+                <button
+                  style={{
+                    padding: '6px 15px',
+                    borderRadius: '16px',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontSize: '13px',
+                    fontWeight: 'bold',
+                    background: bodyMode === 'back' ? '#4caf50' : 'transparent',
+                    color: bodyMode === 'back' ? '#fff' : '#888'
+                  }}
+                  onClick={(e) => { e.stopPropagation(); setBodyMode('back'); }}
+                >
                   {t('canvas.bodyBack')}
                 </button>
-                {/* 正背面指引 */}
-                <div style={{
-                  color: '#666',
-                  fontSize: '11px',
-                  marginTop: '8px',
-                  textAlign: 'center',
-                  padding: '0 20px',
-                  lineHeight: '1.4'
-                }}>
-                  {bodyMode === 'front' && t('canvas.frontTip')}
-                  {bodyMode === 'back' && t('canvas.backTip')}
-                </div>
-                {/* 如果为「就诊协助」模式，隐藏并限制使用「沉浸盲画模式」 */}
                 {appMode !== 'medical' && (
-                  <button style={{ padding: '6px 15px', borderRadius: '16px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 'bold', background: bodyMode === 'none' ? '#d32f2f' : 'transparent', color: bodyMode === 'none' ? '#fff' : '#888' }} onClick={(e) => { e.stopPropagation(); setBodyMode('none'); }}>
+                  <button
+                    style={{
+                      padding: '6px 15px',
+                      borderRadius: '16px',
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontSize: '13px',
+                      fontWeight: 'bold',
+                      background: bodyMode === 'none' ? '#d32f2f' : 'transparent',
+                      color: bodyMode === 'none' ? '#fff' : '#888'
+                    }}
+                    onClick={(e) => { e.stopPropagation(); setBodyMode('none'); }}
+                  >
                     {t('canvas.bodyNone')}
                   </button>
                 )}
-                {/* === 底图缩放控制滑块（仅在非盲画模式下可见） === */}
-                {bodyMode !== 'none' && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', borderLeft: '1px solid #333', paddingLeft: '12px' }}>
-                    <span style={{ color: '#888', fontSize: '11px', whiteSpace: 'nowrap' }}>🗺️ 底图比例</span>
-                    <input
-                      type="range"
-                      min="0.5"
-                      max="2.0"
-                      step="0.05"
-                      value={bgScale}
-                      onChange={(e) => setBgScale(parseFloat(e.target.value))}
-                      style={{ accentColor: '#4caf50', width: '70px', height: '4px', cursor: 'pointer' }}
-                    />
-                    <span style={{ color: '#888', fontSize: '11px', minWidth: '32px' }}>{Math.round(bgScale * 100)}%</span>
-                  </div>
-                )}
               </div>
+
+              {/* 右侧提交 */}
+              <button
+                style={{
+                  background: '#d32f2f',
+                  color: '#fff',
+                  border: 'none',
+                  padding: '6px 16px',
+                  borderRadius: '20px',
+                  cursor: 'pointer',
+                  fontWeight: 'bold',
+                  fontSize: '13px',
+                  boxShadow: '0 4px 12px rgba(211,47,47,0.3)'
+                }}
+                onClick={handleFinish}
+              >
+                {t('canvas.generate')}
+              </button>
             </div>
 
+            {/* === 正背面方向提示：悬浮于顶部下方 === */}
+            <div style={{
+              position: 'absolute',
+              top: '80px',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              background: 'rgba(0, 0, 0, 0.6)',
+              padding: '4px 16px',
+              borderRadius: '12px',
+              fontSize: '11px',
+              color: '#888',
+              pointerEvents: 'none',
+              zIndex: 5
+            }}>
+              {bodyMode === 'front' && t('canvas.frontTip')}
+              {bodyMode === 'back' && t('canvas.backTip')}
+            </div>
+
+            {/* === 悬浮缩放比例调节器 === */}
+            {bodyMode !== 'none' && (
+              <div style={{
+                position: 'absolute',
+                top: '75px',
+                left: '20px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                background: 'rgba(20,20,20,0.85)',
+                padding: '6px 12px',
+                borderRadius: '12px',
+                border: '1px solid #2d2d2d',
+                zIndex: 10
+              }}>
+                <span style={{ color: '#888', fontSize: '11px', whiteSpace: 'nowrap' }}>🗺️ 比例</span>
+                <input
+                  type="range"
+                  min="0.5"
+                  max="2.0"
+                  step="0.05"
+                  value={bgScale}
+                  onChange={(e) => setBgScale(parseFloat(e.target.value))}
+                  style={{ accentColor: '#4caf50', width: '60px', height: '4px', cursor: 'pointer' }}
+                />
+                <span style={{ color: '#aaa', fontSize: '11px', minWidth: '32px' }}>{Math.round(bgScale * 100)}%</span>
+              </div>
+            )}
+
+            {/* 右侧工具栏：撤销、恢复、清除、复位 */}
             <div style={{ pointerEvents: 'auto', position: 'absolute', right: '20px', top: '50%', transform: 'translateY(-50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '15px' }}>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', height: '180px', width: '30px', position: 'relative', justifyContent: 'flex-end' }}>
                 <div style={{ color: '#888', fontSize: '9px', marginBottom: '4px', writingMode: 'vertical-rl' }}>
@@ -2951,24 +3046,24 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
               </button>
             </div>
 
+            {/* 底部画笔控制栏：优化流动布局 */}
             <div style={{
               pointerEvents: 'auto',
               position: 'absolute',
-              bottom: 'max(20px, env(safe-area-inset-bottom))', // 确保手机端底部手势条不遮挡文字
+              bottom: 'max(20px, env(safe-area-inset-bottom))',
               left: '50%',
               transform: 'translateX(-50%)',
               width: '92%',
               maxWidth: '380px',
-              // 移除 maxHeight 限制，改用流动布局，彻底防止下沿遮挡
               background: 'rgba(20,20,20,0.95)',
-              padding: '12px 16px', // 紧凑型内边距
+              padding: '12px 16px',
               borderRadius: '24px',
               backdropFilter: 'blur(12px)',
               border: '1px solid #2a2a2a',
               boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
               display: 'flex',
               flexDirection: 'column',
-              gap: '10px' // 设定元素紧凑间隔
+              gap: '10px'
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
                 {Object.keys(BRUSHES).map(k => (
