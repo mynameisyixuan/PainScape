@@ -2076,6 +2076,7 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
         )}
 
         {/* === 模式选择页面 === */}
+        {/* === 模式选择页面 === */}
         {page === "modeSelection" && (() => {
           const isMedical = selectedTempMode === "medical";
           const activeColor = isMedical ? "rgb(211, 47, 47)" : "rgb(76, 175, 80)";
@@ -2093,7 +2094,7 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
               padding: '24px',
               boxSizing: 'border-box'
             }}>
-              {/* 优化后的卡片物理外框：拓宽最大宽度，增加内边距 */}
+              {/* 优化后的卡片物理外框 */}
               <div style={{
                 width: '100%',
                 maxWidth: '460px',
@@ -2108,7 +2109,7 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
                 alignItems: 'center',
                 transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
               }}>
-                {/* 标题：字号提升，增加下边距以显舒展 */}
+                {/* 标题 */}
                 <h2 style={{
                   color: '#fff',
                   marginBottom: '28px',
@@ -2120,7 +2121,7 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
                   {t('modeSelection.title')}
                 </h2>
 
-                {/* 档位滑块：增加高度与字号 */}
+                {/* 档位滑块：就诊协助 / 日常自愈 切换 */}
                 <div style={{
                   display: 'flex',
                   background: '#1a1a1a',
@@ -2132,7 +2133,7 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
                   position: 'relative',
                   border: '1px solid #2a2a2a'
                 }}>
-                  {/* 左档位 */}
+                  {/* 左档位：就诊协助 */}
                   <button
                     onClick={() => setSelectedTempMode("medical")}
                     style={{
@@ -2153,7 +2154,7 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
                     {t('modeSelection.medicalTab')}
                   </button>
 
-                  {/* 右档位 */}
+                  {/* 右档位：日常自愈 */}
                   <button
                     onClick={() => setSelectedTempMode("general")}
                     style={{
@@ -2175,7 +2176,7 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
                   </button>
                 </div>
 
-                {/* 特色功能卡片：增加内边距，拓宽行距与字号 */}
+                {/* 特色功能卡片 */}
                 <div style={{
                   width: '100%',
                   background: '#161616',
@@ -2202,7 +2203,7 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
                   ))}
                 </div>
 
-                {/* 核心基础支持功能：增大胶囊徽章尺寸与间距 */}
+                {/* 核心基础支持功能 */}
                 <div style={{
                   width: '100%',
                   display: 'flex',
@@ -2231,12 +2232,16 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
                   ))}
                 </div>
 
-                {/* 确认按钮：增加垂直内边距及字号 */}
+                {/* 底部真正确认按钮 */}
                 <button
                   onClick={() => {
                     setAppMode(selectedTempMode);
                     setPage("onboarding");
-                    setShowContent("basicInfo");
+                    if (selectedTempMode === "general") {
+                      setShowContent("preference");
+                    } else {
+                      setShowContent("basicInfo");
+                    }
                   }}
                   style={{
                     width: '100%',
@@ -2320,7 +2325,7 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
             <div style={{ width: '100%', boxSizing: 'border-box' }}>
 
               {/* === STEP 1: 基础常态信息 === */}
-              {showContent === 'basicInfo' && (
+              {showContent === 'basicInfo' && appMode !== 'general' && (
                 <div style={{ background: '#1c1c1c', borderRadius: '20px', padding: '20px', border: '1px solid #333' }}>
                   <div style={{ textAlign: 'center', marginBottom: '16px' }}>
                     <span style={{ fontSize: '28px' }}>📋</span>
@@ -2395,7 +2400,7 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
               )}
 
               {/* === STEP 2: 医疗背景临床参数 (医疗协助模式专属) === */}
-              {showContent === 'medical' && (
+              {showContent === 'medical' && appMode !== 'general' && (
                 <div style={{ background: '#1c1c1c', borderRadius: '20px', padding: '20px', border: '1px solid #333' }}>
                   {appMode === 'general' ? (
                     <div style={{ textAlign: 'center', padding: '40px 10px' }}>
@@ -2722,51 +2727,52 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
               )}
             </div>
 
-            {/* === 重新排版整合的控制底部导航条 === */}
-            <div style={{
-              display: 'flex',
-              justifyContent: 'center',
-              gap: '16px',
-              marginTop: '30px',
-              width: '100%',
-              borderTop: '1px solid #222',
-              paddingTop: '20px'
-            }}>
-              {[
-                { key: 'basicInfo', label: '1', title: '基础档案' },
-                { key: 'medical', label: '2', title: '医疗背景' },
-                { key: 'preference', label: '3', title: '干预偏好' },
-              ].map((step) => (
-                <button
-                  key={step.key}
-                  onClick={() => setShowContent(step.key)}
-                  style={{
-                    width: '42px',
-                    height: '42px',
-                    borderRadius: '50%',
-                    border: showContent === step.key ? '2px solid #d32f2f' : '1px solid #444',
-                    background: showContent === step.key ? 'rgba(211, 47, 47, 0.15)' : 'transparent',
-                    color: showContent === step.key ? '#fff' : '#666',
-                    fontSize: '14px',
-                    fontWeight: 'bold',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    transition: 'all 0.2s'
-                  }}
-                  title={step.title}
-                >
-                  {step.label}
-                </button>
-              ))}
-            </div>
-
-            {/* 实操核心：绘制流程跳转按钮 */}
+            {/* === 控制底部导航条（自愈模式下仅显示干预偏好步骤） === */}
+            {appMode !== 'general' && (
+              <div style={{
+                display: 'flex',
+                justifyContent: 'center',
+                gap: '16px',
+                marginTop: '30px',
+                width: '100%',
+                borderTop: '1px solid #222',
+                paddingTop: '20px'
+              }}>
+                {[
+                  { key: 'basicInfo', label: '1', title: '基础档案' },
+                  { key: 'medical', label: '2', title: '医疗背景' },
+                  { key: 'preference', label: '3', title: '干预偏好' },
+                ].map((step) => (
+                  <button
+                    key={step.key}
+                    onClick={() => setShowContent(step.key)}
+                    style={{
+                      width: '42px',
+                      height: '42px',
+                      borderRadius: '50%',
+                      border: showContent === step.key ? '2px solid #d32f2f' : '1px solid #444',
+                      background: showContent === step.key ? 'rgba(211, 47, 47, 0.15)' : 'transparent',
+                      color: showContent === step.key ? '#fff' : '#666',
+                      fontSize: '14px',
+                      fontWeight: 'bold',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transition: 'all 0.2s'
+                    }}
+                    title={step.title}
+                  >
+                    {step.label}
+                  </button>
+                ))}
+              </div>
+            )}
+            {/* 绘制流程跳转按钮 */}
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', marginTop: '24px', width: '100%' }}>
               <button
                 onClick={() => {
-                  // 如果是医疗模式，强制关闭「盲画模式」
+                  // 如果是医疗模式关闭「盲画模式」
                   if (appMode === 'medical') {
                     setBodyMode('front');
                   }
