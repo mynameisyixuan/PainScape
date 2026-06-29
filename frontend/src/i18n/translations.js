@@ -21,7 +21,7 @@ const translations = {
       twist: "绞痛",
       pierce: "刺痛",
       heavy: "坠胀重压",
-      wave: "弥漫胀痛",
+      wave: "弥漫酸胀痛",
       scrape: "撕裂刮痛",
     },
     // ============ 开屏页 ============
@@ -223,7 +223,7 @@ const translations = {
       accompanyingLabel: "伴随症状（可多选）",
       accompanyingOptions: {
         headache: "头痛",
-        breast: "乳房胀痛",
+        breast: "乳房酸胀痛",
         lumbosacral: "腰骶酸痛",
         nausea: "恶心呕吐",
         diarrhea: "经期腹泻",
@@ -251,7 +251,7 @@ const translations = {
       twist: { label: "绞/拧" },
       pierce: { label: "荆/刺" },
       heavy: { label: "坠/压" },
-      wave: { label: "胀/扩" },
+      wave: { label: "酸/胀" },
       scrape: { label: "刮/撕" },
       eraser: { label: "橡皮" },
     },
@@ -259,7 +259,7 @@ const translations = {
       twist: "绞痛",
       pierce: "刺痛",
       heavy: "坠痛",
-      wave: "胀痛",
+      wave: "酸胀痛",
       scrape: "撕裂痛",
     },
     colors: {
@@ -535,7 +535,7 @@ const translations = {
       wave: {
         analogy:
           "像肚子里有个气球在不断充气又放气，一阵一阵地胀，有时蔓延到整个腹部，连呼吸都觉得憋闷。",
-        med: "患者自述腹部弥漫性胀痛，呈阵发性加重，伴肠胀气感，疼痛范围不固定。建议排查水肿、肠胀气及盆腔炎症。",
+        med: "患者自述腹部弥漫性酸胀痛，呈阵发性加重，伴肠胀气感，疼痛范围不固定。建议排查水肿、肠胀气及盆腔炎症。",
         selfCare:
           "✨ 穿着极宽松的衣物，解开所有束缚\n✨ 顺时针轻揉腹部（力度要轻，感觉到皮肉即可）\n✨ 避免产气食物：豆类、碳酸饮料、生冷瓜果\n✨ 温敷整个腹部，用毯子营造温暖环境\n✨ 放慢节奏，节奏慢下来，疼痛也会缓下来",
       },
@@ -897,7 +897,7 @@ const translations = {
       twist: "Cramping",
       pierce: "Stabbing",
       heavy: "Dragging Sinking",// 下坠坠痛
-      wave: "Bloating Fullness",// 胀痛/胀满闷胀
+      wave: "Bloating Fullness",// 酸胀痛/胀满闷胀
       scrape: "Scraping Tearing"// 撕扯/刮坠裂痛
     },
     colors: {

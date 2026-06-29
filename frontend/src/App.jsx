@@ -615,6 +615,7 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
       return null;
     }
   };
+ 
   // === 【动态统计分类】：实时计算真实的帖子分布与周统计，剔除 Mock 数据 ===
   const getDynamicCommunityStats = () => {
     if (!posts || posts.length === 0) return { total: 0, topPainKey: 'twist' };
@@ -785,6 +786,7 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
     localStorage.setItem("painscape_med_bg", JSON.stringify(medicalBackground));
   }, [medicalBackground]);
 
+
   const captureFullCanvas = (side) => {
     const p5 = p5Ref.current;
     if (!p5) return document.createElement('canvas');
@@ -919,32 +921,274 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
 
   const playBrushSound = (type) => {
     if (isMuted) return;
-    if (!audioCtx.current) audioCtx.current = new (window.AudioContext || window.webkitAudioContext)();
+    if (!audioCtx.current) {
+      audioCtx.current = new (window.AudioContext || window.webkitAudioContext)();
+    }
     if (audioCtx.current.state === 'suspended') {
       audioCtx.current.resume();
     }
 
-    const osc = audioCtx.current.createOscillator();
-    const gain = audioCtx.current.createGain();
-    const params = {
-      twist: { freq: 80, wave: 'sawtooth', duration: 0.3 },
-      pierce: { freq: 800, wave: 'sine', duration: 0.05 },
-      heavy: { freq: 40, wave: 'sine', duration: 0.5 },
-      wave: { freq: 200, wave: 'sine', duration: 0.8 },
-      scrape: { freq: 300, wave: 'sawtooth', duration: 0.15 },
-      eraser: { freq: 500, wave: 'triangle', duration: 0.08 },
-    };
-    const p = params[type];
-    if (!p) return;
+    const ctx = audioCtx.current;
+    const now = ctx.currentTime;
 
-    osc.type = p.wave;
-    osc.frequency.value = p.freq;
-    gain.gain.setValueAtTime(0.05, audioCtx.current.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.current.currentTime + p.duration);
-    osc.connect(gain);
-    gain.connect(audioCtx.current.destination);
-    osc.start();
-    osc.stop(audioCtx.current.currentTime + p.duration);
+    // 辅助函数：动态生成白噪音 Buffer，用于构建有机的物理摩擦和撞击质感
+    const createNoiseBuffer = (duration = 1.0) => {
+      const bufferSize = ctx.sampleRate * duration;
+      const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = Math.random() * 2 - 1; // 0 ~ 1.0 范围的白噪音
+      }
+      return buffer;
+    };
+
+    // === 通用参数：控制声音的整体柔和度 ===
+    const SMOOTH_ATTACK_TIME = 0.15; // 普遍延长起音时间
+    const SMOOTH_RELEASE_TIME = 0.8; // 普遍延长衰减时间
+    const MAX_VOLUME = 0.1;          // 降低峰值响度，避免突兀
+    const LOWPASS_FREQ_GENERAL = 400; // 通用低通滤波器，压制高频
+
+    if (type === 'pierce') {
+      // === 针刺 (Pierce): 瞬态有机穿透音 ===
+      const osc = ctx.createOscillator();
+      const noise = ctx.createBufferSource();
+      const oscGain = ctx.createGain();
+      const noiseGain = ctx.createGain();
+      const noiseFilter = ctx.createBiquadFilter();
+
+      const duration = 0.08;
+
+      // 快速下扫正弦波 (模拟刺入深度)
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(260, now);
+      osc.frequency.exponentialRampToValueAtTime(60, now + duration);
+
+      // 带通滤波噪声 (模拟刺穿纤维时的“嚓”瞬态声)
+      noise.buffer = createNoiseBuffer(duration);
+      noiseFilter.type = 'bandpass';
+      noiseFilter.frequency.setValueAtTime(500, now);
+      noiseFilter.Q.setValueAtTime(3.0, now);
+
+      oscGain.gain.setValueAtTime(0.07, now);
+      oscGain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+      noiseGain.gain.setValueAtTime(0.04, now);
+      noiseGain.gain.exponentialRampToValueAtTime(0.001, now + duration * 0.5);
+
+      osc.connect(oscGain);
+      noise.connect(noiseFilter);
+      noiseFilter.connect(noiseGain);
+
+      oscGain.connect(ctx.destination);
+      noiseGain.connect(ctx.destination);
+
+      osc.start(now);
+      noise.start(now);
+      osc.stop(now + duration);
+      noise.stop(now + duration);
+    }
+    else if (type === 'heavy') {
+      // === 坠痛 (Heavy): 干脆的重石坠落与持续重压感 ===
+      const osc = ctx.createOscillator();
+      const noise = ctx.createBufferSource();
+      const oscGain = ctx.createGain();
+      const noiseGain = ctx.createGain();
+      const oscFilter = ctx.createBiquadFilter();
+      const noiseFilter = ctx.createBiquadFilter();
+
+      const duration = 0.8; // 整体物理重压释放时值
+
+      // 1. 快速下坠的正弦波 (120Hz 骤降至 60Hz，仅用 0.06 秒完成，展现“干脆的下坠着陆点”)
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(120, now);
+      osc.frequency.exponentialRampToValueAtTime(60, now + 0.06);
+
+      // 2. 压感振荡器低通滤波器 (过滤高频，确保低沉温和)
+      oscFilter.type = 'lowpass';
+      oscFilter.frequency.setValueAtTime(150, now);
+
+      // 3. 瞬间触发的重石落地白噪音 (低通在 90Hz，模拟石头着地时的闷响和物理重压)
+      noise.buffer = createNoiseBuffer(duration);
+      noiseFilter.type = 'lowpass';
+      noiseFilter.frequency.setValueAtTime(90, now);
+
+      // 4. 音量包络设计
+      // - 快速起音 (0.025s 达到峰值，塑造极具实体感的脆重撞击)
+      // - 随后缓慢释放，保留低沉的死重余震 (压感)
+      oscGain.gain.setValueAtTime(0.001, now);
+      oscGain.gain.linearRampToValueAtTime(MAX_VOLUME * 0.95, now + 0.025);
+      oscGain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+      // 噪声包络：快速衰减 (只在撞击瞬间产生石头着地感，避免嘈杂)
+      noiseGain.gain.setValueAtTime(0.001, now);
+      noiseGain.gain.linearRampToValueAtTime(MAX_VOLUME * 0.5, now + 0.025);
+      noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.15); // 0.15s 内迅速消失，保持干脆不拖沓
+
+      // 连接
+      osc.connect(oscFilter);
+      oscFilter.connect(oscGain);
+      noise.connect(noiseFilter);
+      noiseFilter.connect(noiseGain);
+
+      oscGain.connect(ctx.destination);
+      noiseGain.connect(ctx.destination);
+
+      osc.start(now);
+      noise.start(now);
+      osc.stop(now + duration);
+      noise.stop(now + duration);
+    }
+    else if (type === 'twist') {
+      // === 绞拧 (Twist): 频率调制 (FM) 的渐进揉拧感 ===
+      const osc = ctx.createOscillator();
+      const lfo = ctx.createOscillator();
+      const lfoGain = ctx.createGain();
+      const mainGain = ctx.createGain();
+
+      const duration = 0.45;
+
+      // 三角波提供温和的、非电子感的肌肉摩擦底色
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(80, now);
+
+      // 13Hz 低频调制器，产生一种拧抹布时的“物理震颤”和持续拧紧质感
+      lfo.type = 'sine';
+      lfo.frequency.setValueAtTime(13, now);
+      lfoGain.gain.setValueAtTime(25, now); // 调制深度
+
+      // 挤压式的渐强再渐弱音量包络
+      mainGain.gain.setValueAtTime(0.001, now);
+      mainGain.gain.linearRampToValueAtTime(0.05, now + duration * 0.35);
+      mainGain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+      lfo.connect(lfoGain);
+      lfoGain.connect(osc.frequency);
+
+      osc.connect(mainGain);
+      mainGain.connect(ctx.destination);
+
+      lfo.start(now);
+      osc.start(now);
+      lfo.stop(now + duration);
+      osc.stop(now + duration);
+    }
+    else if (type === 'wave') {
+      // === 酸胀/胀扩 (Wave): 潮汐般缓和的低频脉动 ===
+      const osc1 = ctx.createOscillator();
+      const osc2 = ctx.createOscillator();
+      const noise = ctx.createBufferSource();
+      const filter1 = ctx.createBiquadFilter(); // 过滤 osc1
+      const filter2 = ctx.createBiquadFilter(); // 过滤 osc2
+      const noiseFilter = ctx.createBiquadFilter(); // 过滤 noise
+      const mainGain = ctx.createGain();
+      const noiseGain = ctx.createGain();
+
+      const duration = 1.5; // 延长时值，体验完整的波动过程
+
+      // 1. 基频：120Hz 的正弦波 + 121.5Hz 的三角波，产生柔和的自然拍频
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(120, now);
+      osc1.frequency.linearRampToValueAtTime(135, now + duration * 0.5);
+      osc1.frequency.linearRampToValueAtTime(115, now + duration);
+
+      osc2.type = 'triangle';
+      osc2.frequency.setValueAtTime(121.5, now);
+      osc2.frequency.linearRampToValueAtTime(136.5, now + duration * 0.5);
+      osc2.frequency.linearRampToValueAtTime(116.5, now + duration);
+
+      // 2. 缓慢变化的带通噪声（潮汐般的物理涌动感）
+      noise.buffer = createNoiseBuffer(duration);
+      filter1.type = 'lowpass'; // 过滤掉噪音的高频部分
+      filter1.frequency.setValueAtTime(LOWPASS_FREQ_GENERAL, now);
+
+      noiseFilter.type = 'bandpass'; // 仅保留一个有限的低频带宽
+      noiseFilter.frequency.setValueAtTime(140, now);
+      noiseFilter.frequency.exponentialRampToValueAtTime(360, now + duration * 0.45); // 模拟潮水涌动
+      noiseFilter.frequency.exponentialRampToValueAtTime(120, now + duration);        // 模拟潮水退去
+
+      // 3. 缓和的音量包络，模拟潮水涌来、涨满、退去的波动感
+      // 降低峰值响度，以更柔和的方式呈现
+      mainGain.gain.setValueAtTime(0.001, now);
+      mainGain.gain.linearRampToValueAtTime(MAX_VOLUME * 0.7, now + duration * 0.45); // 缓和涌入
+      mainGain.gain.linearRampToValueAtTime(MAX_VOLUME * 0.3, now + duration * 0.75); // 达到峰值后略微回落
+      mainGain.gain.exponentialRampToValueAtTime(0.001, now + SMOOTH_RELEASE_TIME);
+
+      noiseGain.gain.setValueAtTime(0.001, now);
+      noiseGain.gain.linearRampToValueAtTime(MAX_VOLUME * 0.4, now + duration * 0.45);
+      noiseGain.gain.exponentialRampToValueAtTime(0.001, now + SMOOTH_RELEASE_TIME);
+
+      osc1.connect(filter1);
+      osc2.connect(filter2);
+      filter1.connect(mainGain);
+      filter2.connect(mainGain);
+      noise.connect(noiseFilter);
+      noiseFilter.connect(noiseGain);
+
+      mainGain.connect(ctx.destination);
+      noiseGain.connect(ctx.destination);
+
+      osc1.start(now);
+      osc2.start(now);
+      noise.start(now);
+
+      osc1.stop(now + duration);
+      osc2.stop(now + duration);
+      noise.stop(now + duration);
+    }
+    else if (type === 'scrape') {
+      // === 刮擦 (Scrape): 物理颗粒拉扯阻尼音 ===
+      const noise = ctx.createBufferSource();
+      const noiseFilter = ctx.createBiquadFilter();
+      const mainGain = ctx.createGain();
+      const duration = 0.28;
+
+      noise.buffer = createNoiseBuffer(duration);
+
+      // 扫频带通滤波器 (模拟粗糙表面快速摩擦掠过的频域漂移)
+      noiseFilter.type = 'bandpass';
+      noiseFilter.frequency.setValueAtTime(180, now);
+      noiseFilter.frequency.exponentialRampToValueAtTime(480, now + duration);
+      noiseFilter.Q.setValueAtTime(1.8, now);
+
+      // 略微抖动的粗糙振幅包络
+      mainGain.gain.setValueAtTime(0.05, now);
+      mainGain.gain.linearRampToValueAtTime(0.03, now + duration * 0.4);
+      mainGain.gain.linearRampToValueAtTime(0.045, now + duration * 0.7);
+      mainGain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+      noise.connect(noiseFilter);
+      noiseFilter.connect(mainGain);
+      mainGain.connect(ctx.destination);
+
+      noise.start(now);
+      noise.stop(now + duration);
+    }
+    else if (type === 'eraser') {
+      // === 橡皮擦 (Eraser): 舒缓抚平与放松的上扫正弦波 ===
+      const osc = ctx.createOscillator();
+      const filter = ctx.createBiquadFilter();
+      const mainGain = ctx.createGain();
+      const duration = 0.5;
+
+      // 纯净上扫 (E4 330Hz -> A4 440Hz 协和五度上行，带来听觉上的完结与轻松感)
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(330, now);
+      osc.frequency.exponentialRampToValueAtTime(440, now + duration);
+
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(600, now);
+      filter.frequency.exponentialRampToValueAtTime(200, now + duration);
+
+      mainGain.gain.setValueAtTime(0.04, now);
+      mainGain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+      osc.connect(filter);
+      filter.connect(mainGain);
+      mainGain.connect(ctx.destination);
+
+      osc.start(now);
+      osc.stop(now + duration);
+    }
   };
 
   const [refiningField, setRefiningField] = useState(null);
@@ -1071,6 +1315,13 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
   // === 人体背景图独立缩放控制 ===
   const [bgScale, setBgScale] = useState(1.0); // 范围 0.5 - 2.0
   const bgScaleRef = useRef(1.0);
+
+   const [tipVisible, setTipVisible] = useState(false);
+  useEffect(() => {
+  setTipVisible(true);
+  const timer = setTimeout(() => setTipVisible(false), 1500);
+  return () => clearTimeout(timer);
+}, [bodyMode]);
 
   useEffect(() => {
     bgScaleRef.current = bgScale;
@@ -2770,36 +3021,79 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
             )}
             {/* 绘制流程跳转按钮 */}
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', marginTop: '24px', width: '100%' }}>
-              <button
-                onClick={() => {
-                  // 如果是医疗模式关闭「盲画模式」
-                  if (appMode === 'medical') {
-                    setBodyMode('front');
-                  }
-                  setPage("canvas");
-                }}
-                style={{
-                  width: '200px',
-                  padding: '14px',
-                  background: '#d32f2f',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: '30px',
-                  fontWeight: 'bold',
-                  cursor: 'pointer',
-                  fontSize: '15px',
-                  boxShadow: '0 4px 15px rgba(211, 47, 47, 0.3)'
-                }}
-              >
-                {t('onboarding.startDrawing')}
-              </button>
 
-              <button
-                onClick={() => setPage("modeSelection")}
-                style={{ background: 'transparent', border: '1px solid #333', color: '#666', padding: '8px 18px', borderRadius: '20px', fontSize: '12px', cursor: 'pointer' }}
-              >
-                切换就诊/日常模式
-              </button>
+              {/* 条件 1：如果是医疗模式，且用户还没走到第三页，展示“下一步”引导用户 */}
+              {appMode === 'medical' && showContent !== 'preference' ? (
+                <button
+                  onClick={() => {
+                    if (showContent === 'basicInfo') setShowContent('medical');
+                    else if (showContent === 'medical') setShowContent('preference');
+                  }}
+                  style={{
+                    width: '200px',
+                    padding: '14px',
+                    background: '#1f1f1f',
+                    color: '#eee',
+                    border: '1px solid #333',
+                    borderRadius: '30px',
+                    fontWeight: 'bold',
+                    cursor: 'pointer',
+                    fontSize: '15px',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  {t('onboarding.nextStep') || '下一步'}
+                </button>
+              ) : (
+                /* 条件 2：医疗模式走到最后一页，或日常自愈模式，直接展现红色的“开始绘制”主按钮 */
+                <button
+                  onClick={() => {
+                    if (appMode === 'medical') {
+                      setBodyMode('front');
+                    }
+                    setPage("canvas");
+                  }}
+                  style={{
+                    width: '200px',
+                    padding: '14px',
+                    background: '#d32f2f',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '30px',
+                    fontWeight: 'bold',
+                    cursor: 'pointer',
+                    fontSize: '15px',
+                    boxShadow: '0 4px 15px rgba(211, 47, 47, 0.3)',
+                    transition: 'transform 0.1s'
+                  }}
+                >
+                  {t('onboarding.startDrawing')}
+                </button>
+              )}
+
+              {/* 在医疗模式且处于前两步时，提供“直接绘制”的半透明跳过选项，关怀急性剧痛用户 */}
+              {appMode === 'medical' && showContent !== 'preference' && (
+                <button
+                  onClick={() => {
+                    setBodyMode('front');
+                    setPage("canvas");
+                  }}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#555',
+                    fontSize: '12px',
+                    textDecoration: 'underline',
+                    cursor: 'pointer',
+                    marginTop: '4px',
+                    transition: 'color 0.2s'
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.color = '#888'}
+                  onMouseLeave={e => e.currentTarget.style.color = '#555'}
+                >
+                  {t('onboarding.skipAndDraw') || '跳过配置，直接绘制'}
+                </button>
+              )}
             </div>
 
             <footer style={{
@@ -2829,22 +3123,26 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
           <div style={{ position: 'absolute', top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 10, pointerEvents: 'auto', userSelect: 'none', WebkitUserSelect: 'none' }}>
 
             {/* === 顶部高精简导航栏 === */}
-            <div style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              width: '100%',
-              height: '60px',
-              background: 'rgba(10, 10, 10, 0.85)',
-              backdropFilter: 'blur(12px)',
-              borderBottom: '1px solid #1a1a1a',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '0 16px',
-              boxSizing: 'border-box',
-              zIndex: 100
-            }}>
+            <div
+              onMouseDown={(e) => e.stopPropagation()}
+              onTouchStart={(e) => e.stopPropagation()}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                height: '60px',
+                background: 'rgba(10, 10, 10, 0.85)',
+                backdropFilter: 'blur(12px)',
+                borderBottom: '1px solid #1a1a1a',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '0 16px',
+                boxSizing: 'border-box',
+                zIndex: 100
+              }}
+            >
               {/* 左侧控制区 */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <button
@@ -2880,7 +3178,7 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
                 </button>
               </div>
 
-              {/* 中间：正反面切换（药丸形档位） */}
+              {/* 中间：正反面切换 */}
               <div style={{
                 display: 'flex',
                 background: 'rgba(255,255,255,0.03)',
@@ -2919,7 +3217,7 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
                 >
                   {t('canvas.bodyBack')}
                 </button>
-                {appMode !== 'medical' && (
+                {appMode !== 'general' && (
                   <button
                     style={{
                       padding: '6px 15px',
@@ -2957,19 +3255,21 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
               </button>
             </div>
 
-            {/* === 正背面方向提示：悬浮于顶部下方 === */}
+            {/* === 正背面方向提示 === */}
             <div style={{
               position: 'absolute',
-              top: '80px',
+              top: '90px', // 可以重新放回较靠上的位置
               left: '50%',
               transform: 'translateX(-50%)',
-              background: 'rgba(0, 0, 0, 0.6)',
-              padding: '4px 16px',
-              borderRadius: '12px',
+              background: 'rgba(0, 0, 0, 0.75)',
+              padding: '6px 18px',
+              borderRadius: '20px',
               fontSize: '11px',
-              color: '#888',
+              color: '#fff',
               pointerEvents: 'none',
-              zIndex: 5
+              zIndex: 5,
+              transition: 'opacity 0.4s ease', // 平滑淡出效果
+              opacity: tipVisible ? 1 : 0      // 根据状态控制透明度
             }}>
               {bodyMode === 'front' && t('canvas.frontTip')}
               {bodyMode === 'back' && t('canvas.backTip')}
@@ -2977,19 +3277,23 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
 
             {/* === 悬浮缩放比例调节器 === */}
             {bodyMode !== 'none' && (
-              <div style={{
-                position: 'absolute',
-                top: '75px',
-                left: '20px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                background: 'rgba(20,20,20,0.85)',
-                padding: '6px 12px',
-                borderRadius: '12px',
-                border: '1px solid #2d2d2d',
-                zIndex: 10
-              }}>
+              <div
+                onMouseDown={(e) => e.stopPropagation()}
+                onTouchStart={(e) => e.stopPropagation()}
+                style={{
+                  position: 'absolute',
+                  top: '75px',
+                  left: '20px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  background: 'rgba(20,20,20,0.85)',
+                  padding: '6px 12px',
+                  borderRadius: '12px',
+                  border: '1px solid #2d2d2d',
+                  zIndex: 10
+                }}
+              >
                 <span style={{ color: '#888', fontSize: '11px', whiteSpace: 'nowrap' }}>🗺️ 比例</span>
                 <input
                   type="range"
@@ -3005,7 +3309,11 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
             )}
 
             {/* 右侧工具栏：撤销、恢复、清除、复位 */}
-            <div style={{ pointerEvents: 'auto', position: 'absolute', right: '20px', top: '50%', transform: 'translateY(-50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '15px' }}>
+            <div
+              onMouseDown={(e) => e.stopPropagation()}
+              onTouchStart={(e) => e.stopPropagation()}
+              style={{ pointerEvents: 'auto', position: 'absolute', right: '20px', top: '50%', transform: 'translateY(-50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '15px' }}
+            >
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', height: '180px', width: '30px', position: 'relative', justifyContent: 'flex-end' }}>
                 <div style={{ color: '#888', fontSize: '9px', marginBottom: '4px', writingMode: 'vertical-rl' }}>
                   {t('canvas.emotionLoad')}
@@ -3052,25 +3360,29 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
               </button>
             </div>
 
-            {/* 底部画笔控制栏：优化流动布局 */}
-            <div style={{
-              pointerEvents: 'auto',
-              position: 'absolute',
-              bottom: 'max(20px, env(safe-area-inset-bottom))',
-              left: '50%',
-              transform: 'translateX(-50%)',
-              width: '92%',
-              maxWidth: '380px',
-              background: 'rgba(20,20,20,0.95)',
-              padding: '12px 16px',
-              borderRadius: '24px',
-              backdropFilter: 'blur(12px)',
-              border: '1px solid #2a2a2a',
-              boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '10px'
-            }}>
+            {/* 底部画笔控制栏 */}
+            <div
+              onMouseDown={(e) => e.stopPropagation()}
+              onTouchStart={(e) => e.stopPropagation()}
+              style={{
+                pointerEvents: 'auto',
+                position: 'absolute',
+                bottom: 'max(20px, env(safe-area-inset-bottom))',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                width: '92%',
+                maxWidth: '380px',
+                background: 'rgba(20,20,20,0.95)',
+                padding: '12px 16px',
+                borderRadius: '24px',
+                backdropFilter: 'blur(12px)',
+                border: '1px solid #2a2a2a',
+                boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '10px'
+              }}
+            >
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
                 {Object.keys(BRUSHES).map(k => (
                   <button

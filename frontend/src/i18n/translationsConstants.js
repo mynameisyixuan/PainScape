@@ -4,7 +4,7 @@ export const PAIN_NAME_MAP = {
   twist: "绞痛",
   pierce: "刺痛",
   heavy: "坠痛",
-  wave: "胀痛",
+  wave: "酸胀痛",
   scrape: "撕裂痛"
 };
 
@@ -25,7 +25,7 @@ export const BRUSHES = {
     isImage: false
   },
   wave: {
-    label: "胀/扩",
+    label: "酸/胀",
     icon: "/wave.png",
     isImage: true
   },
