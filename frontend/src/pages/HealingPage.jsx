@@ -117,7 +117,7 @@ export default function HealingPage({
             gap: '6px',
           }}
         >
-          ← {t('common.back') || '返回'}
+          ← {t('onboarding.back') || '返回'}
         </button>
 
         <div style={{ textAlign: 'right' }}>

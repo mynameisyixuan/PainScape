@@ -386,6 +386,18 @@ canvas {
   }
 }
 
+
+@keyframes breatheGlow {
+  0%, 100% {
+    opacity: 0.3;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.04);
+  }
+}
+
 /* 生成按钮光泽动画 */
 .generate-shine {
   animation: shimmer 3s infinite;

@@ -998,17 +998,23 @@ export default function OnboardingPage({
               }}
               style={{
                 flex: 1,
-                padding: '14px 16px',
+                padding: '0 16px',  // 只留左右内边距，上下由 flex 控制
                 borderRadius: 'var(--radius-lg)',
                 background: 'transparent',
                 border: '1px solid #444',
                 color: '#888',
-                fontSize: 'clamp(13px, 3.5vw, 16px)',
+                fontSize: 'clamp(13px, 3.2vw, 15px)',
                 fontWeight: '500',
                 cursor: 'pointer',
-                minHeight: 'var(--btn-min-touch)',
+                minHeight: 'var(--btn-min-touch)',  // 使用 CSS 变量
+                maxHeight: '48px',  // 限制最大高度，防止过高
                 transition: 'all 0.2s ease',
                 WebkitTapHighlightColor: 'transparent',
+                // ===== 关键：垂直居中 =====
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                whiteSpace: 'nowrap',  // 防止文字换行导致偏移
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.borderColor = '#666';
@@ -1025,29 +1031,36 @@ export default function OnboardingPage({
                 e.currentTarget.style.opacity = '1';
               }}
             >
-              {t('common.back') || '返回'}
+              {t('onboarding.back') || '返回'}
             </button>
+
             <button
               onClick={() => {
                 setShowContent('preference');
                 setTimeout(scrollToTop, 50);
               }}
               style={{
-                flex: 2,
-                padding: '14px 20px',
+                flex: 1,
+                padding: '0 20px',  // 只留左右内边距
                 borderRadius: 'var(--radius-lg)',
                 background: 'linear-gradient(135deg, #d32f2f, #c62828)',
                 border: 'none',
                 color: '#fff',
-                fontSize: 'clamp(14px, 3.8vw, 17px)',
+                fontSize: 'clamp(14px, 3.5vw, 16px)',
                 fontWeight: '600',
                 cursor: 'pointer',
                 minHeight: 'var(--btn-min-touch)',
+                maxHeight: '48px',
                 boxShadow: '0 4px 16px rgba(211, 47, 47, 0.25)',
                 transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
                 WebkitTapHighlightColor: 'transparent',
                 position: 'relative',
                 overflow: 'hidden',
+                // ===== 关键：垂直居中 =====
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                whiteSpace: 'nowrap',
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.boxShadow = '0 6px 24px rgba(211, 47, 47, 0.35)';
@@ -1078,17 +1091,22 @@ export default function OnboardingPage({
               }}
               style={{
                 flex: 1,
-                padding: '14px 16px',
+                padding: '0 16px',
                 borderRadius: 'var(--radius-lg)',
                 background: 'transparent',
                 border: '1px solid #444',
                 color: '#888',
-                fontSize: 'clamp(13px, 3.5vw, 16px)',
+                fontSize: 'clamp(13px, 3.2vw, 15px)',
                 fontWeight: '500',
                 cursor: 'pointer',
                 minHeight: 'var(--btn-min-touch)',
+                maxHeight: '48px',
                 transition: 'all 0.2s ease',
                 WebkitTapHighlightColor: 'transparent',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                whiteSpace: 'nowrap',
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.borderColor = '#666';
@@ -1105,7 +1123,7 @@ export default function OnboardingPage({
                 e.currentTarget.style.opacity = '1';
               }}
             >
-              {t('common.back') || '返回'}
+              {t('onboarding.back') || '返回'}
             </button>
 
             <button
@@ -1114,21 +1132,26 @@ export default function OnboardingPage({
                 setTimeout(scrollToTop, 50);
               }}
               style={{
-                flex: 2,
-                padding: '14px 20px',
+                flex: 1,
+                padding: '0 20px',
                 borderRadius: 'var(--radius-lg)',
                 background: 'linear-gradient(135deg, #43a047, #2e7d32)',
                 border: 'none',
                 color: '#fff',
-                fontSize: 'clamp(14px, 3.8vw, 17px)',
+                fontSize: 'clamp(14px, 3.5vw, 16px)',
                 fontWeight: '600',
                 cursor: 'pointer',
                 minHeight: 'var(--btn-min-touch)',
+                maxHeight: '48px',
                 boxShadow: '0 4px 16px rgba(76, 175, 80, 0.25)',
                 transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
                 WebkitTapHighlightColor: 'transparent',
                 position: 'relative',
                 overflow: 'hidden',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                whiteSpace: 'nowrap',
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.boxShadow = '0 6px 24px rgba(76, 175, 80, 0.35)';
@@ -1152,158 +1175,133 @@ export default function OnboardingPage({
 
         {appMode === 'general' && (
           <>
-            <button
-              onClick={() => {
-                setShowContent('preference');
-                setTimeout(scrollToTop, 50);
-              }}
-              style={{
-                flex: 1,
-                padding: '14px 16px',
-                borderRadius: 'var(--radius-lg)',
-                background: 'rgba(255,255,255,0.05)',
-                border: '1px solid #444',
-                color: '#888',
-                fontSize: 'clamp(13px, 3.5vw, 16px)',
-                fontWeight: '500',
-                cursor: 'pointer',
-                minHeight: 'var(--btn-min-touch)',
-                transition: 'all 0.2s ease',
-                WebkitTapHighlightColor: 'transparent',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = '#666';
-                e.currentTarget.style.color = '#ccc';
-                e.currentTarget.style.background = 'rgba(255,255,255,0.08)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = '#444';
-                e.currentTarget.style.color = '#888';
-                e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
-              }}
-              onTouchStart={(e) => {
-                e.currentTarget.style.opacity = '0.7';
-              }}
-              onTouchEnd={(e) => {
-                e.currentTarget.style.opacity = '1';
-              }}
-            >
-              {t('common.back') || '返回'}
-            </button>
-            
-            {/* 进入自愈舱按钮 */}
-            <button
-              onClick={() => onOpenHealing?.()}
-              style={{
-                flex: 1.3,
-                padding: '14px 16px',
-                borderRadius: 'var(--radius-lg)',
-                background: 'linear-gradient(135deg, #1e88e5, #1565c0)',
-                border: 'none',
-                color: '#fff',
-                fontSize: 'clamp(13px, 3.5vw, 16px)',
-                fontWeight: '600',
-                cursor: 'pointer',
-                minHeight: 'var(--btn-min-touch)',
-                boxShadow: '0 4px 16px rgba(33, 150, 243, 0.25)',
-                transition: 'all 0.25s ease',
-                whiteSpace: 'nowrap',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.boxShadow = '0 6px 20px rgba(33, 150, 243, 0.35)';
-                e.currentTarget.style.transform = 'translateY(-1px)';
-              }}
-              onMouseLeave={(e) => {
-               e.currentTarget.style.boxShadow = '0 4px 16px rgba(33, 150, 243, 0.25)';
-                e.currentTarget.style.transform = 'translateY(0)';
-              }}
-            >
-              {t('onboarding.enterHealing') || '进入自愈舱'}
-            </button>
-
-            <button
-              onClick={() => {
-                onStartDrawing?.();
-                setTimeout(scrollToTop, 50);
-              }}
-              style={{
-                flex: 2,
-                padding: '14px 20px',
-                borderRadius: 'var(--radius-lg)',
-                background: 'linear-gradient(135deg, #43a047, #2e7d32)',
-                border: 'none',
-                color: '#fff',
-                fontSize: 'clamp(14px, 3.8vw, 17px)',
-                fontWeight: '600',
-                cursor: 'pointer',
-                minHeight: 'var(--btn-min-touch)',
-                boxShadow: '0 4px 16px rgba(76, 175, 80, 0.25)',
-                transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
-                WebkitTapHighlightColor: 'transparent',
-                position: 'relative',
-                overflow: 'hidden',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.boxShadow = '0 6px 24px rgba(76, 175, 80, 0.35)';
-                e.currentTarget.style.transform = 'translateY(-1px)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.boxShadow = '0 4px 16px rgba(76, 175, 80, 0.25)';
-                e.currentTarget.style.transform = 'translateY(0)';
-              }}
-              onTouchStart={(e) => {
-                e.currentTarget.style.transform = 'scale(0.97)';
-              }}
-              onTouchEnd={(e) => {
-                e.currentTarget.style.transform = 'scale(1)';
-              }}
-            >
-              {t('onboarding.startDrawing')}
-            </button>
+{/* 进入自愈舱按钮 */}
+<button
+  onClick={() => onOpenHealing?.()}
+  style={{
+    flex: 1.3,
+    padding: '0 16px',
+    borderRadius: 'var(--radius-lg)',
+    background: 'linear-gradient(135deg, rgba(211, 47, 47, 0.85), rgba(183, 28, 28, 0.95))',
+    border: '1px solid rgba(211, 47, 47, 0.3)',
+    color: '#fff',
+    fontSize: 'clamp(13px, 3.2vw, 15px)',
+    fontWeight: '600',
+    cursor: 'pointer',
+    minHeight: 'var(--btn-min-touch)',
+    maxHeight: '48px',
+    boxShadow: '0 0 20px rgba(211, 47, 47, 0.15), inset 0 1px 0 rgba(255,255,255,0.06)',
+    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+    whiteSpace: 'nowrap',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '8px',
+    position: 'relative',
+    overflow: 'visible',
+  }}
+  onMouseEnter={(e) => {
+    e.currentTarget.style.boxShadow = '0 0 32px rgba(211, 47, 47, 0.25), inset 0 1px 0 rgba(255,255,255,0.1)';
+    e.currentTarget.style.transform = 'translateY(-1px)';
+    e.currentTarget.style.background = 'linear-gradient(135deg, rgba(211, 47, 47, 0.95), rgba(183, 28, 28, 1))';
+  }}
+  onMouseLeave={(e) => {
+    e.currentTarget.style.boxShadow = '0 0 20px rgba(211, 47, 47, 0.15), inset 0 1px 0 rgba(255,255,255,0.06)';
+    e.currentTarget.style.transform = 'translateY(0)';
+    e.currentTarget.style.background = 'linear-gradient(135deg, rgba(211, 47, 47, 0.85), rgba(183, 28, 28, 0.95))';
+  }}
+  onTouchStart={(e) => {
+    e.currentTarget.style.transform = 'scale(0.97)';
+  }}
+  onTouchEnd={(e) => {
+    e.currentTarget.style.transform = 'scale(1)';
+  }}
+>
+  {/* 呼吸光晕 - 原地脉动，不移动 */}
+  <span style={{
+    position: 'absolute',
+    inset: '-4px',
+    borderRadius: 'var(--radius-lg)',
+    background: 'rgba(211, 47, 47, 0.15)',
+    filter: 'blur(12px)',
+    animation: 'breatheGlow 2.5s ease-in-out infinite',
+    pointerEvents: 'none',
+    zIndex: 0,
+  }} />
+  
+  {/* 推荐角标 */}
+  <span style={{
+    position: 'absolute',
+    top: '-8px',
+    right: '-4px',
+    fontSize: '8px',
+    background: 'linear-gradient(135deg, #ffd54f, #ffb300)',
+    padding: '2px 10px',
+    borderRadius: '10px 10px 10px 2px',
+    fontWeight: '700',
+    letterSpacing: '0.3px',
+    color: '#1a1a1a',
+    boxShadow: '0 2px 8px rgba(255, 213, 79, 0.4)',
+    zIndex: 2,
+    pointerEvents: 'none',
+    whiteSpace: 'nowrap',
+  }}>
+    {t('onboarding.recommended') || '推荐'}
+  </span>
+  
+  {/* 按钮文字 - 确保在光晕上层 */}
+  <span style={{ position: 'relative', zIndex: 1 }}>
+    {t('onboarding.enterHealing') || '进入自愈舱'}
+  </span>
+</button>
+{/* 开始绘制按钮 */ }
+<button
+  onClick={() => {
+    onStartDrawing?.();
+    setTimeout(scrollToTop, 50);
+  }}
+  style={{
+    flex: 1,
+    padding: '0 16px',
+    borderRadius: 'var(--radius-lg)',
+    background: 'linear-gradient(135deg, #43a047, #2e7d32)',
+    border: 'none',
+    color: '#fff',
+    fontSize: 'clamp(13px, 3.2vw, 15px)',
+    fontWeight: '500',
+    cursor: 'pointer',
+    minHeight: 'var(--btn-min-touch)',
+    maxHeight: '48px',
+    boxShadow: '0 4px 16px rgba(76, 175, 80, 0.2)',
+    transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+    WebkitTapHighlightColor: 'transparent',
+    position: 'relative',
+    overflow: 'hidden',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    whiteSpace: 'nowrap',
+  }}
+  onMouseEnter={(e) => {
+    e.currentTarget.style.boxShadow = '0 6px 24px rgba(76, 175, 80, 0.3)';
+    e.currentTarget.style.transform = 'translateY(-1px)';
+  }}
+  onMouseLeave={(e) => {
+    e.currentTarget.style.boxShadow = '0 4px 16px rgba(76, 175, 80, 0.2)';
+    e.currentTarget.style.transform = 'translateY(0)';
+  }}
+  onTouchStart={(e) => {
+    e.currentTarget.style.transform = 'scale(0.97)';
+  }}
+  onTouchEnd={(e) => {
+    e.currentTarget.style.transform = 'scale(1)';
+  }}
+>
+  {t('onboarding.startDrawing') || '开始绘制'}
+</button>
           </>
         )}
-        {/* ✅ 新增：跳过按钮 - 在所有模式下都显示（除了偏好设置页） */}
-        {appMode !== 'general' && showContent === 'basicInfo' && (
-          <button
-            onClick={() => {
-              if (onSkip) {
-                onSkip();
-              }
-            }}
-            style={{
-              flex: 0.8,
-              padding: '14px 12px',
-              borderRadius: 'var(--radius-lg)',
-              background: 'transparent',
-              border: '1px solid rgba(255,255,255,0.06)',
-              color: '#555',
-              fontSize: 'clamp(12px, 3vw, 14px)',
-              fontWeight: '400',
-              cursor: 'pointer',
-              minHeight: 'var(--btn-min-touch)',
-              transition: 'all 0.2s ease',
-              WebkitTapHighlightColor: 'transparent',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.color = '#888';
-              e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.color = '#555';
-              e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)';
-            }}
-            onTouchStart={(e) => {
-              e.currentTarget.style.opacity = '0.7';
-            }}
-            onTouchEnd={(e) => {
-              e.currentTarget.style.opacity = '1';
-            }}
-          >
-            {t('onboarding.skipAndDraw') || '跳过 → 直接绘制'}
-          </button>
-        )}
       </div>
-
       {/* 科普入口文字 */}
       <div
         style={{
@@ -1348,7 +1346,62 @@ export default function OnboardingPage({
           <span style={{ fontSize: '11px', opacity: 0.8 }}>›</span>
         </button>
       </div>
-
+      {/* ✅ 跳过按钮 - 样式同科普入口 */}
+      {appMode !== 'general' && showContent === 'basicInfo' && (
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            width: '100%',
+            marginTop: '8px',
+            marginBottom: '2px',
+          }}
+        >
+          <button
+            onClick={() => {
+              if (onSkip) {
+                onSkip();
+              }
+            }}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: '#555',
+              fontSize: 'clamp(12px, 2.8vw, 14px)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 14px',
+              borderRadius: '16px',
+              transition: 'all 0.2s ease',
+              letterSpacing: '0.3px',
+              minHeight: 'auto',  // 移除触摸最小高度，让它自然
+              whiteSpace: 'nowrap',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = '#888';
+              e.currentTarget.style.background = 'rgba(255,255,255,0.04)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = '#555';
+              e.currentTarget.style.background = 'none';
+            }}
+            onTouchStart={(e) => {
+              e.currentTarget.style.opacity = '0.6';
+            }}
+            onTouchEnd={(e) => {
+              e.currentTarget.style.opacity = '1';
+            }}
+          >
+            <span style={{ textDecoration: 'underline', textUnderlineOffset: '3px' }}>
+              {t('onboarding.skipAndDraw') || '跳过 → 直接绘制'}
+            </span>
+            <span style={{ fontSize: '11px', opacity: 0.6 }}>›</span>
+          </button>
+        </div>
+      )}
       {/* 页脚导航链接 */}
       <footer
         style={{

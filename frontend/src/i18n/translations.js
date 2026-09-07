@@ -98,7 +98,7 @@ const translations = {
       wave: "弥漫酸胀痛",
       scrape: "撕刮痛",
     },
-    // ============ 画布 ============
+
     // ============ 开屏页 ============
     splash: {
       switchLang: "English",
@@ -186,6 +186,8 @@ const translations = {
       medicalTitle: "填写健康信息（可选）",
       step1: "基础信息",
       step2: "干预偏好",
+       recommended: '推荐',
+       back: '返回',
       basicPhysiologicalTitle: "基础生理档案",
       basicPhysiologicalDesc: "这些常态基础指标将被本地保存，避免重复录入",
       basicInfoTitle: "基础信息",
@@ -196,6 +198,7 @@ const translations = {
       recentPsychosocialLabel: "近期压力状况 (可选)",
       openProfileModalBtn: "完善个人档案 (常态生理/病史/过敏等)",
       profileModalTitle: "个人档案",
+      enterHealing: "进入自愈舱",
       profileModalDesc: "这些常态基础生理与既往病史指标将被保存，避免重复录入",
       ageGroupLabel: "您的年龄段",
       activityLevelLabel: "日常活动负荷",
@@ -1890,6 +1893,9 @@ const translations = {
         ["↩️ Undo/Redo", "Use buttons on the right to modify, clear, or restart anytime"],
         ["⚡ Generate Report", "Tap [Generate] in the upper right; AI will translate your pain map"],
       ],
+      recommended: 'Recommended',
+      back: 'Back',
+      enterHealing:"Open Self-care Space",
       preferenceTitle: "When menstrual pain strikes, what do you need most?",
       preferences: [
         { key: "alone", title: "🛑 Leave me alone, I want to be by myself" },
