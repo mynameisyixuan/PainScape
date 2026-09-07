@@ -36,23 +36,32 @@ export class PainParticle {
       }
     }
 
-    else if (type === 'heavy') {
-      this.vel = p5.createVector(0, 0);
-      this.isDynamic = true;
-      this.life = Infinity;
-      this.regionSize = customProps?.regionSize || 40;
-      this.points = customProps?.points || [];
-      // 下拉循环参数
-      this.cyclePhase = p5.random(p5.TWO_PI);
-      this.pullProgress = 0;
-    }
+//  heavy
+else if (type === 'heavy') {
+  this.vel = p5.createVector(0, 0);
+  this.isDynamic = true;
+  this.life = Infinity;
+  this.regionSize = customProps?.regionSize || 40;
+  this.points = customProps?.points || [];
+  this.springStretch = 1.0 / 3.0;
+  this.heavyPhase = 'appear';  // ← 把 'drop' 改成 'appear'
+  this.phaseFrame = Math.floor(p5.random(0, 20));
+  this.pointSeeds = this.points.map(() => p5.random(1000));
+  this.shapeSeed = p5.random(1000);
+  this.smoothNorm = 0.05;
+  this.sinkOffset = 0;
+  this.sinkSpeed = 0.0004;
+}
 
     // ===== 3. 绞痛 (Twist) =====
     else if (type === 'twist') {
       this.vel = p5.createVector(0, 0);
-      this.size = p5.random(18, 30) * (0.6 + this.pressureScale * 0.5);
+      this.size = p5.random(20, 35) * (0.8 + this.pressureScale * 0.5);
       this.initialSize = this.size;
       this.angle = p5.random(p5.TWO_PI);
+      this.minSize = this.size * 0.4;
+      // 保存原始颜色
+      this.originalColor = color || [211, 47, 47];
     }
 
     // ===== 4. 酸胀 (Wave) =====
@@ -129,6 +138,34 @@ export class PainParticle {
           life: 30 + p5.random(40)
         });
       }
+      // ===== 3. 撕裂组织片 - 模拟刮下的肉片 =====
+      this.tissuePieces = [];
+      const tissueCount = Math.floor(2 + this.pressureScale * 3);
+      for (let i = 0; i < tissueCount; i++) {
+        const t = p5.random(0, 1);
+        const longPos = (t - 0.5) * tearLen * 0.6;
+        const latOffset = (p5.random() - 0.5) * 12 * this.pressureScale;
+
+        // 沿着撕扯方向
+        const tx = longPos * cosA - latOffset * sinA;
+        const ty = longPos * sinA + latOffset * cosA;
+
+        this.tissuePieces.push({
+          x: tx,
+          y: ty,
+          size: p5.random(3, 8) * (0.3 + this.pressureScale * 0.5),
+          rotation: p5.random(p5.TWO_PI),
+          rotSpeed: p5.random(-0.01, 0.01),
+          alpha: p5.random(150, 220),
+          // 组织片形状参数
+          stretchX: p5.random(0.6, 1.4),
+          stretchY: p5.random(0.6, 1.4),
+          // 飘散
+          driftX: (p5.random() - 0.5) * 0.3,
+          driftY: (p5.random() - 0.5) * 0.3,
+          life: 60 + p5.random(60)
+        });
+      }
 
       this.life = 150 + this.pressureScale * 80;
     }
@@ -140,14 +177,13 @@ export class PainParticle {
     }
 
     if (this.type === 'twist') {
-      const minSize = this.initialSize / 3;
-      if (this.size > minSize) {
-        this.angle += 0.08;
-        this.size *= 0.985;
-        if (this.size <= minSize) {
-          this.size = minSize;
+      if (this.size > this.minSize) {
+        this.size *= 0.987; // 非常缓慢地缩小
+        if (this.size < this.minSize) {
+          this.size = this.minSize;
         }
       }
+      this.angle += 0.15; // 持续旋转
     } else if (this.type === 'wave') {
       this.pulseSize = this.size + p5.sin(p5.frameCount * 0.05 + this.seed) * (this.maxSize - this.size);
     } else if (this.type === 'scrape') {
@@ -163,58 +199,75 @@ export class PainParticle {
         c.alpha = Math.max(0, c.alpha - 2);
         // 慢慢变淡消失
       });
+      this.tissuePieces.forEach(t => {
+        t.x += t.driftX * 0.2;
+        t.y += t.driftY * 0.2;
+        t.rotation += t.rotSpeed;
+        t.life -= 0.5;
+        t.alpha = Math.max(0, t.alpha - 1);
+      });
     } else if (this.type === 'pierce') {
       this.life -= 25;
       this.vel.mult(0);
     }
-    // =====  heavy  =====
-    else if (this.type === 'heavy') {
-      const speed = 0.004;
-      this.pullProgress += speed;
+    // ===== heavy =====
+// ===== update 中的 heavy =====
+else if (this.type === 'heavy') {
+  const minStretch = 1.0 / 3.0;
+  const stretchRange = 1.0 - minStretch;
 
-      if (this.pullProgress > 1) {
-        this.pullProgress = 0;
-      }
+  this.phaseFrame++;
 
-      const t = this.pullProgress;
+  let normFactor = 0;
 
-      // ===== 1. 整体位移 - 下坠快(15%时间)、回弹慢(85%时间) =====
-      let yOffsetRatio;
-      if (t < 0.15) {
-        // 下坠阶段 (15% 时间) - 快速砸下去
-        const fallT = t / 0.15;
-        // easeIn: 先慢后快，模拟重力加速
-        yOffsetRatio = 0.5 - fallT * fallT * 0.4; // 0.5 -> 0.1
-        yOffsetRatio = Math.max(0.1, yOffsetRatio);
-      } else {
-        // 回弹阶段 (85% 时间) - 极其缓慢回升，像被黏在地上
-        const riseT = (t - 0.15) / 0.85;
-        // easeOut: 先快后慢，但整体速度极慢
-        yOffsetRatio = 0.1 + riseT * 0.35; // 0.1 -> 0.45
-        yOffsetRatio = Math.min(0.45, yOffsetRatio);
-      }
+  if (this.heavyPhase === 'appear') {
+    const u = Math.min(1.0, this.phaseFrame / 60);
+    normFactor = 0.05 + u * u * 0.45;
+    normFactor = Math.min(0.50, normFactor);
 
-      // 映射到位移
-      const displacementRange = this.regionSize * 0.8;
-      this.yOffset = (0.5 - yOffsetRatio) / 0.4 * displacementRange;
-
-      // ===== 2. 拉伸 - 下坠时猛烈拉长，回弹时慢慢恢复 =====
-      const stretchFactor = 1 + (0.5 - yOffsetRatio) / 0.4 * 0.9;
-      this.stretchY = stretchFactor;
-      this.squashX = 1 / Math.sqrt(stretchFactor);
-
-      // ===== 3. 下坠力度 - 下坠时猛，回弹时弱 =====
-      let pullForce;
-      if (t < 0.15) {
-        const fallT = t / 0.15;
-        pullForce = 0.3 + fallT * 0.7; // 0.3 -> 1.0
-      } else {
-        const riseT = (t - 0.15) / 0.85;
-        pullForce = 1.0 - riseT * 0.6; // 1.0 -> 0.4
-        pullForce = Math.max(0.4, pullForce);
-      }
-      this.pullForce = pullForce;
+    if (this.phaseFrame >= 60) {
+      this.heavyPhase = 'sinking';
+      this.phaseFrame = 0;
+      this.startNorm = normFactor;
     }
+  } else if (this.heavyPhase === 'sinking') {
+    // 总周期 600 帧 (10秒)
+    const progress = this.phaseFrame / 600;
+    
+    const startVal = this.startNorm || 0.50;
+    // 上升幅度缩小：从 0.50 到 0.85 (只上升 0.35)
+    const maxVal = 0.85;
+    const range = maxVal - startVal; // 0.35
+    
+    // 正弦波：0 → 1 → 0，周期 600 帧
+    const angle = progress * Math.PI * 2;
+    const raw = (Math.sin(angle) + 1) / 2; // 0-1
+    
+    // 让底部停留更久 (raw > 0.7 时放慢)
+    let adjusted;
+    if (raw > 0.7) {
+      const t = (raw - 0.7) / 0.3;
+      adjusted = 0.7 + t * 0.3 * 0.5; // 波峰更平缓
+    } else {
+      const t = raw / 0.7;
+      adjusted = t * t * 0.7;
+    }
+    
+    normFactor = startVal + adjusted * range;
+    normFactor = Math.max(startVal, Math.min(maxVal, normFactor));
+
+    if (this.phaseFrame >= 600) {
+      this.phaseFrame = 0;
+    }
+  }
+
+  this.normFactor = Math.max(0.05, Math.min(0.98, normFactor));
+  this.springStretch = minStretch + this.normFactor * stretchRange;
+
+  if (!this.history) this.history = [];
+  this.history.push({ normFactor: this.normFactor, time: Date.now() });
+  if (this.history.length > 15) this.history.shift();
+}
   }
 
   show(pg) {
@@ -275,219 +328,418 @@ export class PainParticle {
       p.pop();
     }
 
-    // ===== heavy - 实色版本，去掉蓝色 =====
-    else if (this.type === 'heavy') {
-      if (!this.points || this.points.length < 2) return;
+ // ===== 2. 坠痛 (Heavy) =====
+else if (this.type === 'heavy') {
+  if (!this.points || this.points.length < 2) return;
 
-      const [r, g, b] = this.color;
-      const regionSize = this.regionSize || 40;
+  const [r, g, b] = this.color;
+  const d = this.normFactor || 0.05;
+  const history = this.history || [];
 
-      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-      this.points.forEach(pt => {
-        if (pt.x < minX) minX = pt.x;
-        if (pt.x > maxX) maxX = pt.x;
-        if (pt.y < minY) minY = pt.y;
-        if (pt.y > maxY) maxY = pt.y;
-      });
-      const width = Math.max(maxX - minX, 10);
-      const height = Math.max(maxY - minY, 10);
-      const cx = this.pos.x;
-      const cy = this.pos.y;
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  this.points.forEach(pt => {
+    if (pt.x < minX) minX = pt.x;
+    if (pt.x > maxX) maxX = pt.x;
+    if (pt.y < minY) minY = pt.y;
+    if (pt.y > maxY) maxY = pt.y;
+  });
 
-      const yOffset = this.yOffset || 0;
-      const stretchY = this.stretchY || 1;
-      const squashX = this.squashX || 1;
-      const pullForce = this.pullForce || 0.5;
+  const boxW = Math.max(maxX - minX, 24);
+  const boxH = Math.max(maxY - minY, 24);
+  const cx = this.pos.x;
+  const cy = this.pos.y;
 
-      // 实色 - 颜色随下坠力度加深
-      const depthFactor = 0.3 + pullForce * 0.7;
-      const baseAlpha = Math.min(255, 200 + this.points.length * 0.2);
+  // ===== 残影 =====
+  for (let h = 0; h < history.length - 1; h++) {
+    const entry = history[h];
+    if (!entry) continue;
+    const alphaMul = (h / history.length) * 0.08;
+    if (alphaMul < 0.01) continue;
 
-      // 颜色：保持原始色相，下坠时加深
-      const rCol = Math.min(255, r * (0.5 + depthFactor * 0.5));
-      const gCol = Math.min(255, g * (0.3 + depthFactor * 0.4));
-      const bCol = Math.min(255, b * (0.3 + depthFactor * 0.4));
+    const histD = entry.normFactor || 0.05;
+    const histBrightness = 0.35 + histD * 0.55;
+    const histR = Math.min(255, r * (0.25 + histBrightness * 0.75));
+    const histG = Math.min(255, g * (0.25 + histBrightness * 0.75));
+    const histB = Math.min(255, b * (0.25 + histBrightness * 0.75));
 
-      p.push();
-      p.translate(cx, cy + yOffset);
-
-      // ===== 1. 底部阴影 =====
-      p.noStroke();
-      const shadowAlpha = Math.min(200, 40 + pullForce * 160);
-      p.fill(0, 0, 0, shadowAlpha * 0.10);
-      p.ellipse(0, height * 0.3 + 5, width * 2.2 * squashX, height * 0.25);
-      p.fill(0, 0, 0, shadowAlpha * 0.15);
-      p.ellipse(0, height * 0.5 + 10, width * 1.8 * squashX, height * 0.18);
-      p.fill(0, 0, 0, shadowAlpha * 0.22);
-      p.ellipse(0, height * 0.7 + 15, width * 1.4 * squashX, height * 0.12);
-
-      // ===== 2. 外层羽化 =====
-      p.noStroke();
-      p.fill(rCol * 0.5, gCol * 0.3, bCol * 0.3, baseAlpha * 0.05);
-      p.ellipse(0, 0, width * 2.8 * squashX, height * 2.8 * stretchY);
-
-      p.fill(rCol * 0.6, gCol * 0.35, bCol * 0.35, baseAlpha * 0.10);
-      p.ellipse(0, 0, width * 2.2 * squashX, height * 2.2 * stretchY);
-
-      p.fill(rCol * 0.7, gCol * 0.4, bCol * 0.4, baseAlpha * 0.18);
-      p.ellipse(0, 0, width * 1.8 * squashX, height * 1.8 * stretchY);
-
-      // ===== 3. 砂锅主体 - 厚实 =====
-      p.fill(rCol * 0.85, gCol * 0.5, bCol * 0.5, baseAlpha * 0.35);
-      p.ellipse(-width * 0.03, height * 0.03, width * 1.5 * squashX, height * 1.5 * stretchY);
-
-      p.fill(rCol * 0.85, gCol * 0.5, bCol * 0.5, baseAlpha * 0.30);
-      p.ellipse(width * 0.03, -height * 0.02, width * 1.4 * squashX, height * 1.4 * stretchY);
-
-      // ===== 4. 核心 =====
-      p.fill(rCol * 0.6, gCol * 0.3, bCol * 0.3, baseAlpha * 0.65);
-      p.ellipse(0, height * 0.01, width * 0.85 * squashX, height * 0.85 * stretchY);
-
-      p.fill(rCol * 0.4, gCol * 0.2, bCol * 0.2, baseAlpha * 0.85);
-      p.ellipse(width * 0.02, -height * 0.01, width * 0.55 * squashX, height * 0.55 * stretchY);
-
-      // ===== 5. 最深核心 - 几乎黑色 =====
-      p.fill(rCol * 0.15, gCol * 0.08, bCol * 0.08, Math.min(255, baseAlpha * 0.95));
-      p.ellipse(0, 0, width * 0.25 * squashX, height * 0.25 * stretchY);
-
-      // ===== 6. 底部拖影 - 石头拉扯感 =====
-      const dragAlpha = Math.min(180, 30 + pullForce * 150);
-      for (let i = 1; i <= 4; i++) {
-        const offset = 8 + i * 6 + pullForce * 12;
-        p.fill(0, 0, 0, dragAlpha * 0.06 * (1 - i * 0.15));
-        p.ellipse(
-          0,
-          height * 0.3 + offset,
-          width * (1.0 - i * 0.06) * squashX,
-          height * 0.08 * (1 + i * 0.15)
-        );
-      }
-
-      // ===== 7. 底部石头感 - 硬质重物 =====
-      p.fill(
-        rCol * 0.15,
-        gCol * 0.08,
-        bCol * 0.08,
-        Math.min(160, 30 + pullForce * 130)
-      );
-      p.ellipse(
-        0,
-        height * 0.45 + 15 + pullForce * 20,
-        width * 0.35 * squashX,
-        height * 0.06 + pullForce * 0.05
-      );
-
-      p.fill(
-        rCol * 0.08,
-        gCol * 0.04,
-        bCol * 0.04,
-        Math.min(130, 20 + pullForce * 110)
-      );
-      p.ellipse(
-        0,
-        height * 0.55 + 25 + pullForce * 25,
-        width * 0.2 * squashX,
-        height * 0.04 + pullForce * 0.03
-      );
-
-      // ===== 8. 不规则噪点 =====
-      const numNoise = Math.floor(12 + pullForce * 20);
-      for (let i = 0; i < numNoise; i++) {
-        const angle = p.random(p.TWO_PI);
-        const dist = p.random(0.2, 1.0) * width * 0.5 * squashX;
-        const nx = Math.cos(angle) * dist;
-        const ny = Math.sin(angle) * dist * 0.7 * stretchY;
-        const size = p.random(2, 5) * (0.3 + pullForce * 0.5);
-        const noiseAlpha = p.random(8, 25) * (0.3 + pullForce * 0.5);
-        p.fill(rCol * 0.4, gCol * 0.2, bCol * 0.2, noiseAlpha);
-        p.ellipse(nx, ny, size, size * 0.6);
-      }
-
-      // ===== 9. 重力垂线 - 下坠方向 =====
-      if (pullForce > 0.3) {
-        const lineAlpha = Math.min(140, 15 + pullForce * 125);
-        p.stroke(rCol * 0.15, gCol * 0.08, bCol * 0.08, lineAlpha * 0.3);
-        p.strokeWeight(0.5 + pullForce * 0.8);
-        const numLines = Math.floor(3 + pullForce * 5);
-        for (let i = 0; i < numLines; i++) {
-          const xOff = (i / (numLines - 1) - 0.5) * width * 0.5;
-          const yStart = -height * 0.2 + i * 0.2;
-          const yEnd = height * 0.4 + i * 0.15;
-          const curveOff = Math.sin(i * 0.7 + this.seed) * 2;
-          p.beginShape();
-          for (let t = 0; t <= 1; t += 0.05) {
-            const y = yStart + (yEnd - yStart) * t;
-            const x = xOff + curveOff * t * t;
-            p.vertex(x, y);
-          }
-          p.endShape();
-        }
-      }
-
-      // ===== 10. 底部触地波纹 - 砸到底时出现 =====
-      if (pullForce > 0.7) {
-        const rippleStrength = (pullForce - 0.7) / 0.3;
-        p.noFill();
-        const rippleAlpha = Math.min(120, 20 + rippleStrength * 100);
-        p.stroke(rCol * 0.2, gCol * 0.1, bCol * 0.1, rippleAlpha * 0.4);
-        p.strokeWeight(0.5 + rippleStrength * 1.2);
-        for (let i = 0; i < 3; i++) {
-          const radius = width * (0.3 + i * 0.12 + rippleStrength * 0.15);
-          const alphaMul = 1 - i * 0.25;
-          p.stroke(rCol * 0.2, gCol * 0.1, bCol * 0.1, rippleAlpha * 0.4 * alphaMul);
-          p.ellipse(0, height * 0.35 + i * 2, radius * squashX, radius * 0.3 * stretchY);
-        }
-      }
-
-      // ===== 11. 用户笔触点 =====
-      const numDots = Math.min(this.points.length, 60);
-      for (let i = 0; i < numDots; i++) {
-        const idx = Math.floor(i * this.points.length / numDots);
-        const pt = this.points[idx];
-        if (!pt) continue;
-        const dotIntensity = pt.intensity || 0.5;
-        const dotSizeX = (2 + dotIntensity * 7) * squashX;
-        const dotSizeY = (2 + dotIntensity * 7) * stretchY * 0.5;
-        const dotAlpha = Math.min(220, 100 + dotIntensity * 120);
-        p.noStroke();
-        p.fill(rCol * 0.4, gCol * 0.2, bCol * 0.2, dotAlpha * 0.6);
-        p.ellipse(
-          pt.x - cx,
-          pt.y - cy,
-          dotSizeX * 0.5,
-          dotSizeY * 0.4
-        );
-      }
-
-      p.pop();
+    const histStretch = boxH * 2.8 * histD;
+    const histOffsets = [0];
+    const weights = [0.08, 0.14, 0.18, 0.20, 0.20, 0.20];
+    for (let i = 1; i < 12; i++) {
+      histOffsets.push(histOffsets[i - 1] + histStretch * weights[Math.min(i - 1, weights.length - 1)]);
     }
 
-    // ===== 3. 绞痛 =====
+    p.push();
+    p.translate(cx, cy);
+    p.noStroke();
+
+    const alphas = [0.01, 0.02, 0.035, 0.05, 0.065, 0.08, 0.09, 0.10, 0.105, 0.11, 0.115, 0.12];
+    const sizes = [1.0, 0.97, 0.94, 0.90, 0.85, 0.79, 0.72, 0.64, 0.55, 0.45, 0.34, 0.22];
+    for (let i = 0; i < 12; i++) {
+      const w = boxW * 1.3 * sizes[i];
+      const hh = boxH * 1.3 * sizes[i];
+      p.fill(histR, histG, histB, alphas[i] * alphaMul * 35);
+      p.ellipse(0, histOffsets[i] * 0.25, w, hh);
+    }
+    p.pop();
+  }
+
+  // ===== 主体：12层 =====
+  const baseAlpha = Math.min(255, 170 + d * 85);
+  const layerCount = 12;
+
+  const layerBrightness = [];
+  const layerAlphas = [];
+  const sizeScales = [];
+
+  for (let i = 0; i < layerCount; i++) {
+    const t = i / (layerCount - 1);
+    const brightness = 0.50 - t * 0.46;
+    layerBrightness.push(Math.max(0.08, brightness));
+    const alpha = baseAlpha * (0.04 + t * 0.92);
+    layerAlphas.push(alpha);
+    const scale = 0.35 + t * 0.75;
+    sizeScales.push(scale);
+  }
+
+  const layerVisibility = [];
+  for (let i = 0; i < layerCount; i++) {
+    const t = i / (layerCount - 1);
+    const start = 0.02 + t * 0.02;
+    const end = 0.05 + t * 0.90;
+    let vis = (d - start) / (end - start);
+    vis = Math.max(0, Math.min(1, vis));
+    vis = vis * vis * (3 - 2 * vis);
+    layerVisibility.push(vis);
+  }
+
+  const baseLayers = sizeScales.map((scale, idx) => ({
+    w: boxW * 1.3 * scale,
+    h: boxH * 1.3 * scale,
+    r: Math.min(255, r * layerBrightness[idx]),
+    g: Math.min(255, g * layerBrightness[idx]),
+    b: Math.min(255, b * layerBrightness[idx]),
+    alpha: layerAlphas[idx] * layerVisibility[idx]
+  }));
+
+  // ===== 层间偏移 =====
+  const layerYOffsets = [0];
+  const totalStretch = boxH * 2.8 * d;
+  for (let i = 1; i < layerCount; i++) {
+    const t = i / (layerCount - 1);
+    const weight = t * t * t * 0.7 + t * 0.3;
+    const deltaY = totalStretch * weight / (layerCount - 1) * 2.0;
+    layerYOffsets.push(layerYOffsets[i - 1] + deltaY);
+  }
+
+  const deepestY = layerYOffsets[layerYOffsets.length - 1] + baseLayers[baseLayers.length - 1].h * 0.5;
+
+  p.push();
+  p.translate(cx, cy);
+
+  // ===== 平滑形状 =====
+  const drawSmooth = (cx, cy, w, h, offsetY, alpha, color, irregularity = 0.02) => {
+    if (alpha < 1) return;
+    const numPoints = 28;
+    p.fill(color[0], color[1], color[2], alpha);
+    p.noStroke();
+    p.beginShape();
+    for (let i = 0; i < numPoints; i++) {
+      const angle = (i / numPoints) * p.TWO_PI;
+      const noiseVal = 1 + Math.sin(i * 3.7 + this.seed) * irregularity;
+      const x = cx + w * 0.5 * noiseVal * Math.cos(angle);
+      const y = cy + offsetY + h * 0.5 * noiseVal * Math.sin(angle);
+      p.vertex(x, y);
+    }
+    p.endShape(p.CLOSE);
+  };
+
+  // ===== 阴影 =====
+  p.noStroke();
+  const shadowAlpha = Math.min(140, 10 + d * 130);
+  p.fill(0, 0, 0, shadowAlpha * 0.04);
+  p.ellipse(0, deepestY + 4, baseLayers[11].w * 2.0, 5 + d * 10);
+  p.fill(0, 0, 0, shadowAlpha * 0.07);
+  p.ellipse(0, deepestY + 8, baseLayers[11].w * 1.4, 3 + d * 6);
+  p.fill(0, 0, 0, shadowAlpha * 0.10);
+  p.ellipse(0, deepestY + 12, baseLayers[11].w * 0.8, 2 + d * 3);
+
+  // ===== 绘制所有层 =====
+  for (let i = 0; i < baseLayers.length; i++) {
+    const layer = baseLayers[i];
+    if (layer.alpha < 1) continue;
+    const offsetFactor = 0.10 + 0.90 * (i / (baseLayers.length - 1));
+    const irreg = 0.01 + (i / (baseLayers.length - 1)) * 0.025;
+    drawSmooth(
+      0,
+      layerYOffsets[i] * offsetFactor,
+      layer.w,
+      layer.h,
+      0,
+      layer.alpha,
+      [layer.r, layer.g, layer.b],
+      irreg
+    );
+  }
+
+  // ===== 底部深色拉长块 =====
+  if (d > 0.4) {
+    const blockW = baseLayers[11].w * 0.35 + d * 10;
+    const blockH = baseLayers[11].h * 0.10 + d * 7;
+    const darkR = Math.min(255, r * 0.05);
+    const darkG = Math.min(255, g * 0.05);
+    const darkB = Math.min(255, b * 0.05);
+    const blockAlpha = Math.min(200, 20 + d * 180) * Math.min(1, (d - 0.4) * 2.5);
+    p.fill(darkR, darkG, darkB, blockAlpha);
+    p.beginShape();
+    for (let i = 0; i < 16; i++) {
+      const angle = (i / 16) * p.TWO_PI;
+      const rFactor = 1 + Math.sin(i * 2.1 + this.seed + d) * 0.04;
+      const x = blockW * 0.5 * rFactor * Math.cos(angle);
+      const y = deepestY + (blockH * 0.5) * rFactor * Math.sin(angle) * 0.25;
+      p.vertex(x, y);
+    }
+    p.endShape(p.CLOSE);
+  }
+
+  // ===== 笔触点 =====
+  const numDots = Math.min(this.points.length, 30);
+  for (let k = 0; k < numDots; k++) {
+    const idx = Math.floor(k * this.points.length / numDots);
+    const pt = this.points[idx];
+    if (!pt) continue;
+    const intensity = pt.intensity || 0.5;
+    const dotSize = 1.5 + intensity * 3;
+    p.noStroke();
+    const dotBrightness = 0.15 + d * 0.35;
+    p.fill(
+      Math.min(255, r * dotBrightness * 0.5),
+      Math.min(255, g * dotBrightness * 0.5),
+      Math.min(255, b * dotBrightness * 0.5),
+      50 + intensity * 70
+    );
+    const yRatio = (pt.y - minY) / (maxY - minY + 0.01);
+    const layerIdx = Math.floor(yRatio * (baseLayers.length - 1));
+    const offsetY = layerYOffsets[Math.min(layerIdx, baseLayers.length - 1)] || 0;
+    p.ellipse(
+      pt.x - cx,
+      pt.y - cy + offsetY * 0.15,
+      dotSize * 0.3,
+      dotSize * 0.2
+    );
+  }
+
+  p.pop();
+}
+
+    // ===== 3. 绞痛 (Twist)  =====
     else if (this.type === 'twist') {
+      const sizeRatio = Math.max(0.25, this.size / this.initialSize);
+      const [r, g, b] = this.originalColor || this.color;
+
       p.push();
       p.translate(this.pos.x, this.pos.y);
       p.rotate(this.angle);
 
+      // ===== 1. 同心螺旋细丝 - 一圈一圈绕着中心 =====
+      const numLayers = Math.max(12, Math.floor(20 * sizeRatio));
+      for (let layer = 0; layer < numLayers; layer++) {
+        const t = layer / numLayers;
+        // 从外圈到内圈
+        const radius = this.size * (0.9 - t * 0.75);
+        const alpha = 40 + 30 * (1 - t) + 20 * Math.sin(layer * 1.3 + this.seed);
+        const thickness = 0.6 + 1.2 * (1 - t * 0.5);
+
+        p.stroke(
+          Math.min(255, r * (0.7 + 0.2 * (1 - t))),
+          Math.min(255, g * (0.4 + 0.2 * (1 - t))),
+          Math.min(255, b * (0.4 + 0.2 * (1 - t))),
+          alpha * 0.5 * Math.min(1, sizeRatio * 1.3)
+        );
+        p.strokeWeight(Math.max(0.4, thickness * sizeRatio));
+        p.noFill();
+
+        // 每一圈是不完整的圆，形成螺旋感
+        const segmentStart = layer * 0.15;
+        const segmentEnd = segmentStart + 0.6 + 0.3 * (1 - t);
+        p.beginShape();
+        for (let a = segmentStart * p.TWO_PI; a < segmentEnd * p.TWO_PI; a += 0.05) {
+          const wave = Math.sin(a * 3 + layer * 0.5 + this.seed) * 0.03 * this.size;
+          const x = (radius + wave) * Math.cos(a + this.angle * 0.1 * (1 - t));
+          const y = (radius + wave) * Math.sin(a + this.angle * 0.1 * (1 - t));
+          p.vertex(x, y);
+        }
+        p.endShape();
+      }
+
+      // ===== 2. 细密同心环 - 增加密度 =====
+      const numRings = Math.max(20, Math.floor(32 * sizeRatio));
+      for (let i = 0; i < numRings; i++) {
+        const t = i / numRings;
+        const radius = this.size * (0.85 - t * 0.75);
+        const alpha = 20 + 20 * (1 - t) + 15 * Math.sin(i * 2.1 + this.seed * 0.7);
+
+        p.stroke(
+          Math.min(255, r * 0.5),
+          Math.min(255, g * 0.25),
+          Math.min(255, b * 0.25),
+          alpha * 0.35 * Math.min(1, sizeRatio * 1.3)
+        );
+        p.strokeWeight(Math.max(0.2, 0.5 * sizeRatio));
+        p.noFill();
+
+        // 每个环也是不完整的，形成绞拧的纹理
+        const startA = i * 0.2;
+        const endA = startA + 0.5 + 0.3 * (1 - t);
+        p.beginShape();
+        for (let a = startA * p.TWO_PI; a < endA * p.TWO_PI; a += 0.04) {
+          const wave = Math.sin(a * 4 + i * 0.7 + this.seed + this.angle * 0.05) * 0.02 * this.size;
+          const x = (radius + wave) * Math.cos(a + this.angle * 0.08 * (1 - t));
+          const y = (radius + wave) * Math.sin(a + this.angle * 0.08 * (1 - t));
+          p.vertex(x, y);
+        }
+        p.endShape();
+      }
+
+      // ===== 3. 第一组交叉螺旋（顺时针） =====
       p.noFill();
-      p.stroke(this.color[0], this.color[1], this.color[2], 110);
-      p.strokeWeight(1.2);
+      p.stroke(
+        Math.min(255, r * 0.9),
+        Math.min(255, g * 0.6),
+        Math.min(255, b * 0.6),
+        Math.min(255, (170 + this.pressureScale * 60) * Math.min(1, sizeRatio * 1.4))
+      );
+      p.strokeWeight(Math.max(1.2, 2.5 * sizeRatio));
       p.beginShape();
-      for (let a = 0; a < p.TWO_PI * 1.2; a += 0.25) {
-        const r = p.map(a, 0, p.TWO_PI * 1.2, this.size * 1.6, this.size * 0.4);
-        p.vertex(r * p.cos(a), r * p.sin(a));
+      const turns1 = 2.2;
+      for (let a = 0; a < p.TWO_PI * turns1; a += 0.04) {
+        const t = a / (p.TWO_PI * turns1);
+        const radius = this.size * (1.1 - t * 0.85);
+        // 轻微波浪扭曲
+        const wave = Math.sin(a * 2.5 + this.seed) * 0.03 * this.size;
+        const x = (radius + wave) * Math.cos(a + this.angle * 0.3);
+        const y = (radius + wave) * Math.sin(a + this.angle * 0.3);
+        p.vertex(x, y);
       }
       p.endShape();
 
-      p.fill(this.color[0] * 0.85, 0, 0, 160 + (65 * this.pressureScale));
-      p.stroke(this.color[0] * 0.5, 0, 0, 240);
-      p.strokeWeight(1.0);
+      // ===== 4. 第二组交叉螺旋（逆时针）- 与第一组交叉 =====
+      p.stroke(
+        Math.min(255, r * 0.75),
+        Math.min(255, g * 0.45),
+        Math.min(255, b * 0.45),
+        Math.min(255, (140 + this.pressureScale * 45) * Math.min(1, sizeRatio * 1.4))
+      );
+      p.strokeWeight(Math.max(1.0, 2.0 * sizeRatio));
       p.beginShape();
-      for (let i = 0; i < 7; i++) {
-        const angle = (i * p.TWO_PI) / 7;
-        const rad = this.size * (0.35 + (i % 2 === 0 ? 0.08 : -0.08));
-        p.vertex(rad * p.cos(angle), rad * p.sin(angle));
+      const turns2 = 2.0;
+      for (let a = 0; a < p.TWO_PI * turns2; a += 0.04) {
+        const t = a / (p.TWO_PI * turns2);
+        const radius = this.size * (1.0 - t * 0.8);
+        const wave = Math.sin(a * 2.8 + this.seed * 1.3 + 0.5) * 0.03 * this.size;
+        // 逆时针：使用 -a
+        const x = (radius + wave) * Math.cos(-a + this.angle * 0.25 + 0.2);
+        const y = (radius + wave) * Math.sin(-a + this.angle * 0.25 + 0.2);
+        p.vertex(x, y);
       }
-      p.endShape(p.CLOSE);
+      p.endShape();
+
+      // ===== 5. 交叉节点 - 在交叉处加强，突出绞拧感 =====
+      const numNodes = Math.max(8, Math.floor(14 * sizeRatio));
+      for (let i = 0; i < numNodes; i++) {
+        const t = i / numNodes;
+        const radius = this.size * (0.15 + 0.7 * (1 - t * 0.6));
+        const angle1 = t * p.TWO_PI * 1.8 + this.angle * 0.2;
+        const angle2 = -t * p.TWO_PI * 1.6 + this.angle * 0.15 + 0.3;
+
+        // 两个螺旋交叉的位置
+        const x1 = radius * Math.cos(angle1);
+        const y1 = radius * Math.sin(angle1);
+        const x2 = radius * Math.cos(angle2);
+        const y2 = radius * Math.sin(angle2);
+        const cx = (x1 + x2) * 0.5;
+        const cy = (y1 + y2) * 0.5;
+
+        // 交叉点加深
+        const nodeSize = 2 + 4 * (1 - t * 0.4) * sizeRatio;
+        const nodeAlpha = 60 + 60 * (1 - t * 0.3);
+        p.noStroke();
+        p.fill(
+          Math.min(255, r * 0.6),
+          Math.min(255, g * 0.3),
+          Math.min(255, b * 0.3),
+          nodeAlpha * Math.min(1, sizeRatio * 1.3)
+        );
+        p.ellipse(cx, cy, nodeSize, nodeSize);
+      }
+
+      // ===== 6. 中心交叉核心 =====
+      const coreSize = this.size * 0.25;
+      if (coreSize > 0.15) {
+        // 交叉拧紧的核心 - 两个螺旋在中心交汇
+        p.noStroke();
+
+        // 核心外层 - 交叉纹路
+        p.fill(
+          Math.min(255, r * 0.8),
+          Math.min(255, g * 0.45),
+          Math.min(255, b * 0.45),
+          Math.min(255, (200 + this.pressureScale * 50) * Math.min(1, sizeRatio * 1.6))
+        );
+        p.beginShape();
+        const numPoints = 16;
+        for (let i = 0; i < numPoints; i++) {
+          const angle = (i / numPoints) * p.TWO_PI;
+          // 心形扭曲 - 模拟交叉拧紧
+          const twistFactor = 1 + 0.3 * Math.sin(angle * 2 + this.angle * 0.5 + this.seed);
+          const rad = coreSize * (0.6 + 0.4 * twistFactor * (0.5 + 0.5 * Math.sin(i * 0.5 + this.seed)));
+          p.vertex(rad * Math.cos(angle + this.angle * 0.2), rad * Math.sin(angle + this.angle * 0.2));
+        }
+        p.endShape(p.CLOSE);
+
+        // 核心中层 - 交叉加深
+        const midCore = coreSize * 0.55;
+        p.fill(
+          Math.min(255, r * 0.55),
+          Math.min(255, g * 0.28),
+          Math.min(255, b * 0.28),
+          Math.min(255, (170 + this.pressureScale * 35) * Math.min(1, sizeRatio * 1.6))
+        );
+        p.beginShape();
+        for (let i = 0; i < 12; i++) {
+          const angle = (i / 12) * p.TWO_PI;
+          const twistFactor = 1 + 0.25 * Math.sin(angle * 3 + this.angle * 0.4 + this.seed * 1.3);
+          const rad = midCore * (0.6 + 0.4 * twistFactor * (0.5 + 0.5 * Math.sin(i * 0.7 + this.seed)));
+          p.vertex(rad * Math.cos(angle + this.angle * 0.3), rad * Math.sin(angle + this.angle * 0.3));
+        }
+        p.endShape(p.CLOSE);
+
+        // 核心内层 - 最紧
+        const innerCore = coreSize * 0.3;
+        p.fill(
+          Math.min(255, r * 0.3),
+          Math.min(255, g * 0.15),
+          Math.min(255, b * 0.15),
+          Math.min(255, (140 + this.pressureScale * 25) * Math.min(1, sizeRatio * 1.5))
+        );
+        p.beginShape();
+        for (let i = 0; i < 8; i++) {
+          const angle = (i / 8) * p.TWO_PI;
+          const rad = innerCore * (0.5 + 0.5 * Math.sin(i * 4 + this.angle * 0.5 + this.seed * 0.7));
+          p.vertex(rad * Math.cos(angle + this.angle * 0.4), rad * Math.sin(angle + this.angle * 0.4));
+        }
+        p.endShape(p.CLOSE);
+
+        // 核心高光
+        p.fill(
+          255,
+          255,
+          255,
+          (35 + this.pressureScale * 20) * Math.min(1, sizeRatio * 1.2)
+        );
+        p.ellipse(-coreSize * 0.1, -coreSize * 0.1, coreSize * 0.15, coreSize * 0.12);
+      }
+
       p.pop();
     }
 
@@ -592,6 +844,66 @@ export class PainParticle {
         const size = c.size * (0.8 + 0.4 * Math.sin(c.life * 0.05));
         p.ellipse(0, 0, size * 0.6, size * 0.6 * (0.5 + 0.5 * Math.sin(c.life * 0.07 + 1)));
         p.pop();
+      });
+
+      // ===== 3. 撕裂组织片 - 刮下的肉片质感 =====
+      this.tissuePieces.forEach(t => {
+        if (t.life <= 0 || t.alpha <= 0) return;
+
+        const tAlpha = t.alpha * alpha * 0.5;
+        // 组织片颜色略深，有血丝感
+        p.noStroke();
+        p.fill(
+          Math.min(255, rCol * 0.6 + 20),
+          Math.min(255, gCol * 0.3 + 10),
+          Math.min(255, bCol * 0.3 + 10),
+          tAlpha
+        );
+
+        p.push();
+        p.translate(t.x, t.y);
+        p.rotate(t.rotation);
+
+        // 不规则形状 - 像撕下的组织片
+        const size = t.size * (0.7 + 0.3 * Math.sin(t.life * 0.03 + this.seed));
+        p.beginShape();
+        const numPoints = 6 + Math.floor(p.random(3));
+        for (let i = 0; i < numPoints; i++) {
+          const angle = (i / numPoints) * p.TWO_PI + p.sin(i * 1.3 + this.seed) * 0.2;
+          const r = size * (0.6 + 0.4 * p.sin(i * 2.1 + this.seed * 1.3 + t.life * 0.01));
+          const x = r * p.cos(angle) * t.stretchX;
+          const y = r * p.sin(angle) * t.stretchY * 0.6;
+          p.vertex(x, y);
+        }
+        p.endShape(p.CLOSE);
+
+        // 组织片上的血丝纹理
+        if (p.random() < 0.4) {
+          p.stroke(
+            Math.min(255, rCol * 0.4 + 10),
+            Math.min(255, gCol * 0.15 + 5),
+            Math.min(255, bCol * 0.15 + 5),
+            tAlpha * 0.3
+          );
+          p.strokeWeight(0.3);
+          const lineAngle = p.random(p.TWO_PI);
+          const lineLen = size * 0.6 * p.random(0.3, 0.8);
+          p.line(
+            -lineLen * 0.5 * p.cos(lineAngle),
+            -lineLen * 0.5 * p.sin(lineAngle),
+            lineLen * 0.5 * p.cos(lineAngle),
+            lineLen * 0.5 * p.sin(lineAngle)
+          );
+        }
+
+        p.pop();
+
+        // 更新组织片
+        t.x += t.driftX * 0.2;
+        t.y += t.driftY * 0.2;
+        t.rotation += t.rotSpeed;
+        t.life -= 0.5;
+        t.alpha = Math.max(0, t.alpha - 1);
       });
 
       // ===== 3. 浅色撕裂边缘 - 更淡 =====
