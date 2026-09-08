@@ -462,7 +462,7 @@ export class PainParticle {
       }
 
       // ===== 主体：12层 =====
-      const baseAlpha = Math.min(255, 170 + d * 85);
+      const baseAlpha = Math.min(255, 200 + d * 55);
       const layerCount = 12;
 
       const layerBrightness = [];
@@ -471,10 +471,15 @@ export class PainParticle {
 
       for (let i = 0; i < layerCount; i++) {
         const t = i / (layerCount - 1);
-        const brightness = 0.50 - t * 0.46;
-        layerBrightness.push(Math.max(0.08, brightness));
-        const alpha = baseAlpha * (0.04 + t * 0.92);
+
+        // 亮度：从 0.70 渐变到 0.35
+        const brightness = 0.80 - t * 0.55;
+        layerBrightness.push(Math.max(0.20, brightness));
+
+        // 透明度：外层 6%，内层 100%
+        const alpha = baseAlpha * (0.06 + t * 0.94);
         layerAlphas.push(alpha);
+
         const scale = 0.35 + t * 0.75;
         sizeScales.push(scale);
       }
@@ -563,9 +568,9 @@ export class PainParticle {
       if (d > 0.4) {
         const blockW = baseLayers[11].w * 0.35 + d * 10;
         const blockH = baseLayers[11].h * 0.10 + d * 7;
-        const darkR = Math.min(255, r * 0.05);
-        const darkG = Math.min(255, g * 0.05);
-        const darkB = Math.min(255, b * 0.05);
+        const darkR = Math.min(255, r * 0.15);
+        const darkG = Math.min(255, g * 0.15);
+        const darkB = Math.min(255, b * 0.15);
         const blockAlpha = Math.min(200, 20 + d * 180) * Math.min(1, (d - 0.4) * 2.5);
         p.fill(darkR, darkG, darkB, blockAlpha);
         p.beginShape();
@@ -835,10 +840,49 @@ export class PainParticle {
       const [r, g, b] = this.color;
       const alpha = Math.max(0, this.life / 255);
 
-      // 深色化颜色
-      const darkR = Math.max(0, Math.round(r * 0.38));
-      const darkG = Math.max(0, Math.round(g * 0.18));
-      const darkB = Math.max(0, Math.round(b * 0.18));
+      // ===== 计算颜色亮度，动态调整系数 =====
+      const brightness = (r + g + b) / 3;
+      const isDark = brightness < 120;
+      const isGray = Math.abs(r - g) < 20 && Math.abs(g - b) < 20 && Math.abs(r - b) < 20;
+
+      // 根据颜色动态调整提亮系数
+      let darkFactorR, darkFactorG, darkFactorB;
+      if (isGray) {
+        // 灰色：整体提亮，保留灰色调
+        darkFactorR = Math.max(0.65, Math.min(0.85, brightness / 255 + 0.3));
+        darkFactorG = darkFactorR;
+        darkFactorB = darkFactorR;
+      } else if (isDark) {
+        // 深色：提亮更多
+        darkFactorR = 0.65;
+        darkFactorG = 0.50;
+        darkFactorB = 0.50;
+      } else {
+        // 亮色：正常提亮
+        darkFactorR = 0.55;
+        darkFactorG = 0.40;
+        darkFactorB = 0.40;
+      }
+
+      const darkR = Math.max(0, Math.min(255, Math.round(r * darkFactorR)));
+      const darkG = Math.max(0, Math.min(255, Math.round(g * darkFactorG)));
+      const darkB = Math.max(0, Math.min(255, Math.round(b * darkFactorB)));
+
+      // 亮色版本
+      let lightFactorR, lightFactorG, lightFactorB;
+      if (isGray) {
+        lightFactorR = Math.min(0.95, brightness / 255 + 0.4);
+        lightFactorG = lightFactorR;
+        lightFactorB = lightFactorR;
+      } else {
+        lightFactorR = 0.80;
+        lightFactorG = 0.60;
+        lightFactorB = 0.60;
+      }
+
+      const lightR = Math.min(255, Math.round(r * lightFactorR));
+      const lightG = Math.min(255, Math.round(g * lightFactorG));
+      const lightB = Math.min(255, Math.round(b * lightFactorB));
 
       const cosA = Math.cos(this.woundAngle);
       const sinA = Math.sin(this.woundAngle);
@@ -866,9 +910,9 @@ export class PainParticle {
           const pt0 = f.points[step - 1];
           const pt1 = f.points[step];
           if (pt0 && pt1) {
-            const curAlpha = f.rootAlpha * Math.max(0, 1.0 - t);
+            const curAlpha = f.rootAlpha * Math.max(0, 1.0 - t) * 1.2;
             if (curAlpha > 1.0) {
-              p.stroke(r, g, b, curAlpha);
+              p.stroke(r, g, b, Math.min(255, curAlpha));
               p.strokeWeight(f.weight);
               p.line(pt0.x, pt0.y, pt1.x, pt1.y);
             }
@@ -903,7 +947,12 @@ export class PainParticle {
         p.endShape(p.CLOSE);
 
         // 伤口核心线
-        p.stroke(Math.round(darkR * 0.6), Math.round(darkG * 0.6), Math.round(darkB * 0.6), 255);
+        p.stroke(
+          Math.round(darkR * 0.7),
+          Math.round(darkG * 0.7),
+          Math.round(darkB * 0.7),
+          255
+        );
         p.strokeWeight(Math.max(0.8, this.woundThickness * 0.25));
         p.line(tip1X, tip1Y, tip2X, tip2Y);
 
@@ -939,9 +988,9 @@ export class PainParticle {
         this.chunks.forEach(c => {
           if (c.life <= 0 || c.alpha <= 0) return;
           const cAlpha = c.alpha * alpha * 0.3;
-          p.noStroke();
-          p.fill(darkR, darkG, darkB, cAlpha);
           p.push();
+          p.noStroke();
+          p.fill(lightR, lightG, lightB, cAlpha);
           p.translate(c.x, c.y);
           p.rotate(c.rotation);
           const size = c.size * (0.8 + 0.4 * Math.sin(c.life * 0.05));
@@ -955,14 +1004,14 @@ export class PainParticle {
         this.tissuePieces.forEach(t => {
           if (t.life <= 0 || t.alpha <= 0) return;
           const tAlpha = t.alpha * alpha * 0.5;
+          p.push();
           p.noStroke();
           p.fill(
-            Math.min(255, darkR * 0.7 + 30),
-            Math.min(255, darkG * 0.7 + 20),
-            Math.min(255, darkB * 0.7 + 20),
+            Math.min(255, lightR * 0.8 + 20),
+            Math.min(255, lightG * 0.6 + 15),
+            Math.min(255, lightB * 0.6 + 15),
             tAlpha
           );
-          p.push();
           p.translate(t.x, t.y);
           p.rotate(t.rotation);
           const size = t.size * (0.7 + 0.3 * Math.sin(t.life * 0.03 + this.seed));
@@ -980,29 +1029,28 @@ export class PainParticle {
         });
       }
 
-      // ===== 刮削残留物：小血块、组织点 =====
+      // ===== 5. 刮削残留物：小血块、组织点 =====
       if (this.scrapeDebris) {
         this.scrapeDebris.forEach(d => {
           if (d.life <= 0) return;
           const lifeRatio = d.life / d.maxLife;
           if (lifeRatio < 0.1) return;
 
-          // 延迟出现：在纤维生长几帧后才出现
           if (this.currentStep < d.delay) return;
 
-          const alpha = Math.min(255, lifeRatio * 255 * 0.7);
-          const darkR = Math.max(0, Math.round(r * 0.38 * d.darkFactor));
-          const darkG = Math.max(0, Math.round(g * 0.18 * d.darkFactor));
-          const darkB = Math.max(0, Math.round(b * 0.18 * d.darkFactor));
+          const debrisAlpha = Math.min(255, lifeRatio * 255 * 0.7);
+          // 使用外层已定义的 darkR/G/B，乘以 darkFactor
+          const dR = Math.max(0, Math.round(darkR * d.darkFactor));
+          const dG = Math.max(0, Math.round(darkG * d.darkFactor));
+          const dB = Math.max(0, Math.round(darkB * d.darkFactor));
 
           p.push();
           p.translate(d.x, d.y);
           p.rotate(d.rotation);
 
           if (d.type === 'clot') {
-            // 血块：不规则实心块
             p.noStroke();
-            p.fill(darkR, darkG, darkB, alpha);
+            p.fill(dR, dG, dB, debrisAlpha);
             const size = d.size * (0.8 + 0.2 * lifeRatio);
             p.beginShape();
             const pts = 8 + Math.floor(p.random(4));
@@ -1015,16 +1063,14 @@ export class PainParticle {
             }
             p.endShape(p.CLOSE);
 
-            // 血块表面的小亮点（反光）
             if (size > 3) {
-              p.fill(180, 60, 60, alpha * 0.2);
+              p.fill(180, 60, 60, debrisAlpha * 0.2);
               p.ellipse(-size * 0.1, -size * 0.1, size * 0.15, size * 0.1);
             }
 
           } else if (d.type === 'tissue') {
-            // 组织碎屑：小片状，半透明
             p.noStroke();
-            p.fill(darkR, darkG, darkB, alpha * 0.7);
+            p.fill(dR, dG, dB, debrisAlpha * 0.7);
             const size = d.size * (0.7 + 0.3 * lifeRatio);
             p.beginShape();
             const pts = 5 + Math.floor(p.random(3));
@@ -1037,23 +1083,20 @@ export class PainParticle {
             }
             p.endShape(p.CLOSE);
 
-            // 组织碎屑边缘轻微加深
-            p.stroke(darkR * 0.8, darkG * 0.8, darkB * 0.8, alpha * 0.3);
+            p.stroke(dR * 0.8, dG * 0.8, dB * 0.8, debrisAlpha * 0.3);
             p.strokeWeight(0.3);
             p.noFill();
             const size2 = d.size * (0.6 + 0.2 * lifeRatio);
             p.ellipse(0, 0, size2 * 0.8, size2 * 0.5);
 
           } else {
-            // 小血点：圆形
             p.noStroke();
-            p.fill(darkR, darkG, darkB, alpha);
+            p.fill(dR, dG, dB, debrisAlpha);
             const size = d.size * (0.6 + 0.4 * lifeRatio);
             p.ellipse(0, 0, size, size * 0.7);
 
-            // 小血点的高光
             if (size > 1.5) {
-              p.fill(200, 80, 80, alpha * 0.2);
+              p.fill(200, 80, 80, debrisAlpha * 0.2);
               p.ellipse(-size * 0.08, -size * 0.08, size * 0.1, size * 0.08);
             }
           }
@@ -1062,7 +1105,7 @@ export class PainParticle {
         });
       }
 
-      // ===== 5. 浅色撕裂边缘 =====
+      // ===== 6. 浅色撕裂边缘 =====
       p.noFill();
       p.stroke(
         Math.min(255, darkR * 0.7 + 30),
