@@ -355,53 +355,67 @@ export class PainParticle {
 
     // ===== 1. 刺痛 =====
     if (this.type === 'pierce') {
+      const [r, g, b] = this.color;
+
+      // 使用和撕刮痛相同的颜色提亮逻辑
+      const darkR = Math.max(0, Math.round(r * 0.55));
+      const darkG = Math.max(0, Math.round(g * 0.40));
+      const darkB = Math.max(0, Math.round(b * 0.40));
+      const lightR = Math.min(255, Math.round(r * 0.80));
+      const lightG = Math.min(255, Math.round(g * 0.60));
+      const lightB = Math.min(255, Math.round(b * 0.60));
+
       const tipX = this.pos.x;
       const tipY = this.pos.y;
       const angle = this.pierceAngle;
       const thrust = this.thrustLen;
 
-      const tailX = tipX - Math.cos(angle) * thrust;
-      const tailY = tipY - Math.sin(angle) * thrust;
-      const perpAngle = angle + Math.PI / 2;
+      const tailX = tipX - p.cos(angle) * thrust;
+      const tailY = tipY - p.sin(angle) * thrust;
+      const perpAngle = angle + p.PI / 2;
 
       p.push();
+
+      // 主刺身 - 使用暗色 (dark)
       const tailW = 0.9;
       p.noStroke();
-      p.fill(
-        Math.min(255, this.color[0] + 160),
-        Math.min(255, this.color[1] + 140),
-        Math.min(255, this.color[2] + 140),
-        220
-      );
+      p.fill(darkR, darkG, darkB, 220);
       p.beginShape();
-      p.vertex(tailX + Math.cos(perpAngle) * tailW, tailY + Math.sin(perpAngle) * tailW);
+      p.vertex(tailX + p.cos(perpAngle) * tailW, tailY + p.sin(perpAngle) * tailW);
       p.vertex(tipX, tipY);
-      p.vertex(tailX - Math.cos(perpAngle) * tailW, tailY - Math.sin(perpAngle) * tailW);
+      p.vertex(tailX - p.cos(perpAngle) * tailW, tailY - p.sin(perpAngle) * tailW);
       p.endShape(p.CLOSE);
 
-      p.stroke(255, 255, 255, 250);
+      // 高光线 - 使用亮色 (light)
+      p.stroke(lightR, lightG, lightB, 250);
       p.strokeWeight(0.55);
       p.line(tailX, tailY, tipX, tipY);
 
-      p.stroke(this.color[0], this.color[1] * 0.3, this.color[2] * 0.3, 130);
+      // 次高光线
+      p.stroke(darkR, darkG, darkB, 130);
       p.strokeWeight(1.0);
       p.line(tailX, tailY, tipX, tipY);
 
-      p.fill(this.color[0], this.color[1], this.color[2], 220);
+      // 尾部光晕 - 使用亮色
+      p.fill(lightR, lightG, lightB, 220);
       p.noStroke();
       p.ellipse(tailX, tailY, 1.8, 1.8);
+
+      // 尖端 - 使用亮色
       p.fill(255, 255, 255, 255);
       p.ellipse(tipX, tipY, 1.2, 1.2);
 
+      // 裂痕 - 使用暗色
       if (this.fissures) {
-        p.stroke(this.color[0], 0, 0, 180);
+        p.stroke(darkR, darkG, darkB, 180);
         p.strokeWeight(0.5);
         this.fissures.forEach(fis => {
-          const fEndX = tipX + Math.cos(fis.angle) * fis.len;
-          const fEndY = tipY + Math.sin(fis.angle) * fis.len;
+          const fEndX = tipX + p.cos(fis.angle) * fis.len;
+          const fEndY = tipY + p.sin(fis.angle) * fis.len;
           p.line(tipX, tipY, fEndX, fEndY);
         });
       }
+
       p.pop();
     }
 
