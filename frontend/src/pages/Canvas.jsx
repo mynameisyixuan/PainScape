@@ -1360,9 +1360,12 @@ export default function CanvasPage({
                   padding: '6px 0',
                   borderRadius: '10px',
                   fontSize: '11px',
+                  height: '24px',          // 统一高度
                   display: 'flex',
-                  flexDirection: 'column',
                   alignItems: 'center',
+                  justifyContent: 'center',
+                  marginBottom: '2px',
+                  flexDirection: 'column',
                   cursor: 'pointer',
                   transition: 'all 0.15s ease',
                 }}
@@ -1376,13 +1379,14 @@ export default function CanvasPage({
                       width: '20px',
                       height: '20px',
                       marginBottom: '2px',
+                      display: 'block',
                       opacity: activeBrush === k ? 1 : 0.7,
                     }}
                   />
                 ) : (
-                  <span style={{ fontSize: '18px', marginBottom: '2px' }}>{BRUSHES[k].icon}</span>
+                  <span style={{ fontSize: '18px', lineHeight: 1, marginBottom: '2px' }}>{BRUSHES[k].icon}</span>
                 )}
-                <span style={{ fontSize: '11px' }}>{t(`brushes.${k}.label`)}</span>
+                <span style={{ fontSize: '11px', lineHeight: 1}}>{t(`brushes.${k}.label`)}</span>
               </button>
             ))}
           </div>
