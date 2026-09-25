@@ -1741,11 +1741,11 @@ const translations = {
       extremelyIntense: "extremely intense",
     },
     painNames: {
-      twist: "Cramp",
+      twist: "Twist",
       pierce: "Pierce",
-      heavy: "Heavy Dragging",
-      wave: "Diffuse Ache",
-      scrape: "Tearing Scrape"
+      heavy: "Sink",
+      wave: "Swell",
+      scrape: "Scrape"
     },
     canvas: {
       bodyFront: "Front",
@@ -2156,11 +2156,11 @@ const translations = {
       privacyDesc: "All painting data is stored locally by default. What you share and with whom is entirely up to you."
     },
     brushes: {
-      twist: { label: "Cramp", icon: "🔄" },
+      twist: { label: "Twist", icon: "🔄" },
       pierce: { label: "Pierce", icon: "⚡" },
-      heavy: { label: "Heavy Dragging", icon: "🪨" },
-      wave: { label: "Diffuse Ache", icon: "〰️" },
-      scrape: { label: "Tearing Scrape", icon: "🔪" },
+      heavy: { label: "Sink", icon: "🪨" },
+      wave: { label: "Swell", icon: "〰️" },
+      scrape: { label: "Scrape", icon: "🔪" },
       eraser: { label: "Eraser", icon: "🧽" },
     },
     colors: {
