@@ -33,12 +33,12 @@ const translations = {
       unhug: '收回拥抱',
       unhelpful: '取消有用',
       onlyShowLatest: '仅显示最近 {{count}} 条',
-      summaryTitle: "📊 数字化痛觉摘要",
+      summaryTitle: "📊 数字化摘要",
       viewHistory: '查看完整档案',
       totalRecords: "总记录",
       avgIntensity: "平均强度",
       latestPattern: "最新模式",
-      publishedSomatic: "已发布的具身图画",
+      publishedSomatic: "我的贴子",
       publicArchive: "公开广场档案",
       noPublicPost: "🍀 暂无公开图景。画下第一张并发布到广场吧。",
       noPublicPostCompanion: "该同伴暂未发布任何公开具身帖子。",
@@ -186,8 +186,8 @@ const translations = {
       medicalTitle: "填写健康信息（可选）",
       step1: "基础信息",
       step2: "干预偏好",
-       recommended: '推荐',
-       back: '返回',
+      recommended: '推荐',
+      back: '返回',
       basicPhysiologicalTitle: "基础生理档案",
       basicPhysiologicalDesc: "这些常态基础指标将被本地保存，避免重复录入",
       basicInfoTitle: "基础信息",
@@ -850,6 +850,9 @@ const translations = {
       thu: "四",
       fri: "五",
       sat: "六",
+      painDay: '疼痛日',
+      menstrualDay: '经期日',
+      menstrualHint: '长按日期标记经期',
       noRecordThisDay: "这一天没有疼痛记录",
       allRecords: "全部记录",
       recordsOfDate: "{{date}} 的记录",
@@ -1158,29 +1161,29 @@ const translations = {
 
     painTemplates: {
       twist: {
-        analogy: "想象用力拧干一条浸透的厚毛巾从肚脐一直拧到后腰。那种令人窒息的下腹部深层挤压感。",
-        med: "患者主诉持续性下腹部绞痛，阵发性加重并向腰骶部放射，月经第1-2天最重。建议评估子宫平滑肌痉挛和盆腔充血。",
-        selfCare: "✨ 尝试胎儿姿势：侧卧，膝盖贴近胸口，放松盆底肌张力。\n✨ 在下腹部和后腰放置热水袋（40-45°C）20分钟。\n✨ 缓慢腹式呼吸：吸气4秒 - 屏息4秒 - 缓慢呼气6秒。\n✨ 食用富含镁的食物（坚果、深色蔬菜）自然缓解肌肉收缩。\n✨ 你可以蜷缩在床上。疼痛不是你的错。\n✨ 穴位按压：用力按压三阴交穴（SP6）（位于小腿内侧，内踝尖上4横指，胫骨后缘凹陷处）1-2分钟。临床显示可缓解痉挛性子宫张力，促进盆腔血流。\n✨ 温水泡脚：用温水（40-42°C）泡脚15-20分钟。温暖下肢可反射性扩张下腹部血管，缓解缺血性盆腔痉挛。"
+        analogy: "像有一只手在肚子里慢慢地、持续地绞着一条毛巾。不是尖锐的痛，而是一阵一阵的、闷闷的、抽紧的感觉，让她只想蜷起来。",
+        med: "患者主诉下腹部绞痛，呈阵发性，可向腰骶部放射，月经第1-2天较明显。建议评估子宫平滑肌痉挛及盆腔充血情况。",
+        selfCare: "✨ 尝试胎儿姿势：侧卧，膝盖贴近胸口，放松盆底肌张力。\n✨ 在下腹部和后腰放置热水袋（40-45°C）20分钟。\n✨ 缓慢腹式呼吸：吸气4秒 - 屏息4秒 - 缓慢呼气6秒。\n✨ 食用富含镁的食物（坚果、深色蔬菜），帮助放松肌肉。\n✨ 你可以蜷缩在床上。疼痛不是你的错。\n✨ 穴位按压：轻轻按压三阴交穴（SP6，位于小腿内侧，内踝尖上4横指，胫骨后缘凹陷处）1-2分钟，有助于缓解子宫张力、促进盆腔血流。\n✨ 温水泡脚：用温水（40-42°C）泡脚15-20分钟，温暖下肢可帮助放松下腹部。"
       },
       pierce: {
-        analogy: "想象不打麻药做根管治疗那种电击般的钻刺锐痛突然刺入下腹部，麻木而刺痛，像有人在盆腔里搅动一根针。",
-        med: "患者主诉下腹部尖锐刺痛，短暂钻刺感向大腿内侧放射，突发突止，伴冷汗。建议评估神经性疼痛和子宫内膜异位症。",
-        selfCare: "✨ 疼痛发作时立即侧卧，避免任何身体压力点。\n✨ 使用温热（非热烫）敷敏感的神经末梢对极端热刺激反应强烈。\n✨ 用白噪音或舒缓的环境音乐转移注意力。\n✨ 温水放在身边，小口慢饮，稳定自主神经体温。\n✨ 间歇期轻轻转动或活动脚踝，促进下盆腔循环。\n✨ 渐进式肌肉放松（PMR）：有意识地用力绷紧腿部和臀部肌肉10秒，然后完全放松。这有助于打破突发刺痛引发的防御性肌肉紧锁循环。\n✨ 触觉门控：在刺痛区域周围大范围轻轻抚摸皮肤（避开直接痛感中心）。这激活非伤害性A-beta感觉纤维，在脊髓水平物理阻断锐痛信号。"
+        analogy: "像有什么东西在肚子里某个点上突然刺了一下，一下子就过去了，但过一会儿又来。她可能会突然停下手里的动作。",
+        med: "患者主诉下腹部短暂针刺样疼痛，突发突止，可向大腿内侧放射，偶伴冷汗。建议评估神经性疼痛及子宫内膜异位症可能。",
+        selfCare: "✨ 疼痛发作时侧卧，避开身体压力点。\n✨ 使用温热（非热烫）敷，神经末梢对极端热刺激较敏感。\n✨ 用白噪音或舒缓的环境音乐帮助转移注意力。\n✨ 温水放在身边，小口慢饮，帮助稳定自主神经。\n✨ 间歇期轻轻转动或活动脚踝，促进下盆腔循环。\n✨ 渐进式肌肉放松（PMR）：有意识地绷紧腿部和臀部肌肉10秒，然后完全放松。这有助于缓解刺痛引发的肌肉紧锁。\n✨ 触觉门控：在刺痛区域周围轻轻抚摸皮肤（避开痛感中心），可激活非伤害性感觉纤维，帮助在脊髓水平减轻锐痛信号。"
       },
       heavy: {
-        analogy: "像在腹部绑了一个5公斤的沙袋站着想蹲下，坐着想躺平。那种从子宫一直沉到膝盖的沉重拖拽感。",
-        med: "患者主诉下腹部严重沉重拖拽感，站立时加重，平卧稍缓解，伴腰骶部酸痛。建议评估盆腔充血和可能的子宫腺肌症。",
-        selfCare: "✨ 抬高臀部姿势：用枕头将臀部垫高15-20cm平躺。\n✨ 尽量减少站立或行走，绝对避免提重物。\n✨ 穿高腰无缝宽松内裤，避免腹部压迫。\n✨ 喝温热的姜糖水或红枣茶。\n✨ 告诉自己：今天辛苦了，休息不是懒惰。\n✨ 倒箭式（Viparita Karani）：平躺并将双腿垂直靠墙抬起10-15分钟。重力帮助排出盆腔淤积的静脉血和液体，快速缓解盆腔沉重充血。\n✨ 床边骨盆倾斜：平躺屈膝，双脚平放床面。吸气时轻轻将下背部拱离床面，呼气时将下背部压平贴床。这在不离开床的情况下放松了子宫骶骨韧带。"
+        analogy: "像肚子里挂着一个沉甸甸的东西，一直往下坠。站着的时候更明显，躺下来会好一点。她想弯腰、想蹲下来。",
+        med: "患者主诉下腹部明显沉重下坠感，站立时加重，平卧稍缓解，可伴腰骶部酸痛。建议评估盆腔充血及子宫腺肌症可能。",
+        selfCare: "✨ 抬高臀部姿势：用枕头将臀部垫高15-20cm平躺。\n✨ 尽量减少站立或行走，避免提重物。\n✨ 穿高腰、无压迫的宽松内裤。\n✨ 喝温热的姜糖水或红枣茶。\n✨ 告诉自己：今天辛苦了，休息不是懒惰。\n✨ 倒箭式（Viparita Karani）：平躺并将双腿垂直靠墙抬起10-15分钟。重力有助于盆腔静脉回流，缓解沉重感。\n✨ 床边骨盆倾斜：平躺屈膝，双脚平放床面。吸气时轻轻将下背部拱离床面，呼气时将下背部压平贴床。这在不离开床的情况下放松了子宫骶骨韧带。"
       },
       wave: {
-        analogy: "像肚子里有一个不断充气放气的气球一波波胀满感扩散到整个腹部，连呼吸都感到窒息。",
-        med: "患者主诉腹部弥漫性胀痛，阵发性加重伴肠气感，疼痛位置不固定。建议评估盆腔水肿、肠胀气和盆腔炎症。",
-        selfCare: "✨ 穿最宽松的衣服，完全松开腰带。\n✨ 轻柔顺时针腹部按摩（用羽毛般极轻极柔的力度在皮肤上）。\n✨ 避免产气食物：豆类、奶制品、碳酸饮料、生冷食物。\n✨ 在整个腹部放置热敷包，把自己裹在温暖的毯子里。\n✨ 放慢一切当你慢下来，疼痛的感官音量就会降低。\n✨ 排气式：平躺，双手抱膝紧紧贴向胸口，轻轻左右摇晃。这轻柔按摩结肠以释放积气，降低腹内压。\n✨ 穴位按压：按压按摩足三里穴（ST36）（位于外膝眼下4横指，胫骨外侧1横指处）。这调节胃肠蠕动以缓解胀气和痉挛。"
+        analogy: "像肚子里有一股气在慢慢涨开，一波一波地鼓胀。不是刺痛，但整个腹部都闷闷的、胀胀的，连腰带都想松开。",
+        med: "患者主诉腹部弥漫性胀痛，阵发性加重，可伴肠气感，位置不固定。建议评估盆腔水肿、肠胀气及盆腔炎症可能。",
+        selfCare: "✨ 穿最宽松的衣服，完全松开腰带。\n✨ 轻柔顺时针腹部按摩（用很轻的力度在皮肤表面）。\n✨ 避免产气食物：豆类、奶制品、碳酸饮料、生冷食物。\n✨ 在整个腹部放置热敷包，把自己裹在温暖的毯子里。\n✨ 放慢一切。当你慢下来，疼痛的感官音量就会降低。\n✨ 排气式：平躺，双手抱膝轻轻贴向胸口，轻轻左右摇晃。这有助于轻柔按摩结肠、释放积气。\n✨ 穴位按压：按压按摩足三里穴（ST36，位于外膝眼下4横指，胫骨外侧1横指处），有助于调节胃肠蠕动、缓解胀气。"
       },
       scrape: {
-        analogy: "像一个未成熟的水果被强行剥皮那种从子宫内部向外刮擦的撕裂感。每一个动作都像砂纸在磨擦生肉。",
-        med: "患者主诉下腹部剧烈撕裂样锐痛，活动时加重，伴里急后重。建议紧急评估组织粘连和可能的子宫内膜囊肿破裂。",
-        selfCare: "✨ 这是最耗竭的一种疼痛优先保证绝对静止休息。\n✨ 绝对避免任何腹部揉搓或按摩，尽量减少所有体位变化。\n✨ 小口喝温蜂蜜水补充能量（避免空腹服用止痛药）。\n✨ 用温柔、充满慈悲的内心声音安慰自己。\n✨ 疼痛强度减轻后记录疼痛动态。\n✨ 肋间（胸式）呼吸：吸气时横向扩张胸腔，保持下腹部完全静止。这减少腹腔器官的滑动摩擦，防止对敏感生组织的刺激。\n✨ 抱枕支撑婴儿式：在大腿间放置厚抱枕或枕头，将躯干完全伏在上面。双膝分开，臀部向后坐。这利用重力将腹腔器官向前悬吊，防止它们相互压迫在疼痛的盆腔粘连部位。"
+        analogy: "像肚子里有一块地方被来回磨擦着，钝钝的、火辣辣的。每一个动作、每一次呼吸都能感觉到它。",
+        med: "患者主诉下腹部明显的撕裂样疼痛，活动时加重，可伴里急后重感。建议排查组织粘连及子宫内膜相关病变。",
+        selfCare: "✨ 这是比较消耗体力的一种疼痛，优先保证绝对静止休息。\n✨ 避免腹部揉搓或按摩，尽量减少体位变化。\n✨ 小口喝温蜂蜜水补充能量（避免空腹服用止痛药）。\n✨ 用温柔、充满慈悲的内心声音安慰自己。\n✨ 疼痛减轻后记录疼痛动态。\n✨ 肋间（胸式）呼吸：吸气时横向扩张胸腔，保持下腹部完全静止。这减少腹腔器官的滑动摩擦，防止对敏感组织的刺激。\n✨ 抱枕支撑婴儿式：在大腿间放置厚抱枕或枕头，将躯干完全伏在上面。双膝分开，臀部向后坐。这利用重力将腹腔器官向前悬吊，减少相互压迫。"
       }
     },
 
@@ -1191,34 +1194,34 @@ const translations = {
         three: "以{{p1}}为主，伴随{{p2}}，并夹杂{{p3}}",
       },
       analogyTemplates: {
-        two: "{{m1}}\n\n不仅如此，她的身体内部还{{m2}}。两种疼痛交织在一起，让她难以自如活动。",
-        three: "{{m1}}\n\n同时，她的骨盆深处还{{m2}}；而在每个动作间歇，还会{{m3}}。三重复合疼痛层层叠加，正在极大消耗着她的体力和精力。",
+        two: "{{m1}}\n\n不仅如此，她的身体内部还{{m2}}。两种疼痛交织在一起，让她很难轻松活动。",
+        three: "{{m1}}\n\n同时，她的骨盆深处还{{m2}}；而在动作间隙，还会{{m3}}。几种疼痛叠在一起，让她很消耗体力和精力。",
       },
       metaphors: {
         twist: {
-          primary: "像腹腔深处有一条浸透冷水的粗毛巾被两只手拼命反向用力拧紧，子宫平滑肌在经历剧烈的痉挛与抽搐。",
-          secondary: "深处如同湿毛巾被持续反向拧绞，伴随肌肉紧绷与痉挛",
-          tertiary: "冷不防地出现一阵阵毛巾拧紧般的绞缩抽痛"
+          primary: "像腹腔深处有一条被拧紧的毛巾，一阵一阵地绞着、抽紧。不是尖锐的痛，但闷闷的、持续地压在那里。",
+          secondary: "深处有种慢慢收紧、一阵阵绞着的感觉",
+          tertiary: "时不时来一阵抽紧般的闷痛"
         },
         pierce: {
-          primary: "像数根极细且冰冷的钢针毫无预警地向骨盆深处深扎，针尖所到之处伴随着神经放射样的锐利刺痛。",
-          secondary: "同时伴有细密钢针深扎入肉的锐利针刺感",
-          tertiary: "间歇期还冷不防地泛起阵阵针扎般的尖锐刺痛"
+          primary: "像有什么东西在骨盆深处某个点上突然扎了一下，很快过去，但过一阵又来。",
+          secondary: "同时会有短暂、细小的刺一下的感觉",
+          tertiary: "间歇时还会冷不防地刺一下"
         },
         heavy: {
-          primary: "像骨盆深处沉甸甸地坠着一块烧红的铅铁，无休止地向下拉扯着盆底韧带与腰骶骨。",
-          secondary: "骨盆深处持续承受着铅块般沉重下坠的牵拉压迫感",
-          tertiary: "不时泛起重物下坠扯拉骨盆的深层坠胀感"
+          primary: "像骨盆深处坠着一个沉重的东西，一直往下拉。站着更明显，躺下会好一点。",
+          secondary: "骨盆深处有种持续往下沉、往下坠的感觉",
+          tertiary: "不时泛起一阵沉甸甸的下坠感"
         },
         wave: {
-          primary: "像有沉闷的潮水在骨盆内部无休止地肿胀翻涌，深层的酸楚与胀麻感一波波向四周骨缝蔓延扩散。",
-          secondary: "深层如潮水般反复翻涌着无休止的弥漫酸楚与胀麻",
-          tertiary: "骨缝间还间歇泛起潮水般一波波扩散的酸胀感"
+          primary: "像有股气在肚子里一波一波地慢慢涨开，闷闷的、胀胀的，整个腹部都不太舒服。",
+          secondary: "深处一波一波地胀着、酸着，位置不太固定",
+          tertiary: "间隙中还会有酸胀感一波波扩散开来"
         },
         scrape: {
-          primary: "像一个未成熟的水果被强行粗暴剥皮，粗糙的砂纸在子宫内部反复摩擦娇嫩的生肉，带来鲜明火辣的撕刮感。",
-          secondary: "伴随着粗糙砂纸摩擦生肉般火辣辣的刮擦撕裂感",
-          tertiary: "隐约夹杂着内壁被粗糙边缘刮擦剥落的隐痛"
+          primary: "像肚子里有一块地方被来回磨着，钝钝的、火辣辣的。每个动作、每次呼吸都能感觉到。",
+          secondary: "伴随着一种粗糙的、来回磨擦的感觉",
+          tertiary: "隐约还夹杂着一点刮擦般的钝痛"
         }
       }
     },
@@ -1543,13 +1546,11 @@ const translations = {
     },
     // ============ ✅ 新增：默认模板（用于 generateContent 后备） ============
     defaultTemplates: {
-      // 默认值
+      // ===== 默认值 =====
       medication: '布洛芬',
-
-      // ✅ 保留兼容的通用模板（作为最终的兜底）
       workTemplateFallback: '因身体不适，申请休息一天。',
 
-      // ✅ 占位符默认值
+      // ===== 占位符默认值 =====
       notProvided: "未提供",
       noSymptoms: "无明显伴随症状",
       noDiagnosis: "无明确妇科疾病确诊史",
@@ -1560,9 +1561,41 @@ const translations = {
       noReproductive: "未提供",
       noPsychosocial: "未提供",
 
-      // ✅ 支持变量替换的模板
-      chiefComplaint: '{{timing}}出现{{location}}{{pain}}，伴{{symptoms}}。',
-      presentillness: '患者{{age}}，{{heightWeight}}。自述月经{{cycleRegular}}。{{timing}}出现{{location}}{{pain}}，伴{{symptoms}}。日常活动负荷：{{activityLevel}}。',
+      // ===== 主诉 =====
+      chiefComplaint: '{{timing}}{{location}}{{pain}}，伴{{symptoms}}。',
+      chiefComplaintNoSymptoms: '{{timing}}{{location}}{{pain}}。',
+
+      // ===== 现病史（分段）=====
+      presentIllnessBase: '患者自述于{{timing}}出现{{location}}{{pain}}，伴随{{symptoms}}。',
+      presentIllnessBaseNoSymptoms: '患者自述于{{timing}}出现{{location}}{{pain}}。',
+      presentIllnessPrefix: '基本情况：',
+      ageFragment: '年龄{{age}}',
+      cycleRegularFragment: '月经周期{{cycleRegular}}',
+      painNatureFragment: '疼痛性质为{{nature}}，{{relief}}。',
+
+      painNature: {
+        twist: '阵发性绞痛',
+        pierce: '针刺样锐痛',
+        heavy: '坠胀重压感',
+        wave: '弥漫性酸胀',
+        scrape: '撕刮样锐痛',
+      },
+      painRelief: {
+        twist: '热敷后可稍缓解',
+        pierce: '改变体位后可稍缓解',
+        heavy: '平卧抬高臀部后可稍缓解',
+        wave: '轻柔按摩后可稍缓解',
+        scrape: '静卧休息后可稍缓解',
+      },
+
+      // ===== 月经史 =====
+      menarcheFragment: '{{menarche}}岁初潮',
+      durationFragment: '经期{{periodDuration}}天',
+      lmpFragment: '末次月经{{lmp}}',
+      noMenstrualHistory: '月经史未提供',
+      menstrualHistory: '月经史：{{menarche}}岁初潮，经期{{periodDuration}}天，周期{{cycleRegular}}。末次月经：{{lmp}}。',
+
+      // ===== 既往史（分段）=====
       pastHistoryDiagnosis: '患者既往{{diagnosed}}病史。',
       pastHistorySurgery: '曾行{{surgery}}。',
       pastHistoryAllergy: '对{{allergy}}过敏。',
@@ -1571,25 +1604,20 @@ const translations = {
       pastHistoryReproductive: '生育史：{{reproductiveHistory}}。',
       pastHistoryPsychosocial: '心理社会评估提示{{psychosocial}}。',
       pastHistoryNone: '未诉特殊既往病史。',
-      presentIllnessAge: '患者{{age}}，{{heightWeight}}。',
-      presentIllnessCycle: '自述月经{{cycleRegular}}。',
-      presentIllnessOnset: '于{{cycleDay}}突发{{pain}}。',
-      presentIllnessSymptoms: '伴{{symptoms}}。',
-      presentIllnessActivity: '日常活动负荷：{{activityLevel}}。',
-      menstrualHistory: '月经史：{{menarche}}岁初潮，经期{{periodDuration}}天，周期{{cycleRegular}}。末次月经：{{lmp}}。',
 
+      // ===== 临床诊断与建议 =====
       clinicalDiagnosis: '结合痛觉成像特征及周期性发作规律，需考虑以下方向：\n\n{{diagnosisItems}}\n\n建议检查：{{examSuggestions}}。\n\n{{reassurance}}',
       clinicalSuggestions: '【缓解期自我照护】\n{{selfCareItems}}\n\n【供您与医生讨论】\n{{discussionItems}}\n\n【给您的提醒】\n{{reassurance}}\n\n【关于检查，您可能想知道的】\n{{examInfo}}',
       clinicalDiagnosisStructured: '结合痛觉成像特征及周期性发作规律，需考虑以下方向：\n\n{{diagnosisItems}}\n\n建议检查：{{examSuggestions}}。',
       clinicalSuggestionsStructured: '缓解措施：\n{{selfCareItems}}',
 
-      // 各模块标题
+      // ===== 模块标题 =====
       moduleSelfCare: '缓解期自我照护',
       moduleDiscussion: '供您与医生讨论',
       moduleReminder: '给您的提醒',
       moduleExamInfo: '关于检查，您可能想知道的',
 
-      // ✅ 新增：默认的 defaultActions（当 partnerActions 找不到时使用）
+      // ===== 默认动作 =====
       defaultActions: '☑️ 帮她热敷小腹并准备好止痛药。\n☑️ 给她倒杯温水，陪伴在她身边。\n☑️ 调暗灯光，让她安静休息。',
     },
     doctorTab: {
@@ -1598,7 +1626,7 @@ const translations = {
       pastHistory: "既往史与个人习惯",
       menstrualObstetricHistory: "月经与婚育史",
       clinicalDiagnosis: "临床诊断与筛查建议",
-      clinicalAdvice: "临床建议与自我照护", 
+      clinicalAdvice: "临床建议与自我照护",
       selfCareTitle: "缓解期自我照护",
       discussionTitle: "供您与医生讨论",
       reminderTitle: "给您的提醒",
@@ -1671,7 +1699,7 @@ const translations = {
       noFollowers: "No followers yet",
       closeList: "Close List",
       memberStatus: "Cloud Member",
-      summaryTitle: "📊 Digital Pain Reconstruction Summary",
+      summaryTitle: "📊 Digital Summary",
       myInteractions: '💬 My Interactions',
       myLikes: 'Likes',
       myHugs: 'Hugs',
@@ -1683,11 +1711,11 @@ const translations = {
       unhug: 'Unhug',
       unhelpful: 'Unmark Helpful',
       onlyShowLatest: 'Showing latest {{count}}',
-      viewHistory: 'View Complete Archieve',
+      viewHistory: 'See more',
       totalRecords: "Total Logs",
       avgIntensity: "Avg Intensity",
       latestPattern: "Latest Pattern",
-      publishedSomatic: "📮 Published Embodied Drawings",
+      publishedSomatic: "Posts",
       publicArchive: "Public Feed",
       noPublicPost: "🍀 No public somatos yet. Create one and share it.",
       noPublicPostCompanion: "This companion hasn't published any public embodied posts yet.",
@@ -1895,12 +1923,12 @@ const translations = {
       ],
       recommended: 'Recommended',
       back: 'Back',
-      enterHealing:"Open Self-care Space",
-      preferenceTitle: "When menstrual pain strikes, what do you need most?",
+      enterHealing: "Open Self-care Space",
+      preferenceTitle: "What feels right for you today?",
       preferences: [
-        { key: "alone", title: "🛑 Leave me alone, I want to be by myself" },
-        { key: "care", title: "🥣 I have no energy; I need practical care" },
-        { key: "comfort", title: "🫂 I feel vulnerable; I need emotional support" },
+        { key: "alone", title: "🛑 I'd like some quiet time" },
+        { key: "care", title: "🥣 I could use a hand" },
+        { key: "comfort", title: "🫂 I'd like some company" },
       ],
       medicalTitle: "Health Information (Optional)",
       step1: "Basic Info",
@@ -2493,6 +2521,9 @@ const translations = {
       thu: "Thu",
       fri: "Fri",
       sat: "Sat",
+      painDay: 'Pain Day',
+      menstrualDay: 'Period Day',
+      menstrualHint: 'Long-press to mark period',
       noRecordThisDay: "No pain records on this day",
       allRecords: "All Records",
       recordsOfDate: "Records of {{date}}",
@@ -2677,6 +2708,7 @@ const translations = {
       confirm: "Confirm",
       itemsSelected: 'items selected',
       pleaseSelect: 'Please select',
+      save: "Save and continue",
     },
 
     shareText: {
@@ -2799,67 +2831,67 @@ const translations = {
 
     painTemplates: {
       twist: {
-        analogy: "Imagine wringing out a thick, soaking wet towel—twisting tighter and tighter from your navel all the way to your lower back. That suffocating, deep squeeze in your lower abdomen.",
-        med: "Patient reports persistent cramping pain in the lower abdomen, episodic exacerbation with lumbosacral radiation, most severe on days 1-2 of menstruation. Recommend evaluation for uterine smooth muscle spasms and pelvic congestion.",
-        selfCare: "✨ Try fetal position: lie on your side, knees to chest, to relax pelvic floor muscle tension.\n✨ Apply a heating pad on lower belly and back (40-45°C) for 20 minutes.\n✨ Slow abdominal breathing: inhale for 4s - hold for 4s - exhale slowly for 6s.\n✨ Eat magnesium-rich foods (nuts, dark greens) to naturally ease muscle contractions.\n✨ You are allowed to curl up in bed. Pain is not your fault.\n✨ Acupressure: Firmly press the Sanyinjiao (SP6) acupoint (located on the inner side of your lower leg, 4 finger-widths above the tip of the inner ankle bone, in the depression behind the tibia bone) for 1-2 minutes. Clinically shown to relieve spasmodic uterine tension and promote pelvic blood flow.\n✨ Warm Foot Bath: Soak feet in warm water (40-42°C) for 15-20 minutes. Warming the lower limbs reflexively dilates lower abdominal vessels, relieving ischemic pelvic cramps."
+        analogy: "It's like a hand slowly wringing a towel inside her belly. Not sharp pain, but a dull, tightening, wave-like squeeze that makes her want to curl up.",
+        med: "Patient reports cramping lower abdominal pain, paroxysmal, possibly radiating to the lumbosacral area, more noticeable on days 1-2 of menstruation. Consider evaluating uterine smooth muscle spasm and pelvic congestion.",
+        selfCare: "✨ Try the fetal position: lie on your side, knees toward your chest, to relax pelvic floor tension.\n✨ Place a warm compress (40-45°C) on the lower abdomen and lower back for 20 minutes.\n✨ Slow abdominal breathing: inhale 4s - hold 4s - exhale slowly 6s.\n✨ Eat magnesium-rich foods (nuts, dark leafy greens) to help relax muscles.\n✨ You can curl up in bed. The pain is not your fault.\n✨ Acupressure: gently press Sanyinjiao (SP6, located on the inner lower leg, 4 finger-widths above the inner ankle, in the depression behind the shin bone) for 1-2 minutes. This may help ease uterine tension and support pelvic circulation.\n✨ Warm foot soak: soak your feet in warm water (40-42°C) for 15-20 minutes. Warming the lower legs can help relax the lower abdomen."
       },
       pierce: {
-        analogy: "Imagine having a root canal without anesthesia—that electric, drilling sharp pain suddenly pierce into your lower abdomen, numbing and stinging, as if someone is stirring a needle in your pelvis.",
-        med: "Patient reports sharp pierce pain in the lower abdomen, brief drilling sensation radiating to the inner thigh, sudden onset and offset, with cold sweats. Recommend evaluation for neuropathic pain and endometriosis.",
-        selfCare: "✨ Immediately lie on your side during an attack, avoiding any pressure points.\n✨ Use warm (not hot) compresses—sensitive nerve endings react strongly to extreme heat.\n✨ Use white noise or soothing ambient music to distract.\n✨ Keep warm water nearby, sip slowly to stabilize autonomic body temperature.\n✨ Gently rotate or move your ankles during intervals to promote lower pelvic circulation.\n✨ Progressive Muscle Relaxation (PMR): Consciously tense your leg and gluteal muscles for 10 seconds, then fully relax. This helps break the defensive muscle-locking cycle triggered by sudden pierce pain.\n✨ Tactile Gating: Gently stroke the skin in a wide area around the pierce pain (avoiding the direct pain center). This activates non-nociceptive A-beta sensory fibers, physically blocking sharp pain signals at the spinal cord level."
+        analogy: "It's like something stabs a single spot inside her belly, then disappears. It comes and goes, and she may suddenly stop whatever she's doing.",
+        med: "Patient reports brief stabbing lower abdominal pain, sudden onset and offset, possibly radiating to the inner thigh, occasionally with cold sweats. Consider evaluating neuropathic pain and endometriosis.",
+        selfCare: "✨ Lie on your side during an episode, avoiding pressure points on the body.\n✨ Use gentle warmth (not extreme heat) — nerve endings are sensitive to strong heat.\n✨ Use white noise or calming ambient music to help shift attention.\n✨ Keep warm water nearby and sip slowly to help stabilize the autonomic nervous system.\n✨ Between episodes, gently rotate or move your ankles to support pelvic circulation.\n✨ Progressive Muscle Relaxation (PMR): deliberately tense your leg and hip muscles for 10 seconds, then fully release. This helps break the muscle-guarding cycle triggered by sharp pain.\n✨ Tactile gating: gently stroke the skin around the painful area (avoiding the center). This activates non-painful sensory fibers that can help reduce sharp pain signals at the spinal level."
       },
       heavy: {
-        analogy: "Like having a 5kg sandbag tied to your abdomen—standing makes you want to squat, sitting makes you want to lie down. That heavy dragging sensation sinking from your uterus all the way to your knees.",
-        med: "Patient reports severe dragging and heavy sensation in the lower abdomen, worsening when standing, slightly relieved when lying flat, with lumbosacral soreness. Recommend evaluation for pelvic congestion and possible adenomyosis.",
-        selfCare: "✨ Elevated hip position: use a pillow to elevate hips 15-20cm while lying flat.\n✨ Minimize standing or walking, absolutely avoid lifting heavy objects.\n✨ Wear high-waisted seamless loose underwear to avoid abdominal compression.\n✨ Drink warm ginger tea or red date tea.\n✨ Tell yourself: you've worked hard today, rest is not laziness.\n✨ Legs-Up-The-Wall Pose (Viparita Karani): lie flat and raise your legs vertically against the wall for 10-15 minutes. Gravity helps drain pooled venous blood and fluid from the pelvis, quickly relieving heavy pelvic congestion.\n✨ Bedside Pelvic Tilt: lie flat with knees bent, feet flat on the bed. Gently arch your lower back away from the bed on inhale, press your lower back flat against the bed on exhale. This relaxes the uterosacral ligaments without leaving the bed."
+        analogy: "It feels like something heavy is hanging inside her belly, pulling downward. Worse when standing, a little better lying down. She may want to bend forward or crouch.",
+        med: "Patient reports a clear heavy dragging sensation in the lower abdomen, worse on standing, somewhat relieved by lying flat, possibly with lumbosacral aching. Consider evaluating pelvic congestion and adenomyosis.",
+        selfCare: "✨ Elevated hips: lie flat with hips raised 15-20cm using a pillow.\n✨ Minimize standing or walking, and avoid lifting heavy objects.\n✨ Wear high-waisted, non-compressive, loose underwear.\n✨ Drink warm ginger or red date tea.\n✨ Tell yourself: today was hard, resting is not laziness.\n✨ Legs-up-the-wall pose (Viparita Karani): lie flat with legs raised vertically against a wall for 10-15 minutes. Gravity helps pelvic venous return and eases the heaviness.\n✨ Bedside pelvic tilt: lie on your back with knees bent and feet flat on the bed. On inhale, gently arch the lower back away from the bed; on exhale, press the lower back flat. This relaxes the uterosacral ligaments without leaving the bed."
       },
       wave: {
-        analogy: "Like having a balloon inside your belly that keeps inflating and deflating—waves of swell spreading through your entire abdomen, making even breathing feel suffocating.",
-        med: "Patient reports diffuse bloating pain in the abdomen, episodic exacerbation with gas sensation, pain location not fixed. Recommend evaluation for pelvic edema, intestinal gas, and pelvic inflammation.",
-        selfCare: "✨ Wear the loosest clothes possible, completely loosen your belt.\n✨ Gentle clockwise abdominal massage (with feather-light, extremely gentle pressure on the skin).\n✨ Avoid gas-producing foods: beans, dairy, carbonated drinks, cold foods.\n✨ Place a heat pack over the entire abdomen, wrap yourself in a warm blanket.\n✨ Slow everything down—when you slow down, the sensory volume of pain decreases.\n✨ Wind-Relieving Pose: lie flat, hug both knees tightly to your chest, gently rock side to side. This gently massages the colon to release trapped gas, reducing intra-abdominal pressure.\n✨ Acupressure: Press and massage the ST36 (Zusanli) acupoint (located 4 finger-widths below the kneecap, 1 finger-width lateral to the shin bone). This regulates gastrointestinal motility to relieve bloating and cramps."
+        analogy: "It's like gas slowly building up and expanding in waves. Not sharp, but a dull, bloated pressure across the whole abdomen. She may want to loosen her waistband.",
+        med: "Patient reports diffuse abdominal bloating pain, paroxysmal, possibly with gas sensation, location not fixed. Consider evaluating pelvic edema, intestinal gas, and pelvic inflammation.",
+        selfCare: "✨ Wear the loosest clothing and fully loosen the waistband.\n✨ Gently massage the abdomen clockwise (very light pressure on the skin surface).\n✨ Avoid gas-producing foods: beans, dairy, carbonated drinks, cold or raw foods.\n✨ Place a warm compress over the whole abdomen and wrap yourself in a warm blanket.\n✨ Slow everything down. When you slow down, the sensory volume of pain goes down too.\n✨ Wind-relieving pose: lie on your back, hug your knees gently toward your chest, and sway side to side. This gently massages the colon and helps release trapped gas.\n✨ Acupressure: press and massage Zusanli (ST36, located 4 finger-widths below the outer knee, 1 finger-width outside the shin bone). This helps regulate digestion and ease bloating."
       },
       scrape: {
-        analogy: "Like an unripe fruit being forcibly peeled—that scraping, tearing sensation from the inside of your uterus outward. Every movement feels like sandpaper rubbing against raw flesh.",
-        med: "Patient reports severe tearing sharp pain in the lower abdomen, worsening with movement, with tenesmus. Recommend urgent evaluation for tissue adhesions and possible endometrioma rupture.",
-        selfCare: "✨ This is the most exhausting type of pain—prioritize absolute stillness and rest.\n✨ Absolutely avoid any abdominal rubbing or massage, minimize all position changes.\n✨ Sip warm honey water for energy (avoid taking painkillers on an empty stomach).\n✨ Comfort yourself with a gentle, compassionate inner voice.\n✨ Record pain dynamics once intensity subsides.\n✨ Intercostal (chest) breathing: expand your ribcage laterally on inhale, keeping your lower abdomen completely still. This reduces sliding friction of abdominal organs, preventing irritation of sensitive tissue.\n✨ Pillow-Supported Child's Pose: place a thick bolster or pillow between your thighs, drape your torso completely over it. Knees apart, hips sitting back. This uses gravity to suspend abdominal organs forward, preventing them from pressing against painful pelvic adhesion sites."
+        analogy: "It's like a spot inside her belly is being rubbed back and forth — dull and raw. Every movement, every breath, she can feel it.",
+        med: "Patient reports clear tearing-like lower abdominal pain, worse with movement, possibly with tenesmus. Consider screening for tissue adhesions and endometrial-related conditions.",
+        selfCare: "✨ This is a more draining type of pain — prioritize complete rest.\n✨ Avoid rubbing or massaging the abdomen, and minimize position changes.\n✨ Sip warm honey water for energy (avoid taking pain relief on an empty stomach).\n✨ Comfort yourself with a gentle, compassionate inner voice.\n✨ Log your pain pattern once the intensity eases.\n✨ Intercostal (chest) breathing: expand the chest laterally on inhale while keeping the lower abdomen completely still. This reduces sliding friction between abdominal organs and prevents irritation of sensitive tissue.\n✨ Supported child's pose: place a thick pillow or cushion between your thighs and rest your torso fully on it. Knees apart, hips back. This uses gravity to suspend the abdominal organs forward, reducing pressure on painful pelvic adhesions."
       }
     },
 
     // ============ Multi-Pain Dictionary & Templates ============
     multiPain: {
       names: {
-        two: "{{p1}} (accompanied by {{p2}})",
-        three: "predominantly {{p1}}, accompanied by {{p2}}, along with intermittent {{p3}}",
+        two: "Mainly {{p1}}, with {{p2}}",
+        three: "Mainly {{p1}}, accompanied by {{p2}}, with some {{p3}}",
       },
       analogyTemplates: {
-        two: "{{m1}}\n\nAdditionally, her body is {{m2}}. These two sensations intertwine, making it exhausting to stay upright.",
-        three: "{{m1}}\n\nMeanwhile, she is {{m2}}; on top of that, there are {{m3}}. This multi-layered composite pain is heavily draining her physical and mental energy.",
+        two: "{{m1}}\n\nOn top of that, her body is also {{m2}}. The two sensations interweave, making it hard for her to move freely.",
+        three: "{{m1}}\n\nAt the same time, deep in her pelvis, she is {{m2}}; and between movements, she also feels {{m3}}. The overlapping pains are draining her energy.",
       },
       metaphors: {
         twist: {
-          primary: "Like a soaked towel deep inside the abdomen being wrung tightly in opposite directions by unseen hands, with intense smooth muscle spasms.",
-          secondary: "accompanied by a deep, twisting and wringing sensation as if muscles are clamped tightly",
-          tertiary: "intermittent twisting pangs that catch her off guard"
+          primary: "Like a towel being slowly wrung deep inside the abdomen — a dull, tightening, wave-like squeeze rather than sharp pain.",
+          secondary: "a slow tightening and wringing sensation deep inside",
+          tertiary: "occasional dull tightening pangs"
         },
         pierce: {
-          primary: "Like sharp, freezing needles suddenly plunging deep into the pelvis without warning, radiating sharp nerve pain.",
-          secondary: "accompanied by sudden, sharp needle-like stabbing sensations",
-          tertiary: "occasional acute needle-sharp twinges radiating outward"
+          primary: "Like something briefly stabs a single spot deep in the pelvis, then goes away, and comes back again later.",
+          secondary: "also brief, small stabbing sensations",
+          tertiary: "occasional sudden pinpricks between episodes"
         },
         heavy: {
-          primary: "Like a dense block of lead sinking relentlessly in the pelvis, dragging down the pelvic ligaments and lower back.",
-          secondary: "bearing a relentless, heavy downward dragging pressure deep in the pelvic basin",
-          tertiary: "an underlying dragging weight pulling at her lower back"
+          primary: "Like something heavy is hanging deep in the pelvis, pulling downward. Worse when standing, a bit better when lying down.",
+          secondary: "a steady downward dragging pressure deep in the pelvis",
+          tertiary: "occasional waves of heavy downward pressure"
         },
         wave: {
-          primary: "Like relentless dull tides swelling and aching inside the pelvis, sending continuous waves of deep soreness through every joint.",
-          secondary: "a pervasive, swelling ache rolling through the pelvis like continuous dull waves",
-          tertiary: "occasional waves of deep, diffuse aching spreading through her bones"
+          primary: "Like gas slowly expanding in waves inside the belly — dull, bloated, and uncomfortable across the whole abdomen.",
+          secondary: "waves of dull swelling and aching deep inside, with no fixed location",
+          tertiary: "occasional waves of diffuse aching spreading outward"
         },
         scrape: {
-          primary: "Like an unripened fruit being forcefully peeled from the inside, coarse sandpaper repeatedly rubbing against raw tissue.",
-          secondary: "a burning, abrasive scraping sensation as if sandpaper is rubbing raw skin",
-          tertiary: "subtle, stinging friction scraping across the internal lining"
+          primary: "Like a spot inside the belly is being rubbed back and forth — dull and raw. Felt with every movement and every breath.",
+          secondary: "a rough, back-and-forth rubbing sensation",
+          tertiary: "a faint scraping, dull soreness"
         }
       }
     },
@@ -3094,56 +3126,7 @@ const translations = {
       footer: "PainScape - Generated Report",
     },
 
-    defaultTemplates: {
-      // Default values
-      medication: 'Ibuprofen',
 
-      // Fallback work template (ultimate fallback)
-      workTemplateFallback: 'Requesting a sick day today due to a health condition.',
-
-      // Placeholder default values
-      notProvided: "Not provided",
-      noSymptoms: "No significant accompanying symptoms",
-      noDiagnosis: "No confirmed gynecological conditions",
-      noSurgery: "No surgical history",
-      noAllergy: "No known drug allergies",
-      noLifestyle: "No significant lifestyle factors",
-      noFamilyHistory: "No family history",
-      noReproductive: "Not provided",
-      noPsychosocial: "Not provided",
-
-      // Templates with variable placeholders
-      chiefComplaint: '{{timing}} {{location}} {{pain}}, with {{symptoms}}.',
-      presentillness: 'Patient {{age}}, {{heightWeight}}. Reports menstrual cycles are {{cycleRegular}}. {{timing}} developed {{location}} {{pain}}, accompanied by {{symptoms}}. Activity level: {{activityLevel}}.',
-      pastHistoryDiagnosis: 'Patient has a history of {{diagnosed}}.',
-      pastHistorySurgery: 'Has undergone {{surgery}}.',
-      pastHistoryAllergy: 'Allergic to {{allergy}}.',
-      pastHistoryLifestyle: 'Lifestyle: {{lifestyle}}.',
-      pastHistoryFamily: 'Family history: {{familyHistory}}.',
-      pastHistoryReproductive: 'Obstetric history: {{reproductiveHistory}}.',
-      pastHistoryPsychosocial: 'Psychosocial assessment: {{psychosocial}}.',
-      pastHistoryNone: 'No significant past medical history reported.',
-      presentIllnessAge: 'Patient {{age}}, {{heightWeight}}.',
-      presentIllnessCycle: 'Reports menstrual cycles are {{cycleRegular}}.',
-      presentIllnessOnset: 'Developed sudden {{pain}} on {{cycleDay}}.',
-      presentIllnessSymptoms: 'Accompanied by {{symptoms}}.',
-      presentIllnessActivity: 'Activity level: {{activityLevel}}.',
-      menstrualHistory: 'Menstrual history: Menarche at {{menarche}}, {{periodDuration}}-day cycles, {{cycleRegular}}. LMP: {{lmp}}.',
-
-      clinicalDiagnosis: 'Based on the pain characteristics and cyclical patterns, the following should be considered:\n\n{{diagnosisItems}}\n\nRecommended examinations: {{examSuggestions}}.\n\n{{reassurance}}',
-      clinicalSuggestions: '【Self-Care During Recovery】\n{{selfCareItems}}\n\n【Questions for Your Doctor】\n{{discussionItems}}\n\n【A Note to You】\n{{reassurance}}\n\n【What You May Want to Know About the Exam】\n{{examInfo}}',
-      clinicalDiagnosisStructured: 'Based on the pain characteristics and cyclical patterns, the following should be considered:\n\n{{diagnosisItems}}\n\nRecommended examinations: {{examSuggestions}}.',
-      clinicalSuggestionsStructured: 'Relief measures:\n{{selfCareItems}}',
-
-      // Module titles
-      moduleSelfCare: 'Self-Care During Recovery',
-      moduleDiscussion: 'Questions for Your Doctor',
-      moduleReminder: 'A Note to You',
-      moduleExamInfo: 'What You May Want to Know About the Exam',
-
-      // Default actions (fallback when partnerActions is not found)
-      defaultActions: '☑️ Apply heat to her lower abdomen and prepare pain relief.\n☑️ Get her a glass of warm water and stay with her.\n☑️ Dim the lights and let her rest quietly.',
-    },
     // ============ Result page labels ============
     resultLabels: {
       companionGuide: "Period Companion Guide",
@@ -3307,7 +3290,81 @@ const translations = {
       clinicalHiddenTitle: "Clinical History Hidden",
       clinicalHiddenDesc: "You have selected the general/community sharing mode. No need to collect menstrual history or other complex background information. You can directly set your companionship and self-care preferences in the final step.",
     },
+    defaultTemplates: {
+      // ===== 默认值 =====
+      medication: 'Ibuprofen',
+      workTemplateFallback: 'Requesting a sick day today due to a health condition.',
 
+      // ===== 占位符默认值 =====
+      notProvided: "Not provided",
+      noSymptoms: "No significant accompanying symptoms",
+      noDiagnosis: "No confirmed gynecological conditions",
+      noSurgery: "No surgical history",
+      noAllergy: "No known drug allergies",
+      noLifestyle: "No significant lifestyle factors",
+      noFamilyHistory: "No family history",
+      noReproductive: "Not provided",
+      noPsychosocial: "Not provided",
+
+      // ===== 主诉 =====
+      chiefComplaint: '{{timing}}, {{location}} {{pain}}, with {{symptoms}}.',
+      chiefComplaintNoSymptoms: '{{timing}}, {{location}} {{pain}}.',
+
+      // ===== 现病史（分段）=====
+      presentIllnessBase: 'Patient reports {{location}} {{pain}} during {{timing}}, accompanied by {{symptoms}}.',
+      presentIllnessBaseNoSymptoms: 'Patient reports {{location}} {{pain}} during {{timing}}.',
+      presentIllnessPrefix: 'Profile: ',
+      ageFragment: 'age {{age}}',
+      cycleRegularFragment: 'Menstrual cycles are {{cycleRegular}}',
+      painNatureFragment: 'Pain is characterized as {{nature}}, {{relief}}.',
+
+      painNature: {
+        twist: 'paroxysmal cramping',
+        pierce: 'stabbing sharp pain',
+        heavy: 'dragging and pressing',
+        wave: 'diffuse aching and swelling',
+        scrape: 'tearing and scraping sharp pain',
+      },
+      painRelief: {
+        twist: 'slightly relieved by warm compress',
+        pierce: 'slightly relieved by position change',
+        heavy: 'slightly relieved by lying flat with hips elevated',
+        wave: 'slightly relieved by gentle massage',
+        scrape: 'slightly relieved by rest',
+      },
+
+      // ===== 月经史 =====
+      menarcheFragment: 'menarche at {{menarche}}',
+      durationFragment: '{{periodDuration}}-day period',
+      lmpFragment: 'LMP {{lmp}}',
+      noMenstrualHistory: 'Menstrual history not provided',
+      menstrualHistory: 'Menstrual history: Menarche at {{menarche}}, {{periodDuration}}-day cycles, {{cycleRegular}}. LMP: {{lmp}}.',
+
+      // ===== 既往史（分段）=====
+      pastHistoryDiagnosis: 'Patient has a history of {{diagnosed}}.',
+      pastHistorySurgery: 'Has undergone {{surgery}}.',
+      pastHistoryAllergy: 'Allergic to {{allergy}}.',
+      pastHistoryLifestyle: 'Lifestyle: {{lifestyle}}.',
+      pastHistoryFamily: 'Family history: {{familyHistory}}.',
+      pastHistoryReproductive: 'Obstetric history: {{reproductiveHistory}}.',
+      pastHistoryPsychosocial: 'Psychosocial assessment: {{psychosocial}}.',
+      pastHistoryNone: 'No significant past medical history reported.',
+
+      // ===== 临床诊断与建议 =====
+      clinicalDiagnosis: 'Based on the pain characteristics and cyclical patterns, the following should be considered:\n\n{{diagnosisItems}}\n\nRecommended examinations: {{examSuggestions}}.\n\n{{reassurance}}',
+      clinicalSuggestions: '【Self-Care During Recovery】\n{{selfCareItems}}\n\n【Questions for Your Doctor】\n{{discussionItems}}\n\n【A Note to You】\n{{reassurance}}\n\n【What You May Want to Know About the Exam】\n{{examInfo}}',
+      clinicalDiagnosisStructured: 'Based on the pain characteristics and cyclical patterns, the following should be considered:\n\n{{diagnosisItems}}\n\nRecommended examinations: {{examSuggestions}}.',
+      clinicalSuggestionsStructured: 'Relief measures:\n{{selfCareItems}}',
+
+      // ===== 模块标题 =====
+      moduleSelfCare: 'Self-Care During Recovery',
+      moduleDiscussion: 'Questions for Your Doctor',
+      moduleReminder: 'A Note to You',
+      moduleExamInfo: 'What You May Want to Know About the Exam',
+
+      // ===== 默认动作 =====
+      defaultActions: '☑️ Apply heat to her lower abdomen and prepare pain relief.\n☑️ Get her a glass of warm water and stay with her.\n☑️ Dim the lights and let her rest quietly.',
+    },
     doctorTab: {
       chiefComplaint: "Chief Complaint",
       presentIllness: "History of Present Illness",

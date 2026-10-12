@@ -1014,7 +1014,7 @@ export default function CanvasPage({
                   whiteSpace: 'nowrap',
                 }}
               >
-                📝 {!isSmallScreen && (t('canvas.saveDraft') || '保存草稿')}
+                {!isSmallScreen && (t('canvas.saveDraft') || '保存草稿')}
               </button>
 
               {!isSmallScreen && (
@@ -1039,7 +1039,7 @@ export default function CanvasPage({
                     transition: 'all 0.2s',
                   }}
                 >
-                  💾 {t('canvas.saveOnly') || '仅保存'}
+                  {t('canvas.saveOnly') || '仅保存'}
                 </button>
               )}
 

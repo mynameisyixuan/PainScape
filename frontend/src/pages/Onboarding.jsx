@@ -551,11 +551,10 @@ export default function OnboardingPage({
                 <div style={{ position: 'relative', width: '100%' }}>
                   <input
                     type="date"
+                    lang={targetLanguage === 'en' ? 'en-US' : 'zh-CN'}
                     className="dark-date-input"
                     value={medicalBackground.lastPeriod || ''}
-                    onChange={(e) =>
-                      setMedicalBackground({ ...medicalBackground, lastPeriod: e.target.value })
-                    }
+                    onChange={(e) => setMedicalBackground({ ...medicalBackground, lastPeriod: e.target.value })}
                     onClick={(e) => {
                       try {
                         if (typeof e.target.showPicker === 'function') {
@@ -1175,130 +1174,130 @@ export default function OnboardingPage({
 
         {appMode === 'general' && (
           <>
-{/* 进入自愈舱按钮 */}
-<button
-  onClick={() => onOpenHealing?.()}
-  style={{
-    flex: 1.3,
-    padding: '0 16px',
-    borderRadius: 'var(--radius-lg)',
-    background: 'linear-gradient(135deg, rgba(211, 47, 47, 0.85), rgba(183, 28, 28, 0.95))',
-    border: '1px solid rgba(211, 47, 47, 0.3)',
-    color: '#fff',
-    fontSize: 'clamp(13px, 3.2vw, 15px)',
-    fontWeight: '600',
-    cursor: 'pointer',
-    minHeight: 'var(--btn-min-touch)',
-    maxHeight: '48px',
-    boxShadow: '0 0 20px rgba(211, 47, 47, 0.15), inset 0 1px 0 rgba(255,255,255,0.06)',
-    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-    whiteSpace: 'nowrap',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: '8px',
-    position: 'relative',
-    overflow: 'visible',
-  }}
-  onMouseEnter={(e) => {
-    e.currentTarget.style.boxShadow = '0 0 32px rgba(211, 47, 47, 0.25), inset 0 1px 0 rgba(255,255,255,0.1)';
-    e.currentTarget.style.transform = 'translateY(-1px)';
-    e.currentTarget.style.background = 'linear-gradient(135deg, rgba(211, 47, 47, 0.95), rgba(183, 28, 28, 1))';
-  }}
-  onMouseLeave={(e) => {
-    e.currentTarget.style.boxShadow = '0 0 20px rgba(211, 47, 47, 0.15), inset 0 1px 0 rgba(255,255,255,0.06)';
-    e.currentTarget.style.transform = 'translateY(0)';
-    e.currentTarget.style.background = 'linear-gradient(135deg, rgba(211, 47, 47, 0.85), rgba(183, 28, 28, 0.95))';
-  }}
-  onTouchStart={(e) => {
-    e.currentTarget.style.transform = 'scale(0.97)';
-  }}
-  onTouchEnd={(e) => {
-    e.currentTarget.style.transform = 'scale(1)';
-  }}
->
-  {/* 呼吸光晕 - 原地脉动，不移动 */}
-  <span style={{
-    position: 'absolute',
-    inset: '-4px',
-    borderRadius: 'var(--radius-lg)',
-    background: 'rgba(211, 47, 47, 0.15)',
-    filter: 'blur(12px)',
-    animation: 'breatheGlow 2.5s ease-in-out infinite',
-    pointerEvents: 'none',
-    zIndex: 0,
-  }} />
-  
-  {/* 推荐角标 */}
-  <span style={{
-    position: 'absolute',
-    top: '-8px',
-    right: '-4px',
-    fontSize: '8px',
-    background: 'linear-gradient(135deg, #ffd54f, #ffb300)',
-    padding: '2px 10px',
-    borderRadius: '10px 10px 10px 2px',
-    fontWeight: '700',
-    letterSpacing: '0.3px',
-    color: '#1a1a1a',
-    boxShadow: '0 2px 8px rgba(255, 213, 79, 0.4)',
-    zIndex: 2,
-    pointerEvents: 'none',
-    whiteSpace: 'nowrap',
-  }}>
-    {t('onboarding.recommended') || '推荐'}
-  </span>
-  
-  {/* 按钮文字 - 确保在光晕上层 */}
-  <span style={{ position: 'relative', zIndex: 1 }}>
-    {t('onboarding.enterHealing') || '进入自愈舱'}
-  </span>
-</button>
-{/* 开始绘制按钮 */ }
-<button
-  onClick={() => {
-    onStartDrawing?.();
-    setTimeout(scrollToTop, 50);
-  }}
-  style={{
-    flex: 1,
-    padding: '0 16px',
-    borderRadius: 'var(--radius-lg)',
-    background: 'linear-gradient(135deg, #43a047, #2e7d32)',
-    border: 'none',
-    color: '#fff',
-    fontSize: 'clamp(13px, 3.2vw, 15px)',
-    fontWeight: '500',
-    cursor: 'pointer',
-    minHeight: 'var(--btn-min-touch)',
-    maxHeight: '48px',
-    boxShadow: '0 4px 16px rgba(76, 175, 80, 0.2)',
-    transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
-    WebkitTapHighlightColor: 'transparent',
-    position: 'relative',
-    overflow: 'hidden',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    whiteSpace: 'nowrap',
-  }}
-  onMouseEnter={(e) => {
-    e.currentTarget.style.boxShadow = '0 6px 24px rgba(76, 175, 80, 0.3)';
-    e.currentTarget.style.transform = 'translateY(-1px)';
-  }}
-  onMouseLeave={(e) => {
-    e.currentTarget.style.boxShadow = '0 4px 16px rgba(76, 175, 80, 0.2)';
-    e.currentTarget.style.transform = 'translateY(0)';
-  }}
-  onTouchStart={(e) => {
-    e.currentTarget.style.transform = 'scale(0.97)';
-  }}
-  onTouchEnd={(e) => {
-    e.currentTarget.style.transform = 'scale(1)';
-  }}
->
-  {t('onboarding.startDrawing') || '开始绘制'}
-</button>
+            {/* 进入自愈舱按钮 */}
+            <button
+              onClick={() => onOpenHealing?.()}
+              style={{
+                flex: 1.3,
+                padding: '0 16px',
+                borderRadius: 'var(--radius-lg)',
+                background: 'linear-gradient(135deg, rgba(211, 47, 47, 0.85), rgba(183, 28, 28, 0.95))',
+                border: '1px solid rgba(211, 47, 47, 0.3)',
+                color: '#fff',
+                fontSize: 'clamp(13px, 3.2vw, 15px)',
+                fontWeight: '600',
+                cursor: 'pointer',
+                minHeight: 'var(--btn-min-touch)',
+                maxHeight: '48px',
+                boxShadow: '0 0 20px rgba(211, 47, 47, 0.15), inset 0 1px 0 rgba(255,255,255,0.06)',
+                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                whiteSpace: 'nowrap',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                position: 'relative',
+                overflow: 'visible',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.boxShadow = '0 0 32px rgba(211, 47, 47, 0.25), inset 0 1px 0 rgba(255,255,255,0.1)';
+                e.currentTarget.style.transform = 'translateY(-1px)';
+                e.currentTarget.style.background = 'linear-gradient(135deg, rgba(211, 47, 47, 0.95), rgba(183, 28, 28, 1))';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.boxShadow = '0 0 20px rgba(211, 47, 47, 0.15), inset 0 1px 0 rgba(255,255,255,0.06)';
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.background = 'linear-gradient(135deg, rgba(211, 47, 47, 0.85), rgba(183, 28, 28, 0.95))';
+              }}
+              onTouchStart={(e) => {
+                e.currentTarget.style.transform = 'scale(0.97)';
+              }}
+              onTouchEnd={(e) => {
+                e.currentTarget.style.transform = 'scale(1)';
+              }}
+            >
+              {/* 呼吸光晕 - 原地脉动，不移动 */}
+              <span style={{
+                position: 'absolute',
+                inset: '-4px',
+                borderRadius: 'var(--radius-lg)',
+                background: 'rgba(211, 47, 47, 0.15)',
+                filter: 'blur(12px)',
+                animation: 'breatheGlow 2.5s ease-in-out infinite',
+                pointerEvents: 'none',
+                zIndex: 0,
+              }} />
+
+              {/* 推荐角标 */}
+              <span style={{
+                position: 'absolute',
+                top: '-8px',
+                right: '-4px',
+                fontSize: '8px',
+                background: 'linear-gradient(135deg, #ffd54f, #ffb300)',
+                padding: '2px 10px',
+                borderRadius: '10px 10px 10px 2px',
+                fontWeight: '700',
+                letterSpacing: '0.3px',
+                color: '#1a1a1a',
+                boxShadow: '0 2px 8px rgba(255, 213, 79, 0.4)',
+                zIndex: 2,
+                pointerEvents: 'none',
+                whiteSpace: 'nowrap',
+              }}>
+                {t('onboarding.recommended') || '推荐'}
+              </span>
+
+              {/* 按钮文字 - 确保在光晕上层 */}
+              <span style={{ position: 'relative', zIndex: 1 }}>
+                {t('onboarding.enterHealing') || '进入自愈舱'}
+              </span>
+            </button>
+            {/* 开始绘制按钮 */}
+            <button
+              onClick={() => {
+                onStartDrawing?.();
+                setTimeout(scrollToTop, 50);
+              }}
+              style={{
+                flex: 1,
+                padding: '0 16px',
+                borderRadius: 'var(--radius-lg)',
+                background: 'linear-gradient(135deg, #43a047, #2e7d32)',
+                border: 'none',
+                color: '#fff',
+                fontSize: 'clamp(13px, 3.2vw, 15px)',
+                fontWeight: '500',
+                cursor: 'pointer',
+                minHeight: 'var(--btn-min-touch)',
+                maxHeight: '48px',
+                boxShadow: '0 4px 16px rgba(76, 175, 80, 0.2)',
+                transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                WebkitTapHighlightColor: 'transparent',
+                position: 'relative',
+                overflow: 'hidden',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                whiteSpace: 'nowrap',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.boxShadow = '0 6px 24px rgba(76, 175, 80, 0.3)';
+                e.currentTarget.style.transform = 'translateY(-1px)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.boxShadow = '0 4px 16px rgba(76, 175, 80, 0.2)';
+                e.currentTarget.style.transform = 'translateY(0)';
+              }}
+              onTouchStart={(e) => {
+                e.currentTarget.style.transform = 'scale(0.97)';
+              }}
+              onTouchEnd={(e) => {
+                e.currentTarget.style.transform = 'scale(1)';
+              }}
+            >
+              {t('onboarding.startDrawing') || '开始绘制'}
+            </button>
           </>
         )}
       </div>

@@ -802,20 +802,17 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
         : symptomsText;
 
       // ---- 年龄 ----
-      const ageLabel = mb.age ? t(`onboarding.ageOptions.${mb.age}`) || mb.age : t('defaultTemplates.notProvided');
+      const ageLabel = mb.age ? t(`onboarding.ageOptions.${mb.age}`) || mb.age : '';
 
       // ---- 身高体重 ----
-      const height = mb.height || t('defaultTemplates.notProvided');
-      const weight = mb.weight || t('defaultTemplates.notProvided');
       const heightWeightText = (mb.height && mb.weight)
-        ? `${height}cm / ${weight}kg`
-        : t('defaultTemplates.notProvided');
+        ? `${mb.height}cm / ${mb.weight}kg`
+        : '';
 
       // ---- 活动水平 ----
-      const activityLabel = mb.activityLevel ? t(`onboarding.activityOptions.${mb.activityLevel}`) || mb.activityLevel : t('defaultTemplates.notProvided');
-
+      const activityLabel = mb.activityLevel ? t(`onboarding.activityOptions.${mb.activityLevel}`) || mb.activityLevel : '';
       // ---- 周期规律 ----
-      let cycleRegDisplay = t('defaultTemplates.notProvided');
+      let cycleRegDisplay = '';
       if (mb.cycleRegular && mb.cycleRegular !== '') {
         cycleRegDisplay = t(`onboarding.cycleRegularOptions.${mb.cycleRegular}`) || mb.cycleRegular;
       }
@@ -859,9 +856,9 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
         : t('defaultTemplates.noLifestyle');
 
       // ---- 月经史 ----
-      const menarche = mb.menarcheAge || t('defaultTemplates.notProvided');
-      const periodDuration = mb.periodDuration || t('defaultTemplates.notProvided');
-      const lmp = mb.lastPeriod || t('defaultTemplates.notProvided');
+      const menarche = mb.menarcheAge || '';
+      const periodDuration = mb.periodDuration || '';
+      const lmp = mb.lastPeriod || '';
 
       // ---- 生育史 ----
       const repArr = mb.reproductiveHistoryArr || [];
@@ -894,22 +891,69 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
       // ============================================================
 
       // ---- 主诉 ----
-      const chiefComplaintText = t('defaultTemplates.chiefComplaint')
-        .replace(/{{timing}}/g, painTiming)
-        .replace(/{{location}}/g, painLocation)
-        .replace(/{{pain}}/g, painName)
-        .replace(/{{symptoms}}/g, allSymptomsText);
+      const hasRealSymptoms = (symptomsArr && symptomsArr.length > 0) || customSymptoms;
+      const chiefComplaintText = hasRealSymptoms
+        ? t('defaultTemplates.chiefComplaint')
+          .replace(/{{timing}}/g, painTiming)
+          .replace(/{{location}}/g, painLocation)
+          .replace(/{{pain}}/g, painName)
+          .replace(/{{symptoms}}/g, allSymptomsText)
+        : t('defaultTemplates.chiefComplaintNoSymptoms')
+          .replace(/{{timing}}/g, painTiming)
+          .replace(/{{location}}/g, painLocation)
+          .replace(/{{pain}}/g, painName);
 
-      // ---- 现病史 ----
-      const presentIllnessText = t('defaultTemplates.presentillness')
-        .replace(/{{age}}/g, ageLabel)
-        .replace(/{{heightWeight}}/g, heightWeightText)
-        .replace(/{{cycleRegular}}/g, cycleRegDisplay)
-        .replace(/{{timing}}/g, painTiming)
-        .replace(/{{location}}/g, painLocation)
-        .replace(/{{pain}}/g, painName)
-        .replace(/{{symptoms}}/g, allSymptomsText)
-        .replace(/{{activityLevel}}/g, activityLabel);
+      // ---- 现病史（动态拼接）----
+      const presentParts = [];
+
+      // 第一部分：基础描述（有症状/无症状分支）
+      if (hasRealSymptoms) {
+        presentParts.push(
+          t('defaultTemplates.presentIllnessBase')
+            .replace(/{{timing}}/g, painTiming)
+            .replace(/{{location}}/g, painLocation)
+            .replace(/{{pain}}/g, painName)
+            .replace(/{{symptoms}}/g, allSymptomsText)
+        );
+      } else {
+        presentParts.push(
+          t('defaultTemplates.presentIllnessBaseNoSymptoms')
+            .replace(/{{timing}}/g, painTiming)
+            .replace(/{{location}}/g, painLocation)
+            .replace(/{{pain}}/g, painName)
+        );
+      }
+
+      // 第二部分：基本情况（有值才加）
+      const basicInfo = [];
+      if (ageLabel) basicInfo.push(t('defaultTemplates.ageFragment').replace(/{{age}}/g, ageLabel));
+      if (heightWeightText) basicInfo.push(heightWeightText);
+      if (activityLabel) basicInfo.push(activityLabel);
+      if (basicInfo.length > 0) {
+        presentParts.push(
+          t('defaultTemplates.presentIllnessPrefix') + basicInfo.join(isEn ? ', ' : '，') + (isEn ? '.' : '。')
+        );
+      }
+
+      // 第三部分：月经规律（有值才加）
+      if (cycleRegDisplay) {
+        presentParts.push(
+          t('defaultTemplates.cycleRegularFragment').replace(/{{cycleRegular}}/g, cycleRegDisplay) + (isEn ? '.' : '。')
+        );
+      }
+
+      // 第四部分：疼痛性质与缓解因素
+      const primaryPainNature = t(`defaultTemplates.painNature.${primaryPain}`) || '';
+      const primaryPainRelief = t(`defaultTemplates.painRelief.${primaryPain}`) || '';
+      if (primaryPainNature && primaryPainRelief) {
+        presentParts.push(
+          t('defaultTemplates.painNatureFragment')
+            .replace(/{{nature}}/g, primaryPainNature)
+            .replace(/{{relief}}/g, primaryPainRelief)
+        );
+      }
+
+      const presentIllnessText = presentParts.join(isEn ? ' ' : '');
 
       // ---- 既往史 ----
       let pastHistoryParts = [];
@@ -935,15 +979,19 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
         pastHistoryParts.push(t('defaultTemplates.pastHistoryPsychosocial').replace(/{{psychosocial}}/g, psychText));
       }
       const pastHistoryText = pastHistoryParts.length > 0
-        ? pastHistoryParts.join(' ')
+        ? pastHistoryParts.join(isEn ? ' ' : '')
         : t('defaultTemplates.pastHistoryNone');
 
-      // ---- 月经史 ----
-      const menstrualHistoryText = t('defaultTemplates.menstrualHistory')
-        .replace(/{{menarche}}/g, menarche)
-        .replace(/{{periodDuration}}/g, periodDuration)
-        .replace(/{{cycleRegular}}/g, cycleRegDisplay)
-        .replace(/{{lmp}}/g, lmp);
+      // ---- 月经史（动态拼接）----
+      const menstrualParts = [];
+      if (menarche) menstrualParts.push(t('defaultTemplates.menarcheFragment').replace(/{{menarche}}/g, menarche));
+      if (periodDuration) menstrualParts.push(t('defaultTemplates.durationFragment').replace(/{{periodDuration}}/g, periodDuration));
+      if (cycleRegDisplay) menstrualParts.push(t('defaultTemplates.cycleRegularFragment').replace(/{{cycleRegular}}/g, cycleRegDisplay));
+      if (lmp) menstrualParts.push(t('defaultTemplates.lmpFragment').replace(/{{lmp}}/g, lmp));
+
+      const menstrualHistoryText = menstrualParts.length > 0
+        ? menstrualParts.join(isEn ? ', ' : '，') + (isEn ? '.' : '。')
+        : t('defaultTemplates.noMenstrualHistory');
 
       // ============================================================
       // 临床诊断 - 动态智能推导 (支持前 1~3 种复合痛感机制鉴别)
@@ -1288,38 +1336,47 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
         primaryPain: 'twist',
         topPains: ['twist'],
         analogy: t('painTemplates.twist.analogy') || '',
-        workText: '因身体不适，申请休息一天。',
+        workText: isEn ? 'Requesting one day off due to physical discomfort.' : '因身体不适，申请休息一天。',
         action: t('defaultTemplates.defaultActions') || '',
         selfCare: t('painTemplates.twist.selfCare') || fallbackSelfCare,
-        chief_complaint: t('defaultTemplates.chiefComplaint')
-          .replace(/{{timing}}/g, '经期')
-          .replace(/{{location}}/g, '下腹部')
+
+        // ✅ 主诉：只保留必要信息
+        chief_complaint: t('defaultTemplates.chiefComplaintNoSymptoms')
+          .replace(/{{timing}}/g, isEn ? 'During menstruation' : '经期')
+          .replace(/{{location}}/g, isEn ? 'lower abdomen' : '下腹部')
+          .replace(/{{pain}}/g, fallbackPain),
+
+        // ✅ 现病史：使用无基本信息的基础模板
+        present_illness: t('defaultTemplates.presentIllnessBase')
+          .replace(/{{timing}}/g, isEn ? 'During menstruation' : '经期')
+          .replace(/{{location}}/g, isEn ? 'lower abdomen' : '下腹部')
           .replace(/{{pain}}/g, fallbackPain)
           .replace(/{{symptoms}}/g, t('defaultTemplates.noSymptoms')),
-        present_illness: t('defaultTemplates.presentillness')
-          .replace(/{{age}}/g, t('defaultTemplates.notProvided'))
-          .replace(/{{heightWeight}}/g, t('defaultTemplates.notProvided'))
-          .replace(/{{cycleRegular}}/g, t('defaultTemplates.notProvided'))
-          .replace(/{{timing}}/g, '经期')
-          .replace(/{{location}}/g, '下腹部')
-          .replace(/{{pain}}/g, fallbackPain)
-          .replace(/{{symptoms}}/g, t('defaultTemplates.noSymptoms'))
-          .replace(/{{activityLevel}}/g, t('defaultTemplates.notProvided')),
+
         past_history: t('defaultTemplates.pastHistoryNone'),
-        menstrual_history: t('defaultTemplates.menstrualHistory')
-          .replace(/{{menarche}}/g, t('defaultTemplates.notProvided'))
-          .replace(/{{periodDuration}}/g, t('defaultTemplates.notProvided'))
-          .replace(/{{cycleRegular}}/g, t('defaultTemplates.notProvided'))
-          .replace(/{{lmp}}/g, t('defaultTemplates.notProvided')),
+
+        // ✅ 月经史：无数据时直接给"未提供"
+        menstrual_history: t('defaultTemplates.noMenstrualHistory'),
+
         clinical_diagnosis: t('defaultTemplates.clinicalDiagnosisStructured')
-          .replace(/{{diagnosisItems}}/g, '1. 原发性痛经（功能性）')
-          .replace(/{{examSuggestions}}/g, '常规妇科超声'),
+          .replace(/{{diagnosisItems}}/g, isEn
+            ? '1. Primary dysmenorrhea (functional)'
+            : '1. 原发性痛经（功能性）')
+          .replace(/{{examSuggestions}}/g, isEn
+            ? 'Routine gynecological ultrasound'
+            : '常规妇科超声'),
+
         clinical_suggestions: t('defaultTemplates.clinicalSuggestionsStructured')
           .replace(/{{selfCareItems}}/g, fallbackSelfCare),
+
         full_content: {
           clinical_diagnosis: t('defaultTemplates.clinicalDiagnosis')
-            .replace(/{{diagnosisItems}}/g, '1. 原发性痛经（功能性）')
-            .replace(/{{examSuggestions}}/g, '常规妇科超声')
+            .replace(/{{diagnosisItems}}/g, isEn
+              ? '1. Primary dysmenorrhea (functional)'
+              : '1. 原发性痛经（功能性）')
+            .replace(/{{examSuggestions}}/g, isEn
+              ? 'Routine gynecological ultrasound'
+              : '常规妇科超声')
             .replace(/{{reassurance}}/g, fallbackReassurance),
           clinical_suggestions: t('defaultTemplates.clinicalSuggestions')
             .replace(/{{selfCareItems}}/g, fallbackSelfCare)
@@ -1471,7 +1528,7 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
         console.warn('No backend API, using local templates:', apiErr.message);
       }
 
-      const finalReport = apiResult || generateContent(standardPain);
+      const finalReport = apiResult || generateContent([standardPain]);
       setLlmData(finalReport);
       setCurrentReportData(finalReport);
 
@@ -1485,12 +1542,12 @@ function AppContent({ targetLanguage, setTargetLanguage }) {
         date: dateStr,
         time: timeStr,
         img: canvasImg,
-        painName: formatMultiPainName(topPains, t, isEn),
-        dominantPain: dominant,
-        topPains: topPains,
-        painScore: painScore,
+        painName: t(`painNames.${standardPain}`) || standardPain,
+        dominantPain: standardPain,
+        topPains: [standardPain],
+        painScore: data.painScore || 50,
         appMode,
-        reportData: apiResult || generateContent(standardPain),
+        reportData: finalReport,
         medicalBackground,
         userPrefs,
         tonePreference,
