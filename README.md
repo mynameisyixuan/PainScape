@@ -263,7 +263,7 @@ PainScape 历经四阶段（Formative Study → System Design → Initial Evalua
 > 我们正有序推进 **原生移动端 APP** 的研发与上线（将加入快捷锁屏小组件、经期前夕生理提醒、伴侣账号绑定与实时 care 推送等深度功能，敬请期待！）。
 
 👉 **[点击此处立即体验 PainScape Web 在线版](https://painscape.icu/)** 👈   
-(建议使用手机或 iPad 触屏浏览器打开，以获得最真实的指尖压感与手势粒子反馈)
+> (建议使用手机或 iPad 触屏浏览器打开，以获得最真实的指尖压感与手势粒子反馈)
 ---
 
 ## 🚀 快速开始 (Quick Start)
