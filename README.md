@@ -1,104 +1,231 @@
-# 🩸 PainScape
-**Beyond the Scale: An Embodied Visual Expression and Semantic Translation System for Menstrual Pain**  
-*(超越量表：面向经期疼痛的具身视觉表达与语义转译系统)*
+# 🩸 PainScape: When Translating Menstrual Pain Is Not Enough
+### 超越量表：面向经期疼痛的具身视觉表达、语义转译与集体可见性系统
 
-![React](https://img.shields.io/badge/Frontend-React-61DAFB?style=flat-square&logo=react&logoColor=black)
-![p5.js](https://img.shields.io/badge/Engine-p5.js-ED225D?style=flat-square&logo=p5.js&logoColor=white)
-![Status](https://img.shields.io/badge/Status-Beta_Iterating-4CAF50?style=flat-square)
-![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)
+[![React](https://img.shields.io/badge/Frontend-React%2018-61DAFB?style=flat-square&logo=react&logoColor=black)](https://reactjs.org/)
+[![p5.js](https://img.shields.io/badge/Canvas-p5.js-ED225D?style=flat-square&logo=p5.js&logoColor=white)](https://p5js.org/)
+[![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![LLM Hub](https://img.shields.io/badge/LLM-GLM--4%20%7C%20DeepSeek-8A2BE2?style=flat-square)](https://github.com/mynameisyixuan/PainScape)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](https://opensource.org/licenses/MIT)
+[![Academic Paper](https://img.shields.io/badge/ACM-UbiComp%20%2F%20CHI%20Research-red?style=flat-square)](https://github.com/mynameisyixuan/PainScape)
 
-> *"The pain feels like an unripe fruit being peeled by force, with shreds of real flesh still attached and constantly torn."*  
-> *"痛经就像一颗未完全成熟的果实被生生剥皮，皮上还连着丝丝缕缕真实的血肉..."* —— 来自 PainScape 用户访谈
-
-## 📖 About The Project | 项目简介
-
-原发性痛经困扰着全球超半数育龄女性，但在传统的医疗评估与 FemTech（女性健康科技）应用中，复杂的痛觉体验往往被降维成单一的 **“1-10分数字量表”**。这种“量化霸权”与“粉色温馨”的刻板印象，加剧了女性在医患沟通、职场请假与亲密关系中的失语困境（Medical Gaslighting）。
-
-**PainScape** 是一个基于 **女性主义残疾研究（FDS）** 与 **不适感设计（Designing with Discomfort）** 理论开发的生成式交互系统。我们主张：疼痛不应只是需要被隐藏的“私事”，而是一种需要被表达、被看见的生命体验。
-
-本系统通过前端物理引擎，将患者的“痛觉隐喻”转化为极具破坏力的生成式艺术视觉证据；并结合 AI 语义模型，将其动态转译为适用于多社会语境（医疗、职场、伴侣）的结构化文本报告，助力女性夺回身体的叙事权。
+> *"痛经就像一颗未完全成熟的果实被生生剥皮，皮上还连着丝丝缕缕真实的血肉..."* —— 摘自 PainScape 语料访谈（P03）
+>
+> *"This pain cannot be quantified, but to be understood, you must change the way you speak."* —— P01
 
 ---
 
-## ✨ Core Features | 核心创新功能
+## 写在前面
 
-### 1. 🎨 Embodied Generative Brushes (具身生成式画笔)
-彻底抛弃静态贴图与平滑渲染，基于 8000+ 真实 UGC 数据的提取，自主研发了基于 **p5.js 的动态粒子物理引擎**。通过 **手势动能映射（Kinetic Mapping）**，实时捕捉滑动速度与轨迹：
-*    🌪️ **绞/拧 (Twist):** 带有向心旋转矩阵与高对比度折线的“打结钢丝”。
-*   ⚡️ **荆/刺 (Pierce):** 顺应手指滑动方向，带有随机倒刺的锐利穿透线。
-*   🪨 **坠/压 (Heavy):** 施加高重力加速度，模拟沉重泥块/血液的下坠感。
-*   〰️ **酸/胀 (Wave):** 突破静态限制，基于时间轴持续“呼吸”的弥散性水肿。
-*   🔪 **刮/撕 (Scrape):** 参差不齐的平行错落直线，概率掉落尖锐碎屑。
+这项研究脱胎于我的本科毕业设计。回望来路，不知不觉已走过了一整年。
 
-### 2. 🧠 Multi-Context Semantic Translation (跨语境语义转译)
-打破单一的“健康打卡”孤岛，系统自动解析用户的视觉参数与偏好输入，一键生成四大沟通卡片：
-*   🫂 **伴侣说明书：** 摒弃鸡汤，生成极度务实的“实操照顾指令”。
-*   💼 **职场请假声明：** 生成不卑不亢的“不可见痛苦声明”，助力 DEI（多元公平包容）职场建设。
-*   🩺 **医疗辅助报告：** 转译为主诉、放射痛及排查建议，辅助医生门诊分诊。
-*   ❤️ **自我关怀日记：** 基于痛觉类型，匹配社群/医学的真实缓解动作（如婴儿蜷缩式）。
+最初的选题，源于《看不见的女性》（*Invisible Women*），《制造误诊》（*How Medicine fails Women*）等作品带来的强烈震动，以及身边人的真实困境：**为什么经期疼痛总是遭遇误解与失语？真实的疼痛可以被传达吗？计算机背景赋予我的技术，能为此做些什么？**
 
-### 3. 🛠 Hardcore UX Engineering (极致的前端交互体验)
-*   **离屏双缓冲渲染 (Off-screen Buffer):** 彻底剥离底图与笔触图层，实现无损的移动端画布拖拽与 3 倍缩放。
-*   **内存级状态栈 (Dual-Stack Undo/Redo):** 在 React 与 Canvas 混合生命周期下，实现包含动态呼吸粒子在内的 O(1) 复杂度单步撤销与重做。
-*   **原生分享打通 (Web Share API):** 一键将图文通感卡唤起系统底层的分享面板发送给联系人。
+幸得老师指点，一步步实践着科学的研究方法。研究过程中，看着海量的社交网络语料时会忍不住为那些疼痛的叙事落泪；收到问卷末尾无数陌生女孩留下的联系方式时也会忍不住满怀力量；在街头笨拙又成功地寻找到一位位受访者、在面对医学生专业审视与密密麻麻的代码 Bug 时，陷入过“这真的足够好吗”的深深自我怀疑。
+
+感谢老师的托举，以及每一位参与者女性毫无保留的信任与善意，让 **PainScape** 最终得以被看见。
+
+### 🕊️ 关于名字：“-scape” 与 “escape”
+**PainScape** 的名字蕴含着双重隐喻：
+* **“-scape”** 源于荷兰语，意指“被创造的景观”与“呈现的景象”（如 Landscape）。我们希望它是一方画卷，让隐匿在体内、无法被 1–10 分量表捕捉的痛觉，第一次拥有具身、鲜活且被尊重的视觉景观；
+* **“escape”** 在古法语与拉丁语词源中暗含“脱去斗篷、挣脱束缚”之意。我们深知女性长期被这种每月到来的肉体酷刑与社会规训所困。以此为名，不仅为了**“让疼痛被看见”**，更是为了**“逃离那座名为‘必须自证痛苦’的制度高墙”**。
+
+计算机技术赋予了我们一种可能——**参与并重塑我们所深切关怀的世界的可能**。PainScape 是这一探索的起点。
 
 ---
 
-## 🔬 Research Background | 研究背景
+## 📌 核心痛点与设计哲学
 
-PainScape 的每一行物理参数与交互设计，均由扎实的混合方法（Mixed-Methods）研究驱动：
-1.  **Data Mining:** 使用 Python 爬虫获取小红书/豆瓣 8000+ 语料，利用 **LDA 主题模型** 与设计导向的人工加权，提取出长尾的四大隐喻维度。
-2.  **Quantitative Survey:** 回收 140 份定量问卷，证实了“职场请假 (59.7%)”与“医疗沟通 (74.7%)”的强烈刚需，并验证了用户对“暴躁宣泄 / 反粉色税 (40.6%)”的审美偏好。
-3.  **Qualitative Interviews:** 通过多轮半结构化深度访谈，驱动系统完成了防误触机制、荆棘画笔重构及动态呼吸粒子等敏捷迭代。
+全球有超过 70% 的育龄女性承受着原发性痛经（Dysmenorrhea）的折磨，但在现代社会中，这种疼痛长期遭遇着双重结构性困境：
 
----
-
-## ⚙️ Tech Stack | 技术栈
-
-*   **Frontend:** React, p5.js, react-p5
-*   **Data Processing:** Python, Pandas, scikit-learn (LDA Modeling), Jieba
-*   **Deployment:** Vercel
-*   **Upcoming Backend:** FastAPI, LLM Prompt Engineering (DeepSeek / Qwen API)
-
----
-
-## 🚀 Quick Start | 快速启动
-
-**1. 克隆仓库到本地：**
-```bash
-git clone https://github.com/your-username/PainScape.git
+```
+┌────────────────────────────────────────────────────────┐
+│             传统范式：以客观理性为名的降维              │
+└────────────────────────────────────────────────────────┘
+                                        │
+                 ┌──────────────────────┴──────────────────────┐
+                 ▼                                             ▼
+      【医疗机构：量表霸权】                         【商业 FemTech：粉色规训】
+   将剧烈肉体感知简化为 1-10 数字                  采用淡粉色、花草的温和色调
+   要求必须转化为冰冷医学坐标方获承认             将经期重塑为“自我修养”与“卫生管理”
+                 │                                             │
+                 └──────────────────────┬──────────────────────┘
+                                        ▼
+                ┌──────────────────────────────────────────────┐
+                │       结果：表达劳作 (Expressive Burden)       │
+                │   女性被迫耗费巨大精力自证痛苦，陷入认知不公   │
+                └──────────────────────────────────────────────┘
 ```
 
-**2. 进入项目目录并安装依赖：**
+1. **认知不公与表达劳作（Expressive Burden & Epistemic Injustice）：** 
+   女性的痛觉叙事常被预设为“不可信的、情绪化的主观杂音”（Miranda Fricker, 2007）。要获得职场请假或临床关照，女性必须在身体最虚弱时，独自承担将痛苦“翻译”为制度能听懂的语言的高昂认知劳作。
+2. **制度时间对障碍时间的压迫（Crip Time vs. Clock Time）：** 
+   现代社会遵循线性、不间断的高效时钟运转，而痛经则是“如潮水般反复涌来”（P08）的身体节律。传统工具要求女性“打卡证明自己”，实质上是在强迫女性顺从规训。
+3. **可质疑性悖论（Contestability Paradox）：** 
+   我们在研究中发现：即便赋予用户 100% 的编辑权，**在面对 AI 生成的临床报告时，修改率依然为 0%**。用户因缺乏医学术语资本，害怕修改会导致“显得不科学”而被医生问责。**单纯的技术赋权，无法抹平知识与权力的结构性高墙。**
+
+---
+
+## 🔬 学术研究与实证发现 (Research Highlights)
+
+PainScape 历经四阶段（Formative Study → System Design → Initial Evaluation → Empirical Evaluation）严密论证：
+
+* **8,000+ 社交语料挖掘（LDA + 加权 TF-IDF）：** 从小红书与豆瓣提取出 6,800 条高纯度中文痛经帖，提炼出 5 种核心具身隐喻：**绞/拧 (22.6%)、坠/压 (18.8%)、荆/刺 (15.6%)、酸/胀 (12.9%)、刮/撕 (9.7%)**。
+* **跨语境卡片分类实验（Card Sort, $N=55$）：** 
+  揭示了剧烈的**证据需求错位**——女性在个人记录中将“持续时间与模式”排第 1、“疼痛质感”排第 2、“解剖位置”仅排第 6；但在向医生陈述时，**“解剖位置”跃升至第 1**（医生群组同样将其排第 1）。女性为了被信任，被迫重塑自己的感受。
+* **行动支架超越廉价共情：** 72.9% 的受访者明确表示：**比起无意义的言语安慰，她们更需要“切实可行的照顾行动指令”**。言语安慰有时反而会成为消耗能量的“二次伤害”。
+* **从个人抗辩走向集体可见性（From Individual to Commons）：** 单打独斗的自证极其脆弱。PainScape 提出了**“集体可见性（Collective Visibility）”**，通过聚合匿名痛觉图谱，让散落的个体经验凝聚为可引用的公共认知资源，将自证痛苦的重担从女性身上卸下。
+
+---
+
+## 🎨 核心功能架构与体验流转
+
+PainScape 覆盖从**“急性发作期极简记录与自愈”**到**“多语境沟通、历史追踪与社群共鸣”**的全链路闭环：
+
+```
+用户进入 ──► 模式选择 ──► 三步建档 ──► 具身体感绘画 / 快速记录
+│
+┌────────────────────────────────────────────┴───────────────────────────────────────────┐
+▼ ▼ ▼
+【多语境报告生成】 【痛经日记 & 对比】 【自愈静疗舱】
+├─ 🫂 伴侣：实操照顾说明书 ├─ 日历视图 / 时间轴 ├─ 4大自愈手法
+├─ 💼 请假：不卑不亢请假条 ├─ 多维度历史对比 (部位/色温/质感) ├─ 4大环境声景
+├─ 🩺 医生：结构化标准病历 └─ 批量带图导出临床 PDF └─ 出舱微评估
+└─ ❤️ 自愈：循证身心舒缓建议 │
+▼
+【共鸣广场】
+├─ 匿名模糊图谱 (2-20px)
+└─ 纯净三态轻互动 (抱抱/暖暖)
+```
+
+### 1. 具身生成式画笔画布 (Embodied Generative Canvas)
+基于 p5.js 自主研发动态粒子物理引擎，拒绝死板的色块填充，通过手势动能映射（速度、加速度、接触面积、压力）呈现痛苦的物理张力：
+* 🌪️ **绞/拧 (Twist):** 向心螺旋轨迹与高张力折线，展现“肠肚被死死拧作一团”的绞痛。
+* ⚡ **荆/刺 (Pierce):** 线性高瞬时速度穿透与方向性喷溅，模拟“万针攒刺”的尖锐突发感。
+* 🪨 **坠/压 (Heavy):** 潜伏重力累积与拖曳网格，呈现“铅块拖拽内脏下坠”的钝重。
+* 〰️ **酸/胀 (Wave):** 双层 Alpha 呼吸脉冲，随时间周期性涨落，模拟深层弥漫性水肿与充血。
+* 🔪 **刮/撕 (Scrape):** 平行锯齿笔触、抖动法线与概率性剥落碎屑，模拟“刀刮子宫内壁”的生硬摩擦。
+
+> **交互特性：** 支持人体正/背面透视切换；专为弥散性钝痛设计**“盲画模式（Blind Mode）”**（隐去人体轮廓，自由挥洒）；支持内存级多步 Undo/Redo 与画布平移缩放。
+
+### 2. 3 秒快速压感记录球 (Quick-Log Orb)
+专为痛到“连拿手机的力气都没有”的急性发作时刻打造：
+* 选定 1 种主导痛感类型；
+* **单指长按呼吸球 2.5 秒**，压力数值从 20 匀速上升至 100，界面文本在「轻微 → 中度 → 强烈 → 剧烈」间动态形变；
+* 松开即完成采集，或滑动调节冷暖体感倾向，一键绕过画布直达急救方案。
+
+### 3. 守卫型大模型中枢 (Guarded LLM Hub & Provenance Tracking)
+后端将绘画笔触的动力学参数（位置分布、质感权重、绘制时长、压力极值）与用户健康档案结构化打包，通过精心编排的 Prompt 矩阵与安全防火墙，一键转译为四大差异化草稿：
+* 🫂 **伴侣指南：** 剔除空洞鸡汤，输出“把暖宝宝贴在骶骨处”、“冲泡红糖姜茶（排查糖尿病后）”等直接行动清单。
+* 💼 **请假脚本：** 4 种接收人 × 2 种语气（温和/干练），严格控制在 40 字内，不卑不亢，不过度暴露隐私。
+* 🩺 **医疗报告：** 严格遵循门诊病历规程（主诉、现病史、月经史、既往史、伴随体征、初步排查方向），无缝衔接门诊问诊。
+* ❤️ **自愈建议：** 循证医学科普与自我关照建议。
+
+> 🛡️ **严格的临床安全红线（Safety Guardrails）：**
+> * 严禁不经查验的诊断建议（如无性生活史建议经阴道超声），防范医疗过失风险；
+> * 建立合并症禁忌图谱（糖尿病患者自动过滤高糖饮品推荐，胃溃疡患者过滤 NSAIDs 类止痛药提醒）；
+> * **三色数据溯源标签（Provenance Badges）：** 琥珀色（用户自填）、蓝色（AI 推理）、绿色（用户修改），让机器推理彻底白盒化。
+
+### 4. 痛经日记与多维对比 (Pain Diary & Clinical Export)
+* **日历视图与时间轴：** 统计平均周期、常见痛感类型、发生频次，可视化色条展示分布。
+* **智能多维对比：** 自动比对本次与上次记录的痛感位移、类型演变、强度起伏与体感温差。
+* **结构化 PDF 导出：** 借助 `jsPDF`，一键生成包含高精度体感绘制原图与临床转译文本的 PDF，方便打印面呈医生。
+
+### 5. 自愈静疗舱 (Somatic Healing Cabin)
+脱离文字与报告的纯净身心庇护所：
+* 提供**呼吸调理（多种呼吸节律）、体位松弛（简单易做体式）、穴位按揉（三阴交/关元穴）、热敷温补** 4 大功能模块（尚在升级中）；
+* 整合海浪、林间风声、篝火、节奏音等动态环境声景（Web Audio API）；
+* 体验结束后提供“出舱微评估”，支持一键将实测有效的缓解心得沉淀分享。
+
+### 6. 共鸣广场与集体可见性 (Resonance Square)
+* **隐私模糊滤镜：** 用户发布前可对画作施加 2–20px 的可调模糊，保护隐私轮廓；
+* **纯净非评价式互动：** 彻底关闭文字评论区，阻断可能出现的道德审判、归因责难与情绪传染，仅开放**「抱抱 (Hug)」、「好好休息 (Rest Well)」**2种轻量化支持手势；
+* 沉淀女性群体的真实经验池，让后来者不再孤独求索。
+
+---
+
+## 🛠 技术架构与数据流 (System Architecture)
+
+```
+[前端: React + p5.js Canvas]
+│ 采集手势动能 (速度/压力/触点/色系)
+▼
+[动能特征提取器]
+│ 计算: 主导痛感、质感张力、空间坐标分布
+▼
+[前端封装: PainData 载荷]
+│ (包含用户健康背景 + 伴随症状)
+▼
+[后端网关: FastAPI / Supabase Functions]
+│ 多提供商模型路由调度 (GLM-4 / DeepSeek API)
+├─► 阶段 1: 具身感知转译 (Somatic Decoding)
+├─► 阶段 2: 临床结构化映射 (Clinical Structuring)
+├─► 阶段 3: 语境风格适配 (Context Adaptation)
+└─► 阶段 4: 临床安全红线审查 (Safety Guardrails Enforcement)
+▼
+[输出层: 携带溯源三色标签的四维文本矩阵]
+│
+├──► 本地优先存储 (Local-First: LocalStorage / 离线可用)
+└──► 匿名云端同步 (PostgreSQL with Row-Level Security)
+```
+
+### 💻 核心技术栈
+
+| 层次 | 选型 | 用途与技术亮点 |
+| :--- | :--- | :--- |
+| **Frontend** | React 18, Hooks | 响应式状态流转与单页应用交互调度 |
+| **Physics Canvas** | p5.js, react-p5 | 离屏双缓冲渲染（图层分离）、粒子动力学、手势速度捕获 |
+| **Audio Synthesis**| Web Audio API | 随笔触压力实时调制频率与音量的通感音效生成 |
+| **Backend & LLM**  | FastAPI, Python | 异步高并发请求转发、Prompt 动态编织、安全合规过滤 |
+| **Database & Auth**| Supabase (PostgreSQL) | 匿名身份认证、行级数据安全（RLS）、去隐私化跨端持久化 |
+| **Report Export**  | jsPDF, html2canvas | 客户端无损栅格化渲染，生成临床级图文综合 PDF 归档 |
+
+---
+
+## 🚀 快速开始 (Quick Start)
+
+### 环境依赖
+* Node.js >= 18.0.0
+* npm >= 9.0.0 (或 pnpm / yarn)
+
+### 本地部署运行
+
 ```bash
+# 1. 克隆代码仓库
+git clone https://github.com/mynameisyixuan/PainScape.git
 cd PainScape
-npm install
-```
 
-**3. 启动本地开发服务器：**
-```bash
+# 2. 安装前端依赖
+npm install
+
+# 3. 准备资源文件
+# 请确认 public/ 目录下已存在人体坐标正反面底图：
+# public/body_front.png
+# public/body_back.png
+
+# 4. 配置环境变量 (可选，若需调用真实大模型后端)
+# 复制 .env.example 为 .env 并填入你的 API Key
+cp .env.example .env
+
+# 5. 启动本地开发服务
 npm run dev
 ```
 
-**4. 在浏览器中访问：**  
-打开 [http://localhost:5137](http://localhost:5137) 即可体验。
-
-> ⚠️ **注意：** 需确保在 `public/` 文件夹下已配置 `body_front.png` 和 `body_back.png` 底图文件，以完整体验人体的正反面翻转功能。
+打开浏览器访问 http://localhost:5137 即可进入 PainScape 体验完整流程。
 
 ---
 
-## 🎯 Online Demo | 在线演示
+## 🤝 结语与致谢 (Acknowledgments)
 
-目前已完成前端核心交互开发，欢迎直接通过浏览器体验在线 Demo：
+> "Pain resists language, but it shall not resist community."
 
-👉 **[点击此处访问 PainScape 在线体验版](https://painscape.icu/)** 👈
+PainScape 仍有诸多不完美：临床测试目前主要由具备妇产科轮转经验的医学生完成，尚未邀请具有丰富一线经验的执业医师；跨文化语义迁移仍需进一步验证；在极度痛苦的时刻，如何进一步降低用户的交互负担，依然是一道开放的人机交互课题。
 
-*(注：当前版本主要展示前端生成式艺术与 UI 交互流转，欢迎大家试用并提出宝贵意见！)*
+但我们深信，将身体感受的定义权重新交还给女性，是打破医疗冷漠与社会失语的第一步。
 
+诚挚感谢所有参与本项研究语料贡献、问卷填写、深度访谈、可用性测试与临床评估的女性受访者与医学生们。愿每一份痛苦都能被温柔托起，愿我们都能在彼此的共鸣中，找回属于自己身体的叙事主权。
 
+---
 
-## 🤝 Authors & Acknowledgments | 致谢
+## 📄 开源许可 (License)
 
-特别感谢所有参与本研究问卷填写与深度访谈的女性。是你们勇敢分享的痛觉记忆，赋予了这些冰冷的代码与图形以真实的血肉与灵魂。
-
-> *"Women oppose war. We share the pain, and we heal together."*
+本项目基于 MIT License 开源。欢迎学者、开发者与健康关怀组织参与讨论与迭代。
